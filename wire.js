@@ -1,7 +1,8 @@
 /* Draft War Room · wire: delegated events, buttons, settings, palette, sync, IO. */
 /* ---------- Events (delegated) ---------- */
 document.addEventListener("click", e=>{
-  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-card],[data-cardtab],[data-boost],[data-fade],[data-adpedit],[data-tierup],[data-tierdn],[data-onepager],[data-cardpng],[data-unpickpre],[data-cmpfrom],[data-slotname],[data-keeper],[data-queue],[data-qup],[data-qfill],[data-plan],[data-unplan],[data-plantoggle],[data-planqueue],[data-qround],[data-qdn],[data-showall],[data-simto],[data-horn],[data-siren],#tradeGo,#matrixCopy,#nickGen,#logMineBtn,#logCsvBtn,#undo5Btn,th[data-sort]");
+  window._acts = window._acts || [];
+  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-card],[data-cardtab],[data-boost],[data-fade],[data-adpedit],[data-tierup],[data-tierdn],[data-onepager],[data-cardpng],[data-unpickpre],[data-cmpfrom],[data-slotname],[data-cellpick],[data-voicenote],[data-notetpl],[data-keeper],[data-queue],[data-qup],[data-qfill],[data-plan],[data-unplan],[data-plantoggle],[data-planqueue],[data-qround],[data-qdn],[data-showall],[data-simto],[data-horn],[data-siren],#tradeGo,#matrixCopy,#nickGen,#logMineBtn,#logCsvBtn,#undo5Btn,th[data-sort]");
   if(!t){
     const rowEl = e.target.closest("#poolBody tr[data-pid]");
     if(rowEl){
@@ -9,6 +10,10 @@ document.addEventListener("click", e=>{
       applyKbSel();
     }
     return;
+  }
+  {
+    const dk = Object.keys(t.dataset||{})[0] || t.id || "";
+    if(dk){ window._acts.push(dk+"@"+new Date().toISOString().slice(11,19)); if(window._acts.length>50) window._acts.shift(); }
   }
   if(t.dataset.picksync){
     const v = prompt("Which overall pick is on the clock right now? (board thinks it's #"+pickNow()+")", pickNow());
@@ -27,6 +32,23 @@ document.addEventListener("click", e=>{
   if(t.id==="tradeGo"){ return tradeEval(); }
   if(t.id==="matrixCopy"){ navigator.clipboard.writeText(window._matrixTxt||"").then(()=>toast("📋 Matrix copied")); return; }
   if(t.dataset.teampage){ return openTeamPage(+t.dataset.teampage); }
+  if(t.dataset.cellpick){
+    const n = +t.dataset.cellpick, li = n-1-(S.pickOffset||0);
+    const e2 = S.log[li]; if(!e2) return;
+    const cur = idIndex()[e2.id];
+    const v = prompt("Pick "+n+" is "+(cur?cur.name:"?")+".\nType the correct player (or 'trade 5' to give this pick to slot 5):", "");
+    if(!v) return;
+    const tm2 = v.match(/^trade\s+(\d+)$/i);
+    if(tm2){ S.pickOwner[n] = +tm2[1]; commit(); renderBoard(); return toast("Pick "+n+" now belongs to "+esc(slotName(+tm2[1]))); }
+    const found = allPlayers().find(p2=>nq(p2.name)===nq(v)) || (v.length>=4 ? allPlayers().find(p2=>nq(p2.name).includes(nq(v))) : null);
+    if(!found) return toast("No match for '"+esc(v)+"'", {warn:true});
+    if(offBoard(found.id) && found.id!==e2.id) return toast(esc(found.name)+" is already on the board", {warn:true});
+    if(e2.who==="me"){ S.mine = S.mine.map(x=>x===e2.id?found.id:x); }
+    else { delete S.taken[e2.id]; S.taken[found.id]=true; }
+    e2.id = found.id;
+    _memo={key:null}; commit(); renderBoard();
+    return toast("Pick "+n+" corrected to "+esc(found.name));
+  }
   if(t.id==="nickGen"){
     const adj = ["Iron","Turbo","Cosmic","Grumpy","Electric","Sneaky","Mighty","Haunted","Golden","Feral","Quantum","Soggy"];
     const noun = ["Bison","Wizards","Goblins","Freight Train","Spreadsheet","Tailgate","Vandals","Casserole","Monarchs","Stampede","Syndicate","Waffles"];
@@ -102,13 +124,17 @@ document.addEventListener("click", e=>{
   if(t.dataset.cardtab){ window._cardTab = t.dataset.cardtab; return openCard(t.dataset.cardid); }
   if(t.dataset.boost){
     const id = t.dataset.boost;
-    S.boost[id] = S.boost[id]===1 ? 0 : 1;
-    commit(); window._cardTab="intel"; return openCard(id);
+    const prev = S.boost[id]||0;
+    S.boost[id] = prev===1 ? 0 : 1;
+    commit(); toast((S.boost[id]?"▲ boosted":"boost cleared"), {undo:()=>{ S.boost[id]=prev; commit(); }});
+    window._cardTab="intel"; return openCard(id);
   }
   if(t.dataset.fade){
     const id = t.dataset.fade;
-    S.boost[id] = S.boost[id]===-1 ? 0 : -1;
-    commit(); window._cardTab="intel"; return openCard(id);
+    const prev = S.boost[id]||0;
+    S.boost[id] = prev===-1 ? 0 : -1;
+    commit(); toast((S.boost[id]?"▼ faded":"fade cleared"), {undo:()=>{ S.boost[id]=prev; commit(); }});
+    window._cardTab="intel"; return openCard(id);
   }
   if(t.dataset.adpedit){
     const id = t.dataset.adpedit, p = idIndex()[id];
@@ -189,6 +215,27 @@ document.addEventListener("click", e=>{
     renderCompare(); $("#cmpB").focus();
     return;
   }
+  if(t.dataset.voicenote){
+    try{
+      const R = new webkitSpeechRecognition();
+      R.lang = "en-US";
+      toast("🎤 Listening…");
+      R.onresult = ev=>{
+        const txt = ev.results[0][0].transcript;
+        S.notes[t.dataset.voicenote] = ((S.notes[t.dataset.voicenote]||"")+" "+txt).trim();
+        commit(); toast("📝 Heard: "+esc(txt));
+      };
+      R.onerror = ()=>toast("Mic unavailable", {warn:true});
+      R.start();
+    }catch(e){ toast("Voice notes unsupported here", {warn:true}); }
+    return;
+  }
+  if(t.dataset.notetpl){
+    const pickT = prompt("Template: 1=🔗 handcuff  2=🎲 injury flier  3=😴 sleeper  4=🧊 avoid in first half", "1");
+    const map = {1:"🔗 handcuff priority", 2:"🎲 injury flier — monitor camp", 3:"😴 sleeper — market is late", 4:"🧊 only after round 8"};
+    if(pickT && map[pickT]){ S.notes[t.dataset.notetpl] = map[pickT]; commit(); }
+    return;
+  }
   if(t.dataset.note){
     editNote(t.dataset.note);
     if($("#cardOverlay").classList.contains("show")) openCard(t.dataset.note);
@@ -219,6 +266,9 @@ window.__timers = window.__timers || [];
 const _origSetInterval = window.setInterval;
 window.setInterval = function(fn, ms){ const id = _origSetInterval(fn, ms); window.__timers.push({id, ms}); return id; };
 
+document.addEventListener("input", e=>{
+  if(e.target && e.target.id==="logSearch"){ window._logQ = e.target.value; renderLog(); }
+});
 let searchTimer=null;
 $("#search").addEventListener("input", ()=>{ clearTimeout(searchTimer); searchTimer=setTimeout(renderPool, 120); });
 $("#showTaken").addEventListener("change", e=>{ S.ui.showTaken=e.target.checked; save(); renderPool(); });
@@ -271,11 +321,12 @@ document.addEventListener("keydown", e=>{
     const id = trs[kbSel].dataset.pid;
     if(!id) return;
     const k = e.key.toLowerCase();
-    if(k==="m"){ e.preventDefault(); if(!S.mine.includes(id)) pickMine(id); }
-    if(k==="t"||k==="x"){ e.preventDefault(); if(!S.taken[id] && !S.mine.includes(id)) markTaken(id); }
+    const KB = S.settings.keys||{mine:"m",taken:"t",queue:"q"};
+    if(k===KB.mine){ e.preventDefault(); if(!S.mine.includes(id)) pickMine(id); }
+    if(k===KB.taken||k==="x"){ e.preventDefault(); if(!S.taken[id] && !S.mine.includes(id)) markTaken(id); }
     if(k==="d"){ e.preventDefault(); S.dnd[id] ? delete S.dnd[id] : S.dnd[id]=true; commit(); }
     if(k==="n"){ e.preventDefault(); editNote(id); }
-    if(k==="q"){ e.preventDefault(); toggleQueue(id); return; }
+    if(k===(S.settings.keys||{}).queue || k==="q"){ e.preventDefault(); toggleQueue(id); return; }
   }
   if(e.key.toLowerCase()==="p" && S.ui.live && !e.ctrlKey && !e.metaKey){
     const h3 = nextPickHorizon();
@@ -612,14 +663,15 @@ if(navigator.share){
 }
 
 /* Draft board grid */
-function renderBoard(){
+function renderBoard(limit){
   const byId = idIndex(), t = S.settings.teams, mySlot = Math.min(S.settings.slot,t);
+  const upto = limit==null ? S.log.length : Math.min(limit, S.log.length);
   const cells = {}; let maxR = 1;
-  S.log.forEach((e,i)=>{
-    const n = i+1+(S.pickOffset||0), r = Math.ceil(n/t), idx = n-(r-1)*t;
-    const slot = (r%2===1) ? idx : t+1-idx;
+  S.log.slice(0, upto).forEach((e,i)=>{
+    const n = i+1+(S.pickOffset||0), r = Math.ceil(n/t);
+    const slot = slotOfPick(n);
     const p = byId[e.id];
-    if(p){ cells[r+"-"+slot] = {p, mine:e.who==="me"}; maxR = Math.max(maxR, r); }
+    if(p){ cells[r+"-"+slot] = {p, mine:e.who==="me", n}; maxR = Math.max(maxR, r); }
   });
   let h = '<table style="border-collapse:collapse;font-size:10.5px;min-width:'+(t*92)+'px"><tr><th style="padding:4px 6px"></th>';
   for(let s2=1;s2<=t;s2++) h += '<th data-slotname="'+s2+'" title="Click to rename" style="cursor:pointer;padding:4px 6px;color:'+(s2===mySlot?'var(--green)':'var(--faint)')+';font-size:9px;max-width:90px;overflow:hidden;text-overflow:ellipsis">'+esc(slotName(s2))+(s2===mySlot?' ★':'')+'</th>';
@@ -628,12 +680,15 @@ function renderBoard(){
     h += '<tr><td class="mono" style="color:var(--faint);padding:3px 6px">R'+r+'</td>';
     for(let s2=1;s2<=t;s2++){
       const c = cells[r+"-"+s2];
-      h += '<td style="padding:3px 5px;border:1px solid var(--line);'+(s2===mySlot?'background:rgba(47,212,122,.06);':'')+'">'+
+      h += '<td '+(c?'data-cellpick="'+c.n+'" style="cursor:pointer;':'style="')+'padding:3px 5px;border:1px solid var(--line);'+(s2===mySlot?'background:rgba(47,212,122,.06);':'')+'" title="'+(c?'Pick '+c.n+' — click to correct or trade':'')+'">'+
         (c ? (logoUrl(c.p.team)?'<img class="tlogo" src="'+logoUrl(c.p.team)+'" width="12" height="12" loading="lazy" alt=""> ':'')+'<span class="pos '+c.p.pos+'" style="width:26px;font-size:8px;padding:2px 0">'+c.p.pos+'</span> '+c.p.name.split(" ").slice(-1)[0] : '<span style="color:var(--line)">·</span>')+'</td>';
     }
     h += '</tr>';
   }
   h += '</table>';
+  if(S.log.length) h += '<div style="margin-top:8px;display:flex;gap:10px;align-items:center"><span class="dimtxt">⏪ replay</span>'+
+    '<input type="range" id="boardScrub" min="0" max="'+S.log.length+'" value="'+upto+'" style="flex:1">'+
+    '<span class="mono dimtxt">'+upto+'/'+S.log.length+'</span></div>';
   // projected standings from tracked rosters
   const ros = teamRosters();
   if(S.log.length >= t){
@@ -756,6 +811,13 @@ $("#boardPrint").addEventListener("click", ()=>{
   const w = window.open("about:blank");
   if(w){ w.document.write(h); w.document.close(); }
 });
+document.addEventListener("input", e=>{
+  if(e.target && e.target.id==="boardScrub"){
+    const v = +e.target.value;
+    const grid = document.querySelector("#boardGrid table");
+    renderBoard(v);
+  }
+});
 $("#boardBtn").addEventListener("click", ()=>{ renderBoard(); $("#boardOverlay").classList.add("show"); });
 $("#boardClose").addEventListener("click", ()=>$("#boardOverlay").classList.remove("show"));
 
@@ -847,6 +909,10 @@ $("#settingsBtn").addEventListener("click", ()=>{
   $("#setFavCollege").value=S.settings.favCollege||"";
   $("#setTimer").value=S.settings.timerSecs||0;
   $("#setLowData").checked=!!S.settings.lowData;
+  $("#setVol").value=S.settings.vol!=null?S.settings.vol:1;
+  const kk = S.settings.keys||{};
+  $("#keyMine").value=kk.mine||"m"; $("#keyTaken").value=kk.taken||"t"; $("#keyQueue").value=kk.queue||"q";
+  $("#setTierSense").value=S.settings.tierSense||0.045;
   $("#setNotify").checked=!!S.settings.notifyInj;
   $("#setSleeperDraft").value=S.settings.sleeperDraftId||"";
   $("#setSleeperLeague").value=S.settings.sleeperLeagueId||"";
@@ -919,6 +985,9 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.favCollege = $("#setFavCollege").value.trim();
   S.settings.timerSecs = Math.max(0, +$("#setTimer").value||0);
   S.settings.lowData = $("#setLowData").checked;
+  S.settings.vol = +$("#setVol").value;
+  S.settings.keys = {mine:($("#keyMine").value||"m").toLowerCase(), taken:($("#keyTaken").value||"t").toLowerCase(), queue:($("#keyQueue").value||"q").toLowerCase()};
+  S.settings.tierSense = +$("#setTierSense").value || 0.045;
   const wantNotify = $("#setNotify").checked;
   if(wantNotify && !S.settings.notifyInj && "Notification" in window && Notification.permission==="default"){
     Notification.requestPermission();
@@ -947,7 +1016,7 @@ $("#debugBtn").addEventListener("click", ()=>{
     build: BUILD, data: typeof DATA_STAMP!=="undefined"?DATA_STAMP:"?",
     stateBytes: JSON.stringify(S).length,
     players: allPlayers().length, log: S.log.length, mine: S.mine.length,
-    settings: S.settings, errors: window._errLog,
+    settings: S.settings, errors: window._errLog, recentActions: window._acts,
     ua: navigator.userAgent,
   };
   navigator.clipboard.writeText("Draft War Room debug\n"+JSON.stringify(info,null,2)).then(()=>toast("🐞 Debug info copied"));
@@ -1119,7 +1188,8 @@ $("#projFile").addEventListener("change", e=>{
     if(rows.length<50){ toast("Only parsed "+rows.length+" players — import aborted", {warn:true}); e.target.value=""; return; }
     const curNames = new Set(allPlayers().map(p=>normName(p.name)));
     const fresh = rows.filter(r2=>!curNames.has(normName(r2[0]))).length;
-    if(!confirm("Import preview:\n• "+rows.length+" players parsed\n• "+fresh+" names not on the current board\n• current dataset will be replaced (backup saved)\n\nApply?")){ e.target.value=""; return; }
+    const noHist = rows.filter(r2=>typeof PLAYERMETA==="undefined" || !PLAYERMETA[normName(r2[0])]).length;
+    if(!confirm("Import preview:\n• "+rows.length+" players parsed\n• "+fresh+" names not on the current board\n• "+noHist+" new faces without history data (rookies/moves)\n• current dataset will be replaced (backup saved)\n\nApply?")){ e.target.value=""; return; }
     backupState();
     S.dataRows=rows; S.dataRev=(S.dataRev||0)+1;
     commit(); refreshProjStatus();

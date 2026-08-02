@@ -146,6 +146,7 @@
         <button class="hbtn" id="logMineBtn" style="margin-left:auto;padding:3px 8px;font-size:10px" title="Show only my picks">MINE</button>
         <button class="hbtn" id="undo5Btn" style="margin-left:6px;padding:3px 8px;font-size:10px" title="Undo the last 5 board actions">↩×5</button>
         <button class="hbtn" id="logCsvBtn" style="margin-left:6px;padding:3px 8px;font-size:10px" title="Download pick log as CSV">⇩</button>
+        <input id="logSearch" class="fsel" style="margin-left:6px;width:80px;font-size:10px" placeholder="find…" aria-label="Search the draft log">
       </h2>
       <div class="loglist" id="logList"></div>
     </div>
@@ -191,6 +192,10 @@
       <div class="frow"><label>Sleeper draft ID (picks auto-mark while 🔄 Sync is on)</label><input class="wide" type="text" id="setSleeperDraft" placeholder="123456789012345678"></div>
       <div class="frow"><label>Sleeper league ID (imports names + finds the draft)</label><input class="wide" type="text" id="setSleeperLeague" placeholder="123456789012345678"></div>
       <div class="frow"><label>⏲ Pick timer seconds (0 = off)</label><input type="number" id="setTimer" min="0" max="600" step="15"></div>
+      <div class="frow"><label>🔊 Volume</label><input type="range" id="setVol" min="0" max="1" step="0.1" style="width:120px"></div>
+      <div class="frow"><label>⌨ Keys: mine / taken / queue</label><span style="display:flex;gap:6px">
+        <input type="text" id="keyMine" maxlength="1" style="width:40px;text-align:center"><input type="text" id="keyTaken" maxlength="1" style="width:40px;text-align:center"><input type="text" id="keyQueue" maxlength="1" style="width:40px;text-align:center"></span></div>
+      <div class="frow"><label>🏔 Tier sensitivity (higher = fewer, bigger tiers)</label><input type="range" id="setTierSense" min="0.03" max="0.07" step="0.005" style="width:120px"></div>
       <div class="frow"><label>📶 Low-data mode (no photos/logos)</label><input type="checkbox" id="setLowData" style="width:auto"></div>
       <div class="frow"><label>🔔 Notify me when MY players' status changes (tab in background)</label><input type="checkbox" id="setNotify" style="width:auto"></div>
       <div class="sechead">Achievements</div>

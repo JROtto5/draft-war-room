@@ -44,6 +44,7 @@ const defaultState = () => ({
   v: STATE_V,
   taken: {},            // id -> true (drafted by someone else)
   pickOffset: 0,        // manual correction: real overall pick - marked picks
+  pickOwner: {},        // overall pick -> slot (traded picks)
   keepers: {},          // id -> slot number (kept pre-draft, consumes no pick)
   queue: [],            // ids, user watch/queue order
   boost: {},            // id -> +1 (my guy) / -1 (fade)
@@ -80,6 +81,11 @@ function cached(name, fn){
   return _memo[name];
 }
 function pickNow(){ return S.log.length + 1 + (S.pickOffset||0); }
+function slotOfPick(n){
+  if(S.pickOwner && S.pickOwner[n]) return +S.pickOwner[n];
+  const t = S.settings.teams, r = Math.ceil(n/t), idx = n-(r-1)*t;
+  return (r%2===1) ? idx : t+1-idx;
+}
 function slotName(s){ return (S.slotNames && S.slotNames[s]) || ("T"+s); }
 function slotCfg(){ return (S.settings.slots) || {QB:1,RB:2,WR:2,TE:1,FLEX:1,SF:1,DEF:1,K:0,BN:7}; }
 function startableNow(){
@@ -100,8 +106,7 @@ function teamRosters(){
   for(let s=1;s<=t;s++) ros[s] = [];
   for(const id in (S.keepers||{})){ const s2=+(S.keepers[id].s!=null?S.keepers[id].s:S.keepers[id]); if(ros[s2] && byId[id]) ros[s2].push(id); }
   S.log.forEach((e,i)=>{
-    const n = i+1+(S.pickOffset||0), r = Math.ceil(n/t), idx = n-(r-1)*t;
-    const slot = (r%2===1) ? idx : t+1-idx;
+    const slot = slotOfPick(i+1+(S.pickOffset||0));
     const p = byId[e.id];
     if(p && ros[slot]) ros[slot].push(e.id);
   });
@@ -197,8 +202,12 @@ function allPlayers(){
 /* Snake draft math — overall pick numbers for my slot */
 function myOverallPicks(){
   const t=S.settings.teams, slot=Math.min(S.settings.slot,t), out=[];
-  for(let r=1;r<=S.settings.roster;r++) out.push((r-1)*t + (r%2===1 ? slot : t+1-slot));
-  return out;
+  for(let r=1;r<=S.settings.roster;r++){
+    const n = (r-1)*t + (r%2===1 ? slot : t+1-slot);
+    if(!(S.pickOwner && S.pickOwner[n] && +S.pickOwner[n]!==slot)) out.push(n);
+  }
+  for(const n in (S.pickOwner||{})) if(+S.pickOwner[n]===slot && !out.includes(+n)) out.push(+n);
+  return out.sort((a,b)=>a-b);
 }
 /* Expected draft round per player. Listed players: straight from ADP.
    Unlisted (~): interpolate between same-position ADP anchors by projection,
@@ -256,7 +265,8 @@ function tierMapRaw(players){
     for(let i=0;i<list.length;i++){
       if(i>0){
         const gap = list[i-1].proj - list[i].proj;
-        if(gap >= Math.max(8, list[i-1].proj*0.045) && tier<9) tier++;
+        const sense = (typeof S!=="undefined" && S.settings && S.settings.tierSense) || 0.045;
+        if(gap >= Math.max(8, list[i-1].proj*sense) && tier<9) tier++;
       }
       m[list[i].id] = tier;
     }
@@ -1029,6 +1039,7 @@ document.addEventListener("click", e=>{
 
 /* ---------- Team pages ---------- */
 function openTeamPage(slot){
+  const rivalDiff = (slot===+S.settings.rivalSlot);
   const byId = idIndex(), mySlot = Math.min(S.settings.slot, S.settings.teams);
   const ids = slot===mySlot ? myIds() : teamRosters()[slot];
   const ps = ids.map(id=>byId[id]).filter(Boolean);
@@ -1042,6 +1053,11 @@ function openTeamPage(slot){
     (ps.length ? POSITIONS.map(pos=> byPos[pos] ?
       '<div class="cintel"><b>'+pos+'</b> — '+byPos[pos].sort((a,b)=>b.proj-a.proj).map(p=>esc(p.name)+' <span class="dimtxt mono">'+p.proj+'</span>').join(" · ")+'</div>' : "").join("")
       : '<div class="empty">No tracked picks yet.</div>')+
+    (rivalDiff ? (()=>{
+      const myBs = bestStarters(myIds(), byId);
+      const d3 = Math.round(myBs.pts - (bs?bs.pts:0));
+      return '<div class="cintel" style="color:'+(d3>=0?'var(--green)':'var(--red)')+'">😤 Head-to-head: your starters project <b>'+(d3>=0?'+':'')+d3+'</b> vs this roster.</div>';
+    })() : '')+
     '<div class="cacts"></div>';
   $("#cardOverlay").classList.add("show");
 }
@@ -1098,6 +1114,7 @@ document.getElementById("injDigest").addEventListener("click", ()=>{
 /* ---------- Player card ---------- */
 
 function openCard(id){
+  window._recent = (window._recent||[]).filter(x=>x!==id); window._recent.unshift(id); window._recent = window._recent.slice(0,5);
   const p = idIndex()[id]; if(!p) return;
   const players = allPlayers();
   const repl = replacementLevels(players), tm = tierMap(players), rinfo = roundInfo(players), odds = survivalOdds();
@@ -1250,6 +1267,8 @@ function openCard(id){
         '<button class="undo1" data-dnd="'+id+'">'+(S.dnd[id]?"↩ allow":"🚫 never")+'</button>' : '')+
       (status==="on your roster" ? '<button class="undo1" data-unpickpre="'+id+'">↩ what-if drop</button>' : '')+
       '<button class="undo1" data-note="'+id+'">📝</button>'+
+      ("webkitSpeechRecognition" in window ? '<button class="undo1" data-voicenote="'+id+'" title="Dictate a note">🎤</button>' : '')+
+      '<button class="undo1" data-notetpl="'+id+'" title="Quick note: handcuff / flier / sleeper">📎</button>'+
       '<button class="undo1" data-cmpfrom="'+id+'">⚖</button>'+
       '<button class="undo1" data-keeper="'+id+'">👑</button>'+
       '<button class="undo1" data-queue="'+id+'">'+(S.queue.includes(id)?"★":"☆")+'</button>'+
@@ -1314,6 +1333,7 @@ function renderCompare(){
     row("Health", (()=>{const e=injuryOf(A); return e?injSeverity(e.s).label+(e.c?" — "+e.c.slice(0,40)+"…":""):"healthy ✓";})(), (()=>{const e=injuryOf(B); return e?injSeverity(e.s).label+(e.c?" — "+e.c.slice(0,40)+"…":""):"healthy ✓";})()) +
     row("Bye week", byeOf(A.team)||"—", byeOf(B.team)||"—") +
     row("Playoff weeks", psosFor(A.team)?psosFor(A.team).short:"—", psosFor(B.team)?psosFor(B.team).short:"—") +
+    row("Engine score", a.sc!=null?Math.round(a.sc):"—", b.sc!=null?Math.round(b.sc):"—", 1) +
     row("Status", a.status, b.status) +
     '</table><div style="margin-top:12px; font-size:13px">'+verdict+'</div>'+
     (a.why.length||b.why.length ? '<div class="note">'+(a.why.length?'<b>'+A.name+':</b> '+a.why.join(" · ")+'<br>':'')+(b.why.length?'<b>'+B.name+':</b> '+b.why.join(" · "):'')+'</div>' : '');

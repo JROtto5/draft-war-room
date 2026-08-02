@@ -224,8 +224,9 @@ function chime(){
     [[880,0],[1174.7,0.18]].forEach(([f,at])=>{
       const o=ac.createOscillator(), g=ac.createGain();
       o.frequency.value=f; o.type="sine"; o.connect(g); g.connect(ac.destination);
+      const vol = (S.settings.vol!=null?S.settings.vol:1);
       g.gain.setValueAtTime(0.001, ac.currentTime+at);
-      g.gain.exponentialRampToValueAtTime(0.22, ac.currentTime+at+0.02);
+      g.gain.exponentialRampToValueAtTime(0.22*vol+0.001, ac.currentTime+at+0.02);
       g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+at+0.5);
       o.start(ac.currentTime+at); o.stop(ac.currentTime+at+0.55);
     });

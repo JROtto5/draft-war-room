@@ -494,9 +494,11 @@ function openPalette(){
     const q2 = inp.value.trim();
     const acts = PALETTE_ACTIONS.filter(a=>!q2 || a[0].toLowerCase().includes(q2.toLowerCase())).slice(0,4)
       .map(a=>({label:a[0], run:a[1], kind:"act"}));
+    const recent = !q2 && window._recent ? window._recent.map(id=>idIndex()[id]).filter(Boolean).slice(0,5)
+      .map(p=>({label:"🕘 "+p.name+" · "+p.pos+" "+p.team, p, kind:"player"})) : [];
     const ps = q2.length>=2 ? allPlayers().filter(p=>matchesQuery(p,q2)).slice(0,7)
       .map(p=>({label:p.name+" · "+p.pos+" "+p.team+(offBoard(p.id)?" · off board":""), p, kind:"player"})) : [];
-    items = acts.concat(ps);
+    items = acts.concat(recent, ps);
     sel = Math.min(sel, Math.max(0, items.length-1));
     list.innerHTML = items.map((it,i)=>'<div class="palrow'+(i===sel?" on":"")+'" data-pi="'+i+'">'+
       (it.kind==="player" ? avatarImg(it.p,20)+" " : "")+esc(it.label)+
@@ -1018,6 +1020,7 @@ function renderLog(){
   $("#logList").innerHTML = S.log.length ? S.log.map((e,i)=>{
     const p = byId[e.id]; if(!p) return "";
     if(logMineOnly && e.who!=="me") return "";
+    if(window._logQ && !nq(p.name).includes(nq(window._logQ))) return "";
     const n = i+1+(S.pickOffset||0), r = Math.ceil(n/t), ri = n-(r-1)*t;
     return '<div class="logrow"><span class="pickno mono">'+r+'.'+String(ri).padStart(2,"0")+'</span>'+avatarImg(p,18)+
       '<span class="who '+(e.who==="me"?"me":"")+'">'+(e.who==="me"?"MY PICK":"taken")+'</span>'+
