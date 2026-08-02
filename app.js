@@ -781,6 +781,37 @@ function finishMocks(results, already){
     : "No strong consensus across strategies — your seat has options.";
 }
 
+/* ---------- Season HQ actions ---------- */
+async function weekRecap(){
+  try{
+    const st = await (await fetch("https://api.sleeper.app/v1/state/nfl")).json();
+    const wk = st.season_type==="regular" ? st.week : 0;
+    if(!wk){ toast("📅 Season hasn't kicked off — recap unlocks Week 1"); return; }
+    const stats = await (await fetch("https://api.sleeper.app/v1/stats/nfl/regular/"+st.season+"/"+wk)).json();
+    const inv = {}; if(typeof HEADSHOT!=="undefined") for(const k in HEADSHOT) inv[HEADSHOT[k]] = k;
+    const byId = idIndex();
+    const rows = myIds().map(id2=>byId[id2]).filter(Boolean).map(p2=>{
+      const sid = HEADSHOT[normName(p2.name)];
+      const s2 = sid && stats[String(sid)];
+      return {p:p2, pts: s2 && s2.pts_ppr!=null ? s2.pts_ppr : null};
+    }).sort((a,b)=>(b.pts||0)-(a.pts||0));
+    $("#cardBody").innerHTML = '<div class="chead"><div class="cid"><div class="cname">📅 Week '+wk+' recap</div></div></div>'+
+      rows.map(x=>'<div class="cintel">'+posBadge(x.p.pos)+' '+esc(x.p.name)+' — <b class="mono">'+(x.pts==null?"—":x.pts.toFixed(1))+'</b></div>').join("")+
+      '<div class="cacts"></div>';
+    $("#cardOverlay").classList.add("show");
+  }catch(e){ toast("Week recap needs a connection", {warn:true}); }
+}
+document.addEventListener("click", e=>{
+  if(e.target && e.target.id==="weekRecapBtn") weekRecap();
+  if(e.target && e.target.id==="healthDigestBtn"){
+    const byId = idIndex();
+    const mine = myIds().map(id2=>byId[id2]).filter(Boolean);
+    const txt = "🩹 "+(S.settings.flair||"My team")+" health ("+new Date().toLocaleDateString()+"):\n"+
+      mine.map(p2=>{ const e2=injuryOf(p2); return "• "+p2.name+": "+(e2?injSeverity(e2.s).label+(e2.c?" — "+e2.c.slice(0,60):""):"healthy ✓"); }).join("\n");
+    navigator.clipboard.writeText(txt).then(()=>toast("🩹 Health digest copied"));
+  }
+});
+
 /* ---------- Team pages ---------- */
 function openTeamPage(slot){
   const byId = idIndex(), mySlot = Math.min(S.settings.slot, S.settings.teams);
@@ -1160,6 +1191,11 @@ async function refreshInjuries(silent){
     _memo = {key:null};
     if(S.log.length > 0) changes.slice(0,3).forEach(c=>
       toast((c.mine?"🚨 YOUR PLAYER — ":"🩹 ")+esc(c.p.name)+": "+esc(c.s), {warn:true}));
+    if(S.settings.notifyInj && "Notification" in window && Notification.permission==="granted" && document.visibilityState==="hidden"){
+      changes.filter(c=>c.mine).slice(0,2).forEach(c=>{
+        try{ new Notification("🩹 "+c.p.name, {body:c.s, icon:"icon-192.png", tag:"inj-"+c.p.id}); }catch(e2){}
+      });
+    }
     render();
     if(document.getElementById("injOverlay").classList.contains("show")) renderInjCenter();
     _injFails = 0;
@@ -1621,17 +1657,49 @@ function renderBest(){
     const hurtN = myIds().map(id=>byIdH[id]).filter(Boolean).filter(p2=>injuryOf(p2)).length;
     const st = quickStandings();
     const myRank = st.rows.findIndex(r=>r.s===st.mySlot)+1;
+    const kick = new Date((S.settings.seasonStart||"2026-09-10")+"T20:20");
+    const kd = Math.ceil((kick.getTime()-Date.now())/86400000);
     hero.innerHTML = '<div class="toppick">'+
-      '<div class="tag">🏟 SEASON HQ</div>'+
+      '<div class="tag">🏟 SEASON HQ'+(kd>0?' · 🏈 kickoff in '+kd+'d':'')+'</div>'+
       '<div class="name">'+esc(S.settings.flair||slotName(S.settings.slot))+'</div>'+
       '<div class="meta">Draft complete · optimal starters <b class="mono" style="color:var(--green)">'+fmt(bsH.pts)+'</b> · projected <b>'+ordinal(myRank)+'</b> of '+st.rows.length+
       (hurtN?' · 🩹 '+hurtN+' with injury flags':' · roster healthy ✓')+'</div>'+
       '<div class="actions">'+
         '<button class="hbtn" onclick="document.getElementById(\'gradeBtn\').click()">🎓 Report</button>'+
         '<button class="hbtn" onclick="document.getElementById(\'injBtn\').click()">🩺 Injuries</button>'+
-        '<button class="hbtn" onclick="document.getElementById(\'recapBtn\').click()">📤 Share team</button>'+
+        '<button class="hbtn" onclick="document.getElementById(\'recapBtn\').click()">📤 Share</button>'+
+        '<button class="hbtn" id="weekRecapBtn">📅 Week recap</button>'+
+        '<button class="hbtn" id="healthDigestBtn">🩹 Health digest</button>'+
       '</div></div>';
-    $("#baList").innerHTML = "";
+    // waiver radar: hot adds that nobody in this league rosters
+    const rostered = new Set();
+    Object.values(teamRosters()).forEach(ids=>ids.forEach(id2=>rostered.add(id2)));
+    myIds().forEach(id2=>rostered.add(id2));
+    const radar = allPlayers()
+      .filter(p2=>!rostered.has(p2.id) && buzzOf(p2)>500)
+      .sort((a,b)=>buzzOf(b)-buzzOf(a)).slice(0,5);
+    // my-player headlines
+    const myNews = myIds().map(id2=>byIdH[id2]).filter(Boolean)
+      .map(p2=>({p:p2, n:newsFor(p2)})).filter(x=>x.n).slice(0,4);
+    // drop candidates + IR stashes
+    const bench2 = myIds().filter(id2=>!bsH.starterIds.has(id2)).map(id2=>byIdH[id2]).filter(Boolean);
+    const drops = bench2.slice().sort((a,b)=>a.proj-b.proj).slice(0,2);
+    const irs = myIds().map(id2=>byIdH[id2]).filter(Boolean)
+      .filter(p2=>{ const e2=injuryOf(p2); return e2 && injSeverity(e2.s).code==="IR"; });
+    let hq = "";
+    if(radar.length) hq += '<div class="benchhead">📡 Waiver radar (unrostered, trending)</div>'+
+      radar.map(p2=>'<div class="barow" data-card="'+p2.id+'">'+avatarImg(p2,22)+posBadge(p2.pos)+
+        '<div class="info"><div class="nm">'+p2.name+'</div><div class="sm">📈 '+buzzOf(p2).toLocaleString()+' adds/24h</div></div></div>').join("");
+    if(myNews.length) hq += '<div class="benchhead">📰 Your players in the news</div>'+
+      myNews.map(x=>'<div class="barow" data-card="'+x.p.id+'">'+avatarImg(x.p,22)+
+        '<div class="info"><div class="nm" style="font-size:11.5px">'+esc(x.n.h.slice(0,70))+'</div><div class="sm">'+esc(x.p.name)+' · '+x.n.d+'</div></div></div>').join("");
+    if(irs.length) hq += '<div class="benchhead">🏥 IR-eligible (league has 3 IR slots)</div>'+
+      irs.map(p2=>'<div class="barow" data-card="'+p2.id+'">'+avatarImg(p2,22)+'<div class="info"><div class="nm">'+p2.name+'</div><div class="sm">stash him, open a bench spot</div></div></div>').join("");
+    if(drops.length) hq += '<div class="benchhead">🪓 Thinnest bench spots</div>'+
+      drops.map(p2=>'<div class="barow" data-card="'+p2.id+'">'+avatarImg(p2,22)+'<div class="info"><div class="nm">'+p2.name+'</div><div class="sm mono">'+p2.proj+' proj</div></div></div>').join("");
+    hq += '<div class="benchhead">League rosters</div><div class="scarce">'+
+      Array.from({length:S.settings.teams},(_,i2)=>i2+1).map(s2=>'<span class="scpill" data-teampage="'+s2+'" style="cursor:pointer">'+esc(slotName(s2))+'</span>').join("")+'</div>';
+    $("#baList").innerHTML = hq;
     document.title = "Draft War Room — 2QB";
     updatePanic(null, null);
     return;
@@ -1662,6 +1730,12 @@ function renderBest(){
   document.title = (h && h.onClock ? "🟢 YOUR PICK — " : "") + "Draft War Room — 2QB";
   if(h && h.onClock && !window._wasOnClock && S.ui.live) chime();
   window._wasOnClock = !!(h && h.onClock);
+  if(navigator.setAppBadge){
+    try{
+      if(S.ui.live && h && !h.onClock) navigator.setAppBadge(Math.max(1, h.mine0-h.cur));
+      else if(navigator.clearAppBadge) navigator.clearAppBadge();
+    }catch(e){}
+  }
   updatePanic(h, top);
   if(S.ui.live && h && h.onClock && S.settings.timerSecs){
     if(!window._clockT0) window._clockT0 = Date.now();
@@ -2753,6 +2827,7 @@ $("#settingsBtn").addEventListener("click", ()=>{
   $("#setFavCollege").value=S.settings.favCollege||"";
   $("#setTimer").value=S.settings.timerSecs||0;
   $("#setLowData").checked=!!S.settings.lowData;
+  $("#setNotify").checked=!!S.settings.notifyInj;
   const rs=$("#setRival");
   rs.innerHTML='<option value="">none</option>'+Array.from({length:S.settings.teams},(_,i)=>i+1)
     .filter(s2=>s2!==S.settings.slot).map(s2=>'<option value="'+s2+'"'+(+S.settings.rivalSlot===s2?' selected':'')+'>'+esc(slotName(s2))+'</option>').join("");
@@ -2796,6 +2871,11 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.favCollege = $("#setFavCollege").value.trim();
   S.settings.timerSecs = Math.max(0, +$("#setTimer").value||0);
   S.settings.lowData = $("#setLowData").checked;
+  const wantNotify = $("#setNotify").checked;
+  if(wantNotify && !S.settings.notifyInj && "Notification" in window && Notification.permission==="default"){
+    Notification.requestPermission();
+  }
+  S.settings.notifyInj = wantNotify;
   S.settings.rivalSlot = $("#setRival").value ? +$("#setRival").value : null;
   S.settings.cols = {adp:$("#colADP").checked, edge:$("#colEdge").checked, rd:$("#colRd").checked};
   S.settings.baCount = Math.min(30, Math.max(5, +$("#setBaCount").value||15));
@@ -3257,6 +3337,20 @@ document.querySelectorAll(".modal").forEach((m,i)=>{
   if(h3){ if(!h3.id) h3.id = "dlg"+i; m.setAttribute("aria-labelledby", h3.id); }
 });
 const BUILD = "6.0";
+let _installEvt = null;
+window.addEventListener("beforeinstallprompt", e=>{
+  e.preventDefault();
+  _installEvt = e;
+  const b = document.getElementById("installBtn");
+  if(b) b.style.display = "";
+});
+document.addEventListener("click", e=>{
+  if(e.target && e.target.id==="installBtn" && _installEvt){
+    _installEvt.prompt();
+    _installEvt = null;
+    e.target.style.display = "none";
+  }
+});
 /* Theme: auto follows the OS, or force dark/light */
 function applyTheme(){
   const pref = S.settings.theme || "auto";
@@ -3277,8 +3371,17 @@ function applyTheme(){
   document.body.classList.toggle("hidecol-edge", cols.edge===false);
   document.body.classList.toggle("hidecol-rd", cols.rd===false);
 }
+let _wakeLock = null;
+async function holdWake(on){
+  try{
+    if(on && "wakeLock" in navigator){ _wakeLock = await navigator.wakeLock.request("screen"); }
+    else if(_wakeLock){ _wakeLock.release(); _wakeLock = null; }
+  }catch(e){}
+}
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && S.ui.live) holdWake(true); });
 function setLive(on){
   S.ui.live = on;
+  holdWake(on);
   if(on){ S.ui.liveStart = Date.now(); S.ui.liveLen0 = S.log.length; }
   document.body.classList.toggle("live", on);
   const b = document.getElementById("liveBtn");

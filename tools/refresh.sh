@@ -26,4 +26,5 @@ node tests/logic.test.mjs
 echo
 echo "✅ Data refreshed for the $(($SEASON + 1)) draft (last season: $SEASON)."
 echo "   Review: git diff --stat"
+echo "   In-season: re-run monthly (or after big injuries) — stats/injuries/trends all refresh."
 echo "   Ship:   git add -A && git commit -m '$(($SEASON + 1)) data' && git push"
