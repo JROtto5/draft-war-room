@@ -17,9 +17,7 @@ jobs:
           node-version: ${{ matrix.node }}
       - name: Syntax checks
         run: |
-          node --check app.js
-          node --check data.js
-          node --check sw.js
+          for f in data.js engine.js core.js views.js wire.js boot.js sw.js; do node --check "$f"; done
       - name: HTML sanity
         run: |
           test "$(grep -c '<script src=' index.html)" = "3"
