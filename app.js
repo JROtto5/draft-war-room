@@ -1971,7 +1971,7 @@ function renderBest(){
   // Startable players (VORP > 0) left per position
   const scLeft = {}; POSITIONS.forEach(pos=>scLeft[pos]=0);
   scored.forEach(s=>{ if(s.vorp>0) scLeft[s.p.pos]++; });
-  const scarce = '<div class="scarce">'+POSITIONS.map(pos=>{
+  const scarce = '<div class="scarce"><span class="striptag">LEFT</span>'+POSITIONS.map(pos=>{
     const g = odds && odds.posGone ? odds.posGone[pos] : 0;
     const runRisk = g>=2.5 && scLeft[pos]<=6;
     return '<span class="scpill'+(scLeft[pos]<=3?' dry':'')+'" title="Available '+pos+'s above replacement'+(g?'; sims expect ~'+g+' more gone before your pick #'+odds.at1:'')+(runRisk?'; RUN RISK':'')+'">'+
@@ -2003,7 +2003,7 @@ function renderBest(){
   const tmB = tierMap(allPlayers());
   const shelf = {};
   scored.forEach(s=>{ const tr2=tmB[s.p.id]; if(tr2<=2) shelf[s.p.pos]=(shelf[s.p.pos]||0)+1; });
-  const shelfLine = '<div class="scarce" style="margin-top:-4px" title="Players left in Tier 1–2 at each position">🏔 elite shelf: '+
+  const shelfLine = '<div class="scarce" title="Players left in Tier 1–2 at each position"><span class="striptag">🏔 SHELF</span>'+
     POSITIONS.map(pos=>'<span class="scpill'+((shelf[pos]||0)===0?' dry':'')+'">'+pos+' <b>'+(shelf[pos]||0)+'</b></span>').join("")+'</div>';
   // Momentum: last five picks
   let momentum = "";
@@ -2012,8 +2012,8 @@ function renderBest(){
     const byIdM = idIndex(), mc = {};
     last5.forEach(e2=>{ const pp=byIdM[e2.id]; if(pp) mc[pp.pos]=(mc[pp.pos]||0)+1; });
     const hot = Object.entries(mc).sort((a,b)=>b[1]-a[1])[0];
-    momentum = '<div class="scarce" style="margin-top:-4px;font-size:10px;color:var(--dim)">〰 last 5 picks: '+
-      Object.entries(mc).map(([k,v])=>k+"×"+v).join(" · ")+(hot[1]>=3?' — <b style="color:var(--gold)">'+hot[0]+' heating</b>':'')+'</div>';
+    momentum = '<div class="scarce"><span class="striptag">〰 LAST 5</span><span class="scpill" style="border:none;background:none">'+
+      Object.entries(mc).map(([k,v])=>k+"×"+v).join(" · ")+(hot[1]>=3?' — <b style="color:var(--gold)">'+hot[0]+' heating</b>':'')+'</span></div>';
   }
   // Threats: what teams picking before my next turn still need
   let threats = "";
@@ -2034,7 +2034,7 @@ function renderBest(){
       return n ? '<span class="scpill" title="'+esc([...needBy[pos]].map(slotName).join(", "))+'" style="cursor:help">'+pos+'-needy <b'+(n>=3?' style="color:var(--red)"':'')+'>'+n+'</b></span>' : "";
     }).filter(Boolean);
     if(parts.length && S.log.length>=S.settings.teams)
-      threats = '<div class="scarce" style="margin-top:-4px">🎯 before your #'+h.next+': '+parts.join("")+'</div>';
+      threats = '<div class="scarce"><span class="striptag">🎯 BY #'+h.next+'</span>'+parts.join("")+'</div>';
   }
   hero.innerHTML = pickline + scarce + shelfLine + momentum + threats +
     '<div class="toppick'+(freshTop?' fresh':'')+'">'+
