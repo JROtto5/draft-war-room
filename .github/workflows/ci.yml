@@ -20,7 +20,7 @@ jobs:
           for f in data.js engine.js core.js views.js wire.js boot.js sw.js; do node --check "$f"; done
       - name: HTML sanity
         run: |
-          test "$(grep -c '<script src=' index.html)" = "3"
+          test "$(grep -c '<script src=' index.html)" = "6"
           ! grep -q '<style>' index.html
       - name: Lint & size budgets
         run: node scripts/lint.mjs
