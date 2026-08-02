@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Draft War Room — 2QB League</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0b0f14">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -99,6 +102,8 @@ header{
 .tier.t1{color:var(--gold); border-color:rgba(255,201,77,.5)}
 .tier.t2{color:var(--green); border-color:rgba(47,212,122,.45)}
 .tier.t3{color:var(--wr); border-color:rgba(90,169,255,.45)}
+tr.dndrow{opacity:.45} tr.dndrow .pname{text-decoration:line-through}
+tr.tdiv td{padding:4px 10px; font-size:9.5px; letter-spacing:2px; text-transform:uppercase; color:var(--gold); background:rgba(255,201,77,.05); border-bottom:1px solid var(--line)}
 .ok{color:var(--green)} .mid{color:var(--gold)} .low{color:var(--red)}
 .slotlab{width:34px; flex:none; font-size:9px; font-weight:800; letter-spacing:.5px; color:var(--faint)}
 .benchhead{font-size:9.5px; letter-spacing:2px; color:var(--faint); text-transform:uppercase; padding:9px 8px 3px; border-top:1px solid var(--line); margin-top:7px}
@@ -239,11 +244,14 @@ footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--fa
   </div>
   <div class="spacer"></div>
   <span class="savebadge" id="saveBadge" aria-live="polite">Autosave on</span>
-  <button class="hbtn" id="undoBtn" title="Undo last board action">↩ Undo</button>
+  <button class="hbtn" id="undoBtn" title="Undo last board action (Ctrl+Z)">↩ Undo</button>
+  <button class="hbtn" id="redoBtn" title="Redo (Ctrl+Y)">↪ Redo</button>
   <button class="hbtn" id="mocksBtn">🎲 Mocks</button>
   <button class="hbtn" id="pasteBtn">📋 Paste</button>
   <button class="hbtn" id="cmpBtn">⚖ Compare</button>
   <button class="hbtn" id="sheetBtn" title="Printable cheat sheet (Ctrl+P → PDF)">🖨 Sheet</button>
+  <button class="hbtn" id="csvBtn" title="Download the evaluated board as CSV">⇩ CSV</button>
+  <button class="hbtn" id="helpBtn" title="Legend & keyboard shortcuts (?)">?</button>
   <button class="hbtn" id="addBtn">+ Player</button>
   <button class="hbtn" id="settingsBtn">⚙ Settings</button>
   <button class="hbtn" id="exportBtn">⇩ Export</button>
@@ -375,6 +383,27 @@ footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--fa
   </div>
 </div>
 
+<!-- Help modal -->
+<div class="overlay" id="helpOverlay">
+  <div class="modal">
+    <h3>Legend & Shortcuts</h3>
+    <div class="body" style="font-size:12.5px; line-height:2">
+      <div class="sechead">Badges</div>
+      ⭐ analyst target (hover for their note) &nbsp; ▲/▼ prop-market lean<br>
+      💎 falling 10+ picks past ADP &nbsp; 🔗 stacks with your roster<br>
+      🔥 won't reach your next pick &nbsp; ⏳ coin-flip &nbsp; <b class="ok">% back</b> simulated survival odds<br>
+      <span class="tier t1">T1</span> position tier &nbsp; 📝 your note &nbsp; 🚫 do-not-draft &nbsp; <span class="rd">R3–4</span> expected round (~ = estimated)
+      <div class="sechead">Keyboard</div>
+      <span class="mono">/</span> search (fuzzy: cmc, jsn) &nbsp; <span class="mono">↑↓</span> highlight row<br>
+      <span class="mono">M</span> my pick &nbsp; <span class="mono">T</span>/<span class="mono">X</span> taken &nbsp; <span class="mono">D</span> do-not-draft &nbsp; <span class="mono">N</span> note<br>
+      <span class="mono">Ctrl+Z</span> undo &nbsp; <span class="mono">Ctrl+Y</span> redo &nbsp; <span class="mono">Esc</span> clear/blur &nbsp; <span class="mono">?</span> this help
+      <div class="sechead">Tips</div>
+      Click a projection to edit it · click a player name for a note · click the pick banner to resync the pick number · hover a team code for playoff-week matchups.
+    </div>
+    <div class="foot"><button class="hbtn" id="helpClose">Close</button></div>
+  </div>
+</div>
+
 <!-- Compare modal -->
 <div class="overlay" id="cmpOverlay">
   <div class="modal" style="width:min(640px,94vw)">
@@ -418,6 +447,7 @@ footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--fa
         Your picks follow the engine under five different strategies. Re-roll for new outcomes.
       </div>
       <div class="mockgrid" id="mockGrid"></div>
+      <div id="mockConsensus" class="note" style="margin-top:12px"></div>
     </div>
     <div class="foot">
       <button class="hbtn" id="mocksReroll" style="border-color:var(--gold);color:var(--gold)">🎲 Re-roll</button>
@@ -1106,6 +1136,7 @@ const INTEL = {
 }
 };
 function normName(n){return n.toLowerCase().replace(/[.'\u2019-]/g,'').replace(/\s+(jr|sr|ii|iii|iv|v)$/,'').replace(/\s+/g,' ').trim();}
+const PSOS = {"BUF": {"o": ["DET", "NEP", "NYJ"], "r": [10, 12, 31]}, "BAL": {"o": ["NYG", "PIT", "HOU"], "r": [13, 6, 3]}, "CIN": {"o": ["TEN", "CLE", "DEN"], "r": [25, 14, 1]}, "SFO": {"o": ["LAR", "MIA", "DET"], "r": [8, 28, 10]}, "LAC": {"o": ["TBB", "DEN", "NEP"], "r": [17, 1, 12]}, "DET": {"o": ["BUF", "CHI", "SFO"], "r": [16, 24, 15]}, "DAL": {"o": ["CAR", "TBB", "PHI"], "r": [18, 17, 4]}, "LAR": {"o": ["SFO", "NYJ", "ARI"], "r": [15, 31, 30]}, "PHI": {"o": ["PIT", "WAS", "DAL"], "r": [6, 27, 29]}, "CHI": {"o": ["MIN", "DET", "SEA"], "r": [5, 10, 2]}, "JAC": {"o": ["NYJ", "LVR", "TEN"], "r": [31, 26, 25]}, "NEP": {"o": ["ARI", "BUF", "LAC"], "r": [30, 16, 23]}, "IND": {"o": ["DEN", "TEN", "NYG"], "r": [1, 25, 13]}, "WAS": {"o": ["NOS", "PHI", "ATL"], "r": [22, 4, 20]}, "GBP": {"o": ["SEA", "NOS", "MIN"], "r": [2, 22, 5]}, "NYG": {"o": ["BAL", "ATL", "IND"], "r": [19, 20, 21]}, "NOS": {"o": ["WAS", "GBP", "LVR"], "r": [27, 7, 26]}, "DEN": {"o": ["IND", "LAC", "CIN"], "r": [21, 23, 32]}, "SEA": {"o": ["GBP", "MIN", "CHI"], "r": [7, 5, 24]}, "ATL": {"o": ["LVR", "NYG", "WAS"], "r": [26, 13, 27]}, "TBB": {"o": ["LAC", "DAL", "CAR"], "r": [23, 29, 18]}, "KCC": {"o": ["CLE", "HOU", "PIT"], "r": [14, 3, 6]}, "LVR": {"o": ["ATL", "JAC", "NOS"], "r": [20, 11, 22]}, "MIA": {"o": ["HOU", "SFO", "CLE"], "r": [3, 15, 14]}, "HOU": {"o": ["MIA", "KCC", "BAL"], "r": [28, 9, 19]}, "MIN": {"o": ["CHI", "SEA", "GBP"], "r": [24, 2, 7]}, "NYJ": {"o": ["JAC", "LAR", "BUF"], "r": [11, 8, 16]}, "CAR": {"o": ["DAL", "ARI", "TBB"], "r": [29, 30, 17]}, "TEN": {"o": ["CIN", "IND", "JAC"], "r": [32, 21, 11]}, "ARI": {"o": ["NEP", "CAR", "LAR"], "r": [12, 18, 8]}, "PIT": {"o": ["PHI", "BAL", "KCC"], "r": [4, 19, 9]}, "CLE": {"o": ["KCC", "CIN", "MIA"], "r": [9, 32, 28]}};
 
 const POSITIONS = ["QB","RB","WR","TE","DEF"];
 const LS_KEY = "draft-war-room-v2";
@@ -1113,6 +1144,9 @@ const LS_KEY = "draft-war-room-v2";
 /* ---------- State ---------- */
 const defaultState = () => ({
   taken: {},            // id -> true (drafted by someone else)
+  pickOffset: 0,        // manual correction: real overall pick - marked picks
+  notes: {},            // id -> personal note
+  dnd: {},              // id -> true (do-not-draft)
   mine: [],             // ids in pick order
   log: [],              // {id, who:'me'|'other'}
   custom: [],           // [name,team,pos,proj,id]
@@ -1121,6 +1155,22 @@ const defaultState = () => ({
   ui: { pos:"ALL", showTaken:false, sort:"vorp", dir:-1, round:"ALL", targetsOnly:false, stacksOnly:false, survivors:false }
 });
 let S = defaultState();
+
+/* ---------- Per-board-state memoization ----------
+   Odds sims, tiers, rounds and replacement levels only change when the
+   board does — cache them behind a state fingerprint. */
+let _memo = {key:null};
+function stateKey(){
+  return S.log.length+"|"+S.mine.length+"|"+Object.keys(S.taken).length+"|"+S.custom.length+"|"+
+         JSON.stringify(S.overrides)+"|"+(S.pickOffset||0)+"|"+JSON.stringify(S.settings);
+}
+function cached(name, fn){
+  const k = stateKey();
+  if(_memo.key!==k) _memo = {key:k};
+  if(!(name in _memo)) _memo[name] = fn();
+  return _memo[name];
+}
+function pickNow(){ return S.log.length + 1 + (S.pickOffset||0); }
 
 function load(){
   try{
@@ -1168,7 +1218,7 @@ function myOverallPicks(){
    so a 205-pt QB prices like the 205-pt QBs the market DID rank — not like a
    205-pt WR. Positions with no anchors at all (DEF) map to the late rounds
    by position rank. */
-function roundInfo(players){
+function roundInfoRaw(players){
   const t = S.settings.teams, cap = t*S.settings.roster, R = S.settings.roster;
   const anchors = {}, posRank = {};
   for(const pos of POSITIONS){
@@ -1211,7 +1261,7 @@ function roundInfo(players){
 
 /* Position tiers from projection gaps: a new tier starts wherever the
    drop-off from the previous player is meaningful (4.5% or 8+ pts). */
-function tierMap(players){
+function tierMapRaw(players){
   const m = {};
   for(const pos of POSITIONS){
     const list = players.filter(p=>p.pos===pos).sort((a,b)=>b.proj-a.proj);
@@ -1230,9 +1280,9 @@ function tierMap(players){
 /* Monte Carlo: % chance each available player survives the CPU picks
    between now and my next pick. Seeded by board state so it's stable
    until another pick happens. Back-to-back turn picks → 100%. */
-function survivalOdds(){
+function survivalOddsRaw(){
   const h = nextPickHorizon(); if(!h) return null;
-  const from = S.log.length+1, to = h.next;
+  const from = pickNow(), to = h.next;
   const players = allPlayers();
   if(to <= from){ const o={}; players.forEach(p=>o[p.id]=100); return o; }
   const rinfo = roundInfo(players);
@@ -1264,10 +1314,14 @@ function survivalOdds(){
   for(const p of players) out[p.id] = Math.round(100*(surv[p.id]||0)/trials);
   return out;
 }
+function tierMap(players){ return cached("tiers", ()=>tierMapRaw(players)); }
+function survivalOdds(){ return cached("odds", survivalOddsRaw); }
+function roundInfo(players){ return cached("rounds", ()=>roundInfoRaw(players)); }
+function replacementLevels(players){ return cached("repl", ()=>replacementLevelsRaw(players)); }
 function oddsClass(v){ return v>=70 ? "ok" : v>=35 ? "mid" : "low"; }
 
 function nextPickHorizon(){
-  const cur = S.log.length + 1;               // pick currently on the clock
+  const cur = pickNow();                       // pick currently on the clock
   const mine = myOverallPicks().filter(x=>x>=cur);
   if(!mine.length) return null;
   const onClock = mine[0]===cur;
@@ -1277,7 +1331,7 @@ function nextPickHorizon(){
 
 /* Replacement level per position — scales with league size. 2-QB league:
    teams×2 QB starters, so replacement QB is deep and QBs carry huge value. */
-function replacementLevels(players){
+function replacementLevelsRaw(players){
   const t = S.settings.teams;
   const demand = { QB:Math.round(t*2.3), RB:Math.round(t*2.6), WR:Math.round(t*3.2), TE:Math.round(t*1.3), DEF:Math.round(t*1.1) };
   const repl = {};
@@ -1341,7 +1395,7 @@ function scoreBoard(){
   }
   const mustFill = totalNeeded >= picksLeft && picksLeft > 0; // out of slack: only needed positions
   const horizon = nextPickHorizon();
-  const avail = players.filter(p => !S.taken[p.id] && !S.mine.includes(p.id));
+  const avail = players.filter(p => !S.taken[p.id] && !S.mine.includes(p.id) && !S.dnd[p.id]);
   const tm = tierMap(players);
   const tierLeft = {};
   for(const p of avail){ const k=p.pos+tm[p.id]; tierLeft[k]=(tierLeft[k]||0)+1; }
@@ -1379,7 +1433,7 @@ function scoreBoard(){
       why.push("⚠️ tier cliff — "+(left===1?"LAST one":"only "+left)+" left in "+p.pos+" Tier "+tm[p.id]);
     }
     // Market steal: sliding well past his ADP
-    const fall = p.adp ? (S.log.length+1) - p.adp : 0;
+    const fall = p.adp ? pickNow() - p.adp : 0;
     if(fall >= 10) why.push("💎 falling — "+fall+" picks past his ADP ("+p.adp+")");
     // Will he survive to my next pick? (snake, slot-aware)
     let backRisk = null;
@@ -1395,26 +1449,44 @@ function scoreBoard(){
 }
 
 /* ---------- Actions ---------- */
-function markTaken(id){ S.taken[id]=true; S.log.push({id, who:"other"}); commit(); }
-function pickMine(id){ S.mine.push(id); S.log.push({id, who:"me"}); commit(); }
+let redoStack = [];
+function markTaken(id){ redoStack.length=0; S.taken[id]=true; S.log.push({id, who:"other"}); commit(); }
+function pickMine(id){ redoStack.length=0; S.mine.push(id); S.log.push({id, who:"me"}); commit(); }
 function undoLast(){
   const last = S.log.pop();
   if(!last) return;
   if(last.who==="me"){ S.mine = S.mine.filter(x=>x!==last.id); }
   else { delete S.taken[last.id]; }
+  redoStack.push(last);
+  commit();
+}
+function redoLast(){
+  const e = redoStack.pop();
+  if(!e) return;
+  if(e.who==="me") S.mine.push(e.id); else S.taken[e.id]=true;
+  S.log.push(e);
   commit();
 }
 function undoEntry(i){
   const e = S.log[i];
   if(!e) return;
+  redoStack.length=0;
   if(e.who==="me"){ const k=S.mine.lastIndexOf(e.id); if(k>=0) S.mine.splice(k,1); }
   else delete S.taken[e.id];
   S.log.splice(i,1);
   commit();
 }
 function dropMine(id){
+  redoStack.length=0;
   const k=S.mine.lastIndexOf(id); if(k>=0) S.mine.splice(k,1);
   for(let i=S.log.length-1;i>=0;i--){ if(S.log[i].id===id && S.log[i].who==="me"){ S.log.splice(i,1); break; } }
+  commit();
+}
+function editNote(id){
+  const p = idIndex()[id]; if(!p) return;
+  const v = prompt("Note for "+p.name+":", S.notes[id]||"");
+  if(v===null) return;
+  if(v.trim()==="") delete S.notes[id]; else S.notes[id]=v.trim();
   commit();
 }
 function editProj(id){
@@ -1459,7 +1531,7 @@ function runMock(strat, seed){
   const cpu = {}; for(let s=1;s<=t;s++) cpu[s]={QB:0,RB:0,WR:0,TE:0,DEF:0, qbGreed:0.5+rng()*0.55};
   const picks = [];
 
-  for(let pick=S.log.length+1; pick<=total; pick++){
+  for(let pick=pickNow(); pick<=total; pick++){
     const r = Math.ceil(pick/t);
     const idx = pick-(r-1)*t;
     const slot = (r%2===1) ? idx : t+1-idx;
@@ -1477,6 +1549,7 @@ function runMock(strat, seed){
       mineIds.forEach(id=>{const p=byId[id]; if(!p)return; if(p.pos==="QB")myQBt.add(p.team); if(p.pos==="WR"||p.pos==="TE")myPCt.add(p.team);});
       let bestScore=-1e9;
       for(const p of avail){
+        if(S.dnd[p.id]) continue;
         const need=(min[p.pos]||0)-counts[p.pos];
         if(mustFill && need<=0) continue;
         let sc = p.proj-(repl[p.pos]||0);
@@ -1522,8 +1595,9 @@ function renderMocks(){
   const base = Math.floor(Math.random()*1e9);
   const already = S.mine.length;
   $("#mockCtx").textContent = already ? "(continuing from your "+already+" real pick"+(already>1?"s":"")+")" : "(from a clean board)";
+  const results = STRATS.map((st,i)=>runMock(st, base + i*7919));
   $("#mockGrid").innerHTML = STRATS.map((st,i)=>{
-    const m = runMock(st, base + i*7919);
+    const m = results[i];
     const rows = m.picks.map(pk=>{
       const isStart = m.starterIds.has(pk.p.id);
       const tag = (pk.p.intel&&pk.p.intel.t!=null?" ⭐":"");
@@ -1539,6 +1613,13 @@ function renderMocks(){
       '<div class="mtot" style="margin:-4px 0 8px; font-size:10px">'+st.blurb+'</div>'+
       kept + rows + '</div>';
   }).join("");
+  // Consensus: who the sims keep handing you at current prices
+  const exp = {};
+  results.forEach(m=>m.picks.forEach(pk=>{ exp[pk.p.id] = exp[pk.p.id] ? {p:pk.p, n:exp[pk.p.id].n+1} : {p:pk.p, n:1}; }));
+  const guys = Object.values(exp).filter(x=>x.n>=3).sort((a,b)=>b.n-a.n || b.p.proj-a.p.proj).slice(0,12);
+  $("#mockConsensus").innerHTML = guys.length
+    ? '🎯 <b>Your guys</b> — landed on your team in 3+ of 5 sims: ' + guys.map(x=>'<b>'+x.p.name+'</b> ('+x.n+'/5)').join(" · ")
+    : "No strong consensus across strategies — your seat has options.";
 }
 
 /* ---------- Head-to-head compare ---------- */
@@ -1581,6 +1662,7 @@ function renderCompare(){
     row("ADP", A.adp||"—", B.adp||"—") +
     row("Expected round", a.rd, b.rd) +
     row("Back at next pick", a.odds, b.odds, 1) +
+    row("Playoff weeks", psosFor(A.team)?psosFor(A.team).short:"—", psosFor(B.team)?psosFor(B.team).short:"—") +
     row("Status", a.status, b.status) +
     '</table><div style="margin-top:12px; font-size:13px">'+verdict+'</div>'+
     (a.why.length||b.why.length ? '<div class="note">'+(a.why.length?'<b>'+A.name+':</b> '+a.why.join(" · ")+'<br>':'')+(b.why.length?'<b>'+B.name+':</b> '+b.why.join(" · "):'')+'</div>' : '');
@@ -1593,7 +1675,7 @@ function gradeDraft(){
   if(!window._gradeBase || window._gradeBase.key!==key){
     const bak = {taken:S.taken, mine:S.mine, log:S.log};
     S.taken={}; S.mine=[]; S.log=[];                  // clean-board baseline
-    const base = [1,2,3].map(i=>runMock(STRATS[0], 777000+i*104729).startPts);
+    const base = [1,2,3,4,5].map(i=>runMock(STRATS[0], 777000+i*104729).startPts);
     S.taken=bak.taken; S.mine=bak.mine; S.log=bak.log;
     window._gradeBase = {key, avg: base.reduce((a,b)=>a+b,0)/base.length};
   }
@@ -1632,6 +1714,12 @@ function matchesQuery(p, q){
   return false;
 }
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
+function psosFor(team){
+  const s = typeof PSOS!=="undefined" ? PSOS[team] : null;
+  if(!s) return null;
+  return {txt:"Playoff weeks: W15 "+s.o[0]+" · W16 "+s.o[1]+" · W17 "+s.o[2]+" (matchup ranks "+s.r.join("/")+")",
+          short:"W15 "+s.o[0]+" · W16 "+s.o[1]+" · W17 "+s.o[2]};
+}
 function intelBadges(p){
   if(!p.intel) return "";
   let h="";
@@ -1642,7 +1730,7 @@ function intelBadges(p){
 }
 
 function renderTabs(){
-  const tabs = ["ALL"].concat(POSITIONS);
+  const tabs = ["ALL","QB","RB","WR","TE","FLEX","DEF"];
   $("#posTabs").innerHTML = tabs.map(t=>
     '<button class="ptab'+(S.ui.pos===t?" on":"")+'" data-pos="'+t+'">'+t+'</button>').join("");
 }
@@ -1666,7 +1754,8 @@ function renderPool(){
     rd: rinfo[p.id]
   }));
 
-  if(S.ui.pos!=="ALL") rows = rows.filter(r=>r.p.pos===S.ui.pos);
+  if(S.ui.pos==="FLEX") rows = rows.filter(r=>["RB","WR","TE"].includes(r.p.pos));
+  else if(S.ui.pos!=="ALL") rows = rows.filter(r=>r.p.pos===S.ui.pos);
   if(q) rows = rows.filter(r=> matchesQuery(r.p, q));
   if(!S.ui.showTaken) rows = rows.filter(r=>!r.taken);
   if(S.ui.round!=="ALL"){
@@ -1700,26 +1789,37 @@ function renderPool(){
     th.classList.toggle("sorton", th.dataset.sort===key);
   });
 
-  const curRd = Math.min(Math.ceil((S.log.length+1)/S.settings.teams), S.settings.roster);
+  const curRd = Math.min(Math.ceil(pickNow()/S.settings.teams), S.settings.roster);
 
+  const showTierDividers = ["QB","RB","WR","TE","DEF"].includes(S.ui.pos) && (key==="vorp"||key==="rank"||key==="proj") && dir===-1;
+  let prevTier = null;
+  const tw = document.querySelector(".tablewrap");
+  const scrollSave = tw ? tw.scrollTop : 0;
   $("#poolBody").innerHTML = rows.map((r,i)=>{
-    const cls = r.mine ? "mine-row" : (r.taken ? "taken" : "");
+    const cls = r.mine ? "mine-row" : (r.taken ? "taken" : (S.dnd[r.p.id] ? "dndrow" : ""));
     const act = r.mine
       ? '<button class="undo1" data-drop="'+r.p.id+'">↩ un-pick</button>'
       : r.taken
         ? '<button class="undo1" data-untake="'+r.p.id+'">↩ restore</button>'
-        : '<button class="pick" data-pick="'+r.p.id+'">✓ MINE</button><button class="kill" data-take="'+r.p.id+'">✕ taken</button>';
-    return '<tr class="'+cls+'" data-pid="'+r.p.id+'">'+
+        : '<button class="pick" data-pick="'+r.p.id+'">✓ MINE</button><button class="kill" data-take="'+r.p.id+'">✕ taken</button>'+
+          '<button class="undo1" data-dnd="'+r.p.id+'" title="'+(S.dnd[r.p.id]?"Allow drafting again":"Do not draft — hide from recommendations")+'" aria-label="Toggle do-not-draft">'+(S.dnd[r.p.id]?"↩":"🚫")+'</button>';
+    let div = "";
+    if(showTierDividers && tm[r.p.id]!==prevTier){
+      div = '<tr class="tdiv"><td colspan="9">Tier '+tm[r.p.id]+'</td></tr>';
+      prevTier = tm[r.p.id];
+    }
+    return div + '<tr class="'+cls+'" data-pid="'+r.p.id+'">'+
       '<td class="mono" style="color:var(--faint)">'+(i+1)+'</td>'+
-      '<td><span class="pname">'+r.p.name+'</span>'+intelBadges(r.p)+(r.stack?'<span class="stackchip">🔗 stack</span>':'')+(!r.taken&&!r.mine&&r.p.adp&&(S.log.length+1-r.p.adp)>=10?'<span class="ib" title="Falling: '+(S.log.length+1-r.p.adp)+' picks past ADP '+r.p.adp+'">💎</span>':'')+(r.backRisk==="gone"?'<span class="ib" title="Won\'t make it back to your next pick">🔥</span>':r.backRisk==="risky"?'<span class="ib" title="Coin-flip to survive to your next pick">⏳</span>':'')+'</td>'+
+      '<td><span class="pname" data-note="'+r.p.id+'" title="'+(S.notes[r.p.id]?esc(S.notes[r.p.id])+' — click to edit':'Click to add a note')+'" style="cursor:pointer">'+r.p.name+'</span>'+(S.notes[r.p.id]?'<span class="ib gold" title="'+esc(S.notes[r.p.id])+'">📝</span>':'')+(S.dnd[r.p.id]&&!r.taken&&!r.mine?'<span class="ib bear" title="On your do-not-draft list">🚫</span>':'')+intelBadges(r.p)+(r.stack?'<span class="stackchip">🔗 stack</span>':'')+(!r.taken&&!r.mine&&r.p.adp&&(pickNow()-r.p.adp)>=10?'<span class="ib" title="Falling: '+(pickNow()-r.p.adp)+' picks past ADP '+r.p.adp+'">💎</span>':'')+(r.backRisk==="gone"?'<span class="ib" title="Won\'t make it back to your next pick">🔥</span>':r.backRisk==="risky"?'<span class="ib" title="Coin-flip to survive to your next pick">⏳</span>':'')+'</td>'+
       '<td>'+posBadge(r.p.pos)+'<span class="tier t'+Math.min(tm[r.p.id],5)+'">T'+tm[r.p.id]+'</span></td>'+
-      '<td class="mono" style="color:var(--dim)">'+r.p.team+'</td>'+
+      '<td class="mono" style="color:var(--dim)'+(psosFor(r.p.team)?';cursor:help':'')+'"'+(psosFor(r.p.team)?' title="'+esc(psosFor(r.p.team).txt)+'"':'')+'>'+r.p.team+'</td>'+
       '<td><span class="proj mono" data-edit="'+r.p.id+'">'+r.p.proj+'</span></td>'+
       '<td class="mono" style="color:'+(r.vorp>=0?'var(--green)':'var(--faint)')+'">'+(r.vorp>0?"+":"")+Math.round(r.vorp)+'</td>'+
       '<td class="mono" style="color:var(--dim)">'+(r.p.adp||"—")+'</td>'+
       '<td><span class="rd'+(curRd && !r.rd.ud && r.rd.rd<=curRd?" now":"")+'" title="'+(r.rd.est?"Estimated from projection rank (no market ADP)":"Expected round window from ADP")+'">'+r.rd.label+'</span></td>'+
       '<td><div class="act">'+act+'</div></td></tr>';
-  }).join("") || '<tr><td colspan="9" class="empty">No players match.</td></tr>';
+  }).join("") || '<tr><td colspan="9" class="empty">No players match the current filters.<br><br><button class="undo1" data-clearfilters="1">✕ Clear all filters</button></td></tr>';
+  if(tw) tw.scrollTop = scrollSave;
   $("#poolCount").textContent = rows.length + " players";
   window._poolIds = rows.filter(r=>!r.taken && !r.mine).length ? rows.map(r=>r.p.id) : [];
   applyKbSel();
@@ -1728,7 +1828,7 @@ function renderPool(){
 /* Keyboard drafting: arrows move the highlight, M = my pick, T/X = taken */
 let kbSel = -1;
 function applyKbSel(){
-  const trs = document.querySelectorAll("#poolBody tr");
+  const trs = document.querySelectorAll("#poolBody tr[data-pid]");
   trs.forEach((tr,i)=>tr.classList.toggle("kbsel", i===kbSel));
   if(kbSel>=0 && trs[kbSel]) trs[kbSel].scrollIntoView({block:"nearest"});
 }
@@ -1746,7 +1846,7 @@ function renderBest(){
   const h = nextPickHorizon();
   let pickline = "";
   if(h){
-    pickline = '<div class="pickline'+(h.onClock?' onclock':'')+'">Pick <b class="mono">#'+h.cur+'</b> on the clock'+
+    pickline = '<div class="pickline'+(h.onClock?' onclock':'')+'" data-picksync="1" title="Click to correct the current overall pick if the board drifted" style="cursor:pointer">Pick <b class="mono">#'+h.cur+'</b> on the clock'+
       (h.onClock ? ' — <b style="color:var(--green)">THAT\'S YOU, DRAFT NOW</b>' : '') +
       ' · your next: <b class="mono">#'+h.mine0+'</b>'+(h.mine1?' then <b class="mono">#'+h.mine1+'</b>':'')+'</div>';
   }
@@ -1768,6 +1868,7 @@ function renderBest(){
         '<button class="kill" data-take="'+p.id+'">✕ someone took him</button>'+
       '</div>'+
     '</div>';
+  const bl = document.querySelector(".balist"); const blScroll = bl ? bl.scrollTop : 0;
   $("#baList").innerHTML = scored.slice(1,16).map((s,i)=>
     '<div class="barow">'+
       '<div class="rk mono">'+(i+2)+'</div>'+
@@ -1779,6 +1880,20 @@ function renderBest(){
       '<button class="kill" data-take="'+s.p.id+'">✕</button>'+
     '</div>'
   ).join("");
+  // Best available at each position
+  const bypos = {};
+  for(const s of scored){ if(!bypos[s.p.pos]) bypos[s.p.pos] = s; }
+  $("#baList").innerHTML += '<div class="benchhead" style="border-top:1px solid var(--line);margin-top:8px">Best at position</div>' +
+    POSITIONS.map(pos=>{
+      const s = bypos[pos];
+      if(!s) return '<div class="barow"><div class="rk"></div>'+posBadge(pos)+'<div class="info"><div class="sm">— none left</div></div></div>';
+      return '<div class="barow"><div class="rk"></div>'+posBadge(pos)+
+        '<div class="info"><div class="nm">'+s.p.name+'</div><div class="sm">'+s.p.proj+' pts'+(odds&&odds[s.p.id]!=null?' · <b class="'+oddsClass(odds[s.p.id])+'">'+odds[s.p.id]+'%</b>':'')+'</div></div>'+
+        '<div class="val mono">'+(s.vorp>0?"+":"")+Math.round(s.vorp)+'</div>'+
+        '<button class="pick" data-pick="'+s.p.id+'">✓</button>'+
+        '<button class="kill" data-take="'+s.p.id+'">✕</button></div>';
+    }).join("");
+  if(bl) bl.scrollTop = blScroll;
 }
 
 function renderRoster(){
@@ -1857,7 +1972,7 @@ function renderLog(){
   const t = S.settings.teams;
   $("#logList").innerHTML = S.log.length ? S.log.map((e,i)=>{
     const p = byId[e.id]; if(!p) return "";
-    const n = i+1, r = Math.ceil(n/t), ri = n-(r-1)*t;
+    const n = i+1+(S.pickOffset||0), r = Math.ceil(n/t), ri = n-(r-1)*t;
     return '<div class="logrow"><span class="pickno mono">'+r+'.'+String(ri).padStart(2,"0")+'</span>'+
       '<span class="who '+(e.who==="me"?"me":"")+'">'+(e.who==="me"?"MY PICK":"taken")+'</span>'+
       '<span class="n">'+p.name+' <span style="color:var(--faint)">'+p.pos+' · '+p.team+'</span></span>'+
@@ -1872,8 +1987,23 @@ function render(){
 
 /* ---------- Events (delegated) ---------- */
 document.addEventListener("click", e=>{
-  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],th[data-sort]");
+  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],th[data-sort]");
   if(!t) return;
+  if(t.dataset.picksync){
+    const v = prompt("Which overall pick is on the clock right now? (board thinks it's #"+pickNow()+")", pickNow());
+    if(v===null) return;
+    const n = parseInt(v,10);
+    if(!isNaN(n) && n>=1){ S.pickOffset = n - 1 - S.log.length; commit(); }
+    return;
+  }
+  if(t.dataset.note){ return editNote(t.dataset.note); }
+  if(t.dataset.dnd){ S.dnd[t.dataset.dnd] ? delete S.dnd[t.dataset.dnd] : S.dnd[t.dataset.dnd]=true; return commit(); }
+  if(t.dataset.clearfilters){
+    S.ui.pos="ALL"; S.ui.round="ALL"; S.ui.targetsOnly=false; S.ui.stacksOnly=false; S.ui.survivors=false; S.ui.showTaken=false;
+    $("#search").value=""; $("#roundFilter").value="ALL";
+    ["fTargets","fStacks","fSurvive","showTaken"].forEach(id=>$("#"+id).checked=false);
+    save(); renderTabs(); renderPool(); return;
+  }
   if(t.dataset.pick) return pickMine(t.dataset.pick);
   if(t.dataset.take) return markTaken(t.dataset.take);
   if(t.dataset.untake){ delete S.taken[t.dataset.untake]; for(let i=S.log.length-1;i>=0;i--){if(S.log[i].id===t.dataset.untake&&S.log[i].who==="other"){S.log.splice(i,1);break;}} return commit(); }
@@ -1894,7 +2024,9 @@ $("#fTargets").addEventListener("change", e=>{ S.ui.targetsOnly=e.target.checked
 $("#fStacks").addEventListener("change", e=>{ S.ui.stacksOnly=e.target.checked; save(); renderPool(); });
 $("#fSurvive").addEventListener("change", e=>{ S.ui.survivors=e.target.checked; save(); renderPool(); });
 $("#undoBtn").addEventListener("click", undoLast);
+$("#redoBtn").addEventListener("click", redoLast);
 document.addEventListener("keydown", e=>{
+  if((e.ctrlKey||e.metaKey) && (e.key==="y" || (e.shiftKey && e.key.toLowerCase()==="z"))){ e.preventDefault(); redoLast(); return; }
   if((e.ctrlKey||e.metaKey) && e.key==="z"){ e.preventDefault(); undoLast(); return; }
   if(e.key==="Enter"){
     const ae = document.activeElement;
@@ -1902,13 +2034,14 @@ document.addEventListener("keydown", e=>{
   }
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
   if(e.key==="/" && !typing){ e.preventDefault(); $("#search").focus(); return; }
+  if(e.key==="?" && !typing){ e.preventDefault(); $("#helpOverlay").classList.toggle("show"); return; }
   if(e.key==="Escape"){
     if(typing) document.activeElement.blur();
     else { kbSel=-1; applyKbSel(); }
     return;
   }
   if(typing || document.querySelector(".overlay.show")) return;
-  const trs = document.querySelectorAll("#poolBody tr");
+  const trs = document.querySelectorAll("#poolBody tr[data-pid]");
   if(e.key==="ArrowDown"){ e.preventDefault(); kbSel=Math.min(kbSel+1, trs.length-1); applyKbSel(); return; }
   if(e.key==="ArrowUp"){ e.preventDefault(); kbSel=Math.max(kbSel-1, 0); applyKbSel(); return; }
   if(kbSel>=0 && trs[kbSel]){
@@ -1917,6 +2050,8 @@ document.addEventListener("keydown", e=>{
     const k = e.key.toLowerCase();
     if(k==="m"){ e.preventDefault(); if(!S.mine.includes(id)) pickMine(id); }
     if(k==="t"||k==="x"){ e.preventDefault(); if(!S.taken[id] && !S.mine.includes(id)) markTaken(id); }
+    if(k==="d"){ e.preventDefault(); S.dnd[id] ? delete S.dnd[id] : S.dnd[id]=true; commit(); }
+    if(k==="n"){ e.preventDefault(); editNote(id); }
   }
 });
 
@@ -2038,6 +2173,24 @@ $("#sheetBtn").addEventListener("click", ()=>{
   if(w){ w.document.write(html); w.document.close(); }
 });
 
+/* CSV export of the evaluated board */
+$("#csvBtn").addEventListener("click", ()=>{
+  const players=allPlayers(), repl=replacementLevels(players), tm=tierMap(players), rinfo=roundInfo(players);
+  const q = s => '"'+String(s).replace(/"/g,'""')+'"';
+  let csv = "Rank,Player,Pos,Team,Tier,Proj,ValueOverRepl,ADP,ExpectedRound,Status,Note\n";
+  players.map(p=>({p, vorp:p.proj-(repl[p.pos]||0)})).sort((a,b)=>b.vorp-a.vorp).forEach((r,i)=>{
+    const p=r.p, st = S.mine.includes(p.id)?"mine":(S.taken[p.id]?"taken":(S.dnd[p.id]?"do-not-draft":"available"));
+    csv += [i+1, q(p.name), p.pos, p.team, tm[p.id], p.proj, Math.round(r.vorp), p.adp||"", rinfo[p.id]?rinfo[p.id].label:"", st, q(S.notes[p.id]||"")].join(",")+"\n";
+  });
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download="draft-war-room-board.csv"; a.click(); URL.revokeObjectURL(a.href);
+});
+
+/* Help modal */
+$("#helpBtn").addEventListener("click", ()=>$("#helpOverlay").classList.add("show"));
+$("#helpClose").addEventListener("click", ()=>$("#helpOverlay").classList.remove("show"));
+
 /* Auto-backup before destructive actions */
 function backupState(){
   try{ localStorage.setItem(LS_KEY+"-backup", JSON.stringify({when:new Date().toLocaleString(), state:S})); }catch(e){}
@@ -2063,7 +2216,7 @@ $("#importFile").addEventListener("change", e=>{
 $("#resetBtn").addEventListener("click", ()=>{
   if(confirm("Reset the whole board? This clears your roster, taken players, and log. (Settings & custom players are kept. A backup is saved — restore it from ⚙ Settings.)")){
     backupState();
-    const keep = {settings:S.settings, custom:S.custom, overrides:S.overrides};
+    const keep = {settings:S.settings, custom:S.custom, overrides:S.overrides, notes:S.notes, dnd:S.dnd};
     S = Object.assign(defaultState(), keep);
     commit();
   }
@@ -2072,6 +2225,9 @@ $("#resetBtn").addEventListener("click", ()=>{
 /* ---------- Boot ---------- */
 load();
 document.querySelectorAll(".modal").forEach(m=>{ m.setAttribute("role","dialog"); m.setAttribute("aria-modal","true"); });
+if("serviceWorker" in navigator && location.protocol.indexOf("http")===0){
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
 $("#showTaken").checked = S.ui.showTaken;
 $("#roundFilter").value = S.ui.round || "ALL";
 $("#fTargets").checked = !!S.ui.targetsOnly;
