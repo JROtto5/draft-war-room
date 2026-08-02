@@ -329,3 +329,34 @@ th[data-sort]:focus-visible{outline:2px solid var(--green); outline-offset:-2px}
 .newsrow{font-size:12px; padding:5px 4px; border-bottom:1px solid rgba(36,50,71,.3); line-height:1.45}
 .newsrow a{color:var(--text); text-decoration:none}
 .newsrow a:hover{color:var(--green)}
+
+/* ---------- Live mode, panic bar, confetti, lock screen ---------- */
+#liveBtn.liveon{border-color:var(--red); color:var(--red); animation:clockpulse 1.4s infinite}
+#panicBar{
+  position:fixed; top:0; left:0; right:0; z-index:150; display:flex; align-items:center; justify-content:center;
+  gap:16px; padding:12px; background:linear-gradient(180deg, rgba(255,93,93,.18), rgba(11,15,20,.96));
+  backdrop-filter:blur(8px); border-bottom:2px solid var(--red); font-weight:800; font-size:14px;
+  animation:panicIn .3s cubic-bezier(.2,.8,.25,1);
+}
+@keyframes panicIn{from{transform:translateY(-100%)}to{transform:none}}
+.cf{position:fixed; top:-12px; width:9px; height:14px; z-index:300; pointer-events:none; animation:cfFall 3.2s ease-in forwards; border-radius:2px}
+@keyframes cfFall{to{transform:translateY(105vh) rotate(720deg); opacity:.7}}
+#lockScreen{
+  position:fixed; inset:0; z-index:500; display:flex; align-items:center; justify-content:center;
+  background:radial-gradient(900px 500px at 50% 30%, rgba(47,212,122,.09), transparent 60%), var(--bg);
+  transition:opacity .4s;
+}
+#lockScreen.unlocking{opacity:0}
+.lockbox{text-align:center; padding:44px 48px; background:var(--panel); border:1px solid var(--line); border-radius:20px; box-shadow:var(--shadow); max-width:92vw}
+.lockbox .lockicon{font-size:44px; margin-bottom:6px}
+.lockbox h1{font-size:26px; font-weight:800; margin-bottom:4px}
+.lockbox h1 + p{color:var(--dim); font-size:13px; margin-bottom:22px}
+.lockbox form{display:flex; gap:10px; justify-content:center}
+.lockbox input{background:var(--bg2); border:1px solid var(--line); border-radius:10px; color:var(--text); padding:11px 14px; font-family:'JetBrains Mono',monospace; font-size:15px; width:150px; text-align:center; outline:none}
+.lockbox input:focus{border-color:var(--green)}
+.locknote{margin-top:16px; font-size:10.5px; color:var(--faint)}
+.lockbox.shake{animation:shake .4s}
+@keyframes shake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+body.hidecol-adp th:nth-child(7),body.hidecol-adp td:nth-child(7){display:none}
+body.hidecol-edge th:nth-child(8),body.hidecol-edge td:nth-child(8){display:none}
+body.hidecol-rd th:nth-child(9),body.hidecol-rd td:nth-child(9){display:none}

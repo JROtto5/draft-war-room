@@ -24,7 +24,7 @@ const ctx = {
   console, JSON, Math, Array, Object, String, Number, parseFloat, parseInt,
   isNaN, setTimeout: () => 0, clearTimeout: () => {},
   document: anyProxy(), localStorage: anyProxy(), navigator: anyProxy(),
-  location: { protocol: "file:" }, window: {}, alert: () => {}, confirm: () => false,
+  location: { protocol: "file:", search: "", hash: "" }, window: {}, alert: () => {}, confirm: () => false,
   prompt: () => null, requestAnimationFrame: () => 0, MutationObserver: anyProxy(),
   matchMedia: () => ({ matches: false, addEventListener: () => {} }),
   Date, fetch: () => Promise.reject(new Error("no network in tests")),

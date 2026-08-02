@@ -263,7 +263,7 @@ def main():
     out.append("const HEADSHOT = " + json.dumps(heads, separators=(',',':')) + ";")
     out.append("const TEAMLOGO = " + json.dumps(T2ESPN, separators=(',',':')) + ";")
     out.append("const PLAYERMETA = " + json.dumps(meta, ensure_ascii=False, separators=(',',':')) + ";")
-    out.append(f"const LAST{args.season[2:]} = " + json.dumps(last, separators=(',',':')) + ";")
+    out.append("const LASTSZN = " + json.dumps(last, separators=(',',':')) + ";")
     out.append("const PROJ26 = " + json.dumps(proj26, separators=(',',':')) + ";")
     out.append("const TEAMQB = " + json.dumps(teamqb, ensure_ascii=False, separators=(',',':')) + ";")
     out.append("const INJBASE = " + json.dumps(injbase, ensure_ascii=False, separators=(',',':')) + ";")

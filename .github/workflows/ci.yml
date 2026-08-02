@@ -31,7 +31,7 @@ jobs:
           python3 -m http.server 8765 &
           sleep 1
           CHROME=$(command -v google-chrome || command -v chromium-browser || command -v chromium)
-          OUT=$("$CHROME" --headless --no-sandbox --disable-gpu --timeout=12000 --dump-dom http://localhost:8765/e2e.html | grep -o '<title>E2E|[^<]*' || true)
+          OUT=$("$CHROME" --headless --no-sandbox --disable-gpu --virtual-time-budget=25000 --dump-dom "http://localhost:8765/e2e.html?e2e" | grep -o '<title>E2E|[^<]*' || true)
           echo "result: $OUT"
           case "$OUT" in
             *E2E\|*BAD*|*E2E\|*ERR*|"") exit 1 ;;

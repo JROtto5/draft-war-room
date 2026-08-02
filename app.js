@@ -14,6 +14,7 @@ const defaultState = () => ({
   custom: [],           // [name,team,pos,proj,id]
   overrides: {},        // id -> proj
   settings: { teams:12, roster:16, slot:12, scoring:"ppr", ptd:6, min:{QB:2,RB:3,WR:3,TE:1,DEF:1} },
+  slotNames: {"1":"adamslanding","2":"NoahSchindler","3":"schinbad91","4":"DNSchindler","5":"DiddyPartay","6":"SPIDEYxSENSEZ","7":"picklerick10","8":"Cards0407","9":"nbachman","10":"JSchindler5","11":"schindler","12":"Otto5"},
   ui: { pos:"ALL", showTaken:false, sort:"vorp", dir:-1, round:"ALL", targetsOnly:false, stacksOnly:false, survivors:false }
 });
 let S = defaultState();
@@ -33,6 +34,19 @@ function cached(name, fn){
   return _memo[name];
 }
 function pickNow(){ return S.log.length + 1 + (S.pickOffset||0); }
+function slotName(s){ return (S.slotNames && S.slotNames[s]) || ("T"+s); }
+/* who has whom: slot -> [player ids], reconstructed from pick order */
+function teamRosters(){
+  const byId = idIndex(), t = S.settings.teams, ros = {};
+  for(let s=1;s<=t;s++) ros[s] = [];
+  S.log.forEach((e,i)=>{
+    const n = i+1+(S.pickOffset||0), r = Math.ceil(n/t), idx = n-(r-1)*t;
+    const slot = (r%2===1) ? idx : t+1-idx;
+    const p = byId[e.id];
+    if(p && ros[slot]) ros[slot].push(e.id);
+  });
+  return ros;
+}
 
 function load(){
   try{
@@ -43,6 +57,7 @@ function load(){
       S.settings = Object.assign(defaultState().settings, p.settings||{});
       S.settings.min = Object.assign(defaultState().settings.min, (p.settings||{}).min||{});
       S.ui = Object.assign(defaultState().ui, p.ui||{});
+      S.slotNames = Object.assign(defaultState().slotNames, p.slotNames||{});
     }
   }catch(e){
     console.warn("load failed, trying backup", e);
@@ -336,6 +351,20 @@ function scoreBoard(){
 }
 
 /* ---------- Actions ---------- */
+function confetti(){
+  const colors = ["#2fd47a","#ffc94d","#5aa9ff","#ff6b6b","#b78cff"];
+  for(let i=0;i<48;i++){
+    const s = document.createElement("span");
+    s.className = "cf";
+    s.style.left = Math.random()*100+"vw";
+    s.style.background = colors[i%colors.length];
+    s.style.animationDelay = (Math.random()*0.9)+"s";
+    s.style.transform = "rotate("+Math.random()*360+"deg)";
+    document.body.appendChild(s);
+    setTimeout(()=>s.remove(), 4200);
+  }
+}
+
 /* ---------- Toasts ---------- */
 function toast(msg, opts){
   let wrap = document.getElementById("toastWrap");
@@ -880,7 +909,7 @@ function newsFor(p){
 }
 
 function metaFor(p){ return (typeof PLAYERMETA!=="undefined" && PLAYERMETA[normName(p.name)]) || null; }
-function lastFor(p){ return (typeof LAST25!=="undefined" && LAST25[normName(p.name)]) || null; }
+function lastFor(p){ return (typeof LASTSZN!=="undefined" && LASTSZN[normName(p.name)]) || null; }
 function projFor(p){ return (typeof PROJ26!=="undefined" && PROJ26[normName(p.name)]) || null; }
 function ageCliff(p){
   const m = metaFor(p); if(!m || !m[0]) return 0;
@@ -904,7 +933,7 @@ function logoUrl(team){
 function avatarImg(p, size){
   const u = headshotUrl(p);
   if(!u) return '<span class="avatar ph" style="width:'+size+'px;height:'+size+'px">'+p.name[0]+'</span>';
-  return '<img class="avatar" src="'+u+'" width="'+size+'" height="'+size+'" loading="lazy" decoding="async" alt="" onerror="this.outerHTML=\'<span class=&quot;avatar ph&quot; style=&quot;width:'+size+'px;height:'+size+'px&quot;>'+esc(p.name[0])+'</span>\'">';
+  return '<img class="avatar" src="'+u+'" width="'+size+'" height="'+size+'"'+(size>=56?' fetchpriority="high"':' loading="lazy"')+' decoding="async" alt="" onerror="this.outerHTML=\'<span class=&quot;avatar ph&quot; style=&quot;width:'+size+'px;height:'+size+'px&quot;>'+esc(p.name[0])+'</span>\'">';
 }
 function psosFor(team){
   const s = typeof PSOS!=="undefined" ? PSOS[team] : null;
@@ -1056,6 +1085,17 @@ function renderBest(){
       ' · your next: <b class="mono">#'+h.mine0+'</b>'+(h.mine1?' then <b class="mono">#'+h.mine1+'</b>':'')+'</div>';
   }
   document.title = (h && h.onClock ? "🟢 YOUR PICK — " : "") + "Draft War Room — 2QB";
+  if(h && h.onClock && !window._wasOnClock && S.ui.live) chime();
+  window._wasOnClock = !!(h && h.onClock);
+  updatePanic(h, top);
+  if(S.ui.live && h && S.ui.liveStart){
+    const el = (Date.now()-S.ui.liveStart)/1000;
+    const made = Math.max(0, S.log.length-(S.ui.liveLen0||0));
+    const pace = made>2 ? el/made : 0;
+    const left = S.settings.teams*S.settings.roster - h.cur + 1;
+    const eta = pace ? new Date(Date.now()+left*pace*1000).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}) : "—";
+    pickline += '<div class="pickline" style="margin-top:-4px">⏱ <b class="mono">'+Math.floor(el/60)+'m</b> · '+made+' picks · '+(pace?Math.round(pace)+'s/pick · draft ends ~<b class="mono">'+eta+'</b>':'measuring pace…')+'</div>';
+  }
   // Startable players (VORP > 0) left per position
   const scLeft = {}; POSITIONS.forEach(pos=>scLeft[pos]=0);
   scored.forEach(s=>{ if(s.vorp>0) scLeft[s.p.pos]++; });
@@ -1077,7 +1117,28 @@ function renderBest(){
   const heroGain = S.mine.length ? Math.max(0, Math.round(bestStarters(S.mine.concat([p.id]), idIndex()).pts - bestStarters(S.mine, idIndex()).pts)) : 0;
   const freshTop = window._lastTopId !== p.id;
   window._lastTopId = p.id;
-  hero.innerHTML = pickline + scarce +
+  // Threats: what teams picking before my next turn still need
+  let threats = "";
+  if(h && h.next > h.cur){
+    const ros = teamRosters(), byIdT = idIndex(), t2 = S.settings.teams;
+    const myPicksSet = new Set(myOverallPicks());
+    const needBy = {QB:new Set(), RB:new Set(), WR:new Set(), TE:new Set(), DEF:new Set()};
+    for(let pk=h.cur; pk<h.next; pk++){
+      if(myPicksSet.has(pk)) continue;
+      const r2 = Math.ceil(pk/t2), idx2 = pk-(r2-1)*t2, slot2 = (r2%2===1)?idx2:t2+1-idx2;
+      const c = {QB:0,RB:0,WR:0,TE:0,DEF:0};
+      (ros[slot2]||[]).forEach(id2=>{ const pp=byIdT[id2]; if(pp) c[pp.pos]++; });
+      if(c.QB<2) needBy.QB.add(slot2); if(c.RB<2) needBy.RB.add(slot2);
+      if(c.WR<2) needBy.WR.add(slot2); if(c.TE<1) needBy.TE.add(slot2); if(c.DEF<1) needBy.DEF.add(slot2);
+    }
+    const parts = POSITIONS.map(pos=>{
+      const n = needBy[pos].size;
+      return n ? '<span class="scpill" title="'+esc([...needBy[pos]].map(slotName).join(", "))+'" style="cursor:help">'+pos+'-needy <b'+(n>=3?' style="color:var(--red)"':'')+'>'+n+'</b></span>' : "";
+    }).filter(Boolean);
+    if(parts.length && S.log.length>=S.settings.teams)
+      threats = '<div class="scarce" style="margin-top:-4px">🎯 before your #'+h.next+': '+parts.join("")+'</div>';
+  }
+  hero.innerHTML = pickline + scarce + threats +
     '<div class="toppick'+(freshTop?' fresh':'')+'">'+
       '<div class="tag">⭐ Top Pick Right Now'+((()=>{const e=injuryOf(p); if(!e) return ""; const sv=injSeverity(e.s); return ' &nbsp;<span class="sevchip '+sv.cls+'">🩹 '+esc(sv.code==="?"?e.s:sv.label)+'</span>';})())+'</div>'+
       '<div class="heroline" data-card="'+p.id+'" title="Open player card">'+avatarImg(p,56)+'<div><div class="name">'+p.name+'</div>'+
@@ -1164,6 +1225,11 @@ function renderRoster(){
   const warn = $("#warnBox");
   if(picksLeft===0){
     warn.innerHTML = '<div class="warn">Roster full. Good luck this season! 🏆</div>';
+    if(!window._celebrated && S.mine.length >= S.settings.roster){
+      window._celebrated = true;
+      confetti();
+      setTimeout(buildReport, 900);
+    }
   } else if(totalNeeded > picksLeft){
     warn.innerHTML = '<div class="warn crit">⚠️ You owe '+totalNeeded+' required starters but only have '+picksLeft+' picks left. Fill requirements NOW.</div>';
   } else if(totalNeeded === picksLeft && totalNeeded>0){
@@ -1223,12 +1289,14 @@ function renderRoster(){
 function renderLog(){
   const byId = idIndex();
   const t = S.settings.teams;
+  const players = allPlayers(), repl = replacementLevels(players);
   $("#logList").innerHTML = S.log.length ? S.log.map((e,i)=>{
     const p = byId[e.id]; if(!p) return "";
     const n = i+1+(S.pickOffset||0), r = Math.ceil(n/t), ri = n-(r-1)*t;
     return '<div class="logrow"><span class="pickno mono">'+r+'.'+String(ri).padStart(2,"0")+'</span>'+
       '<span class="who '+(e.who==="me"?"me":"")+'">'+(e.who==="me"?"MY PICK":"taken")+'</span>'+
       '<span class="n">'+(logoUrl(p.team)?'<img class="tlogo" src="'+logoUrl(p.team)+'" width="13" height="13" loading="lazy" alt=""> ':'')+p.name+' <span style="color:var(--faint)">'+p.pos+' · '+p.team+'</span></span>'+
+      (function(){const v=Math.round(p.proj-(repl[p.pos]||0)); return '<span class="mono" style="font-size:10px;color:'+(v>25?'var(--green)':v>0?'var(--dim)':'var(--faint)')+'">'+(v>0?'+':'')+v+'</span>';})()+
       '<span class="x undo1" data-undoentry="'+i+'" role="button" tabindex="0" aria-label="Undo this pick" style="font-size:10.5px">undo</span></div>';
   }).reverse().join("") : '<div class="empty">Nothing yet. Mark players as they come off the board.</div>';
 }
@@ -1250,7 +1318,7 @@ function renderHeader(){
 
 /* ---------- Events (delegated) ---------- */
 document.addEventListener("click", e=>{
-  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-card],[data-cmpfrom],th[data-sort]");
+  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-card],[data-cmpfrom],[data-slotname],#tradeGo,th[data-sort]");
   if(!t){
     const rowEl = e.target.closest("#poolBody tr[data-pid]");
     if(rowEl){
@@ -1266,6 +1334,14 @@ document.addEventListener("click", e=>{
     if(!isNaN(n) && n>=1){ S.pickOffset = n - 1 - S.log.length; commit(); }
     return;
   }
+  if(t.dataset.slotname){
+    const s = t.dataset.slotname;
+    const v = prompt("Team name for draft slot "+s+":", slotName(s));
+    if(v===null) return;
+    S.slotNames[s] = v.trim() || ("T"+s);
+    save(); renderBoard(); return;
+  }
+  if(t.id==="tradeGo"){ return tradeEval(); }
   if(t.dataset.card){ return openCard(t.dataset.card); }
   if(t.dataset.cmpfrom){
     const p = idIndex()[t.dataset.cmpfrom]; if(!p) return;
@@ -1430,6 +1506,10 @@ $("#reportClose").addEventListener("click", ()=>$("#reportOverlay").classList.re
 $("#reportCopy").addEventListener("click", ()=>{
   navigator.clipboard.writeText(_reportText).then(()=>toast("📤 Report copied"), ()=>toast("Copy failed", {warn:true}));
 });
+if(navigator.share){
+  $("#reportShare").style.display = "";
+  $("#reportShare").addEventListener("click", ()=>navigator.share({title:"My draft", text:_reportText}).catch(()=>{}));
+}
 
 /* Draft board grid */
 function renderBoard(){
@@ -1442,7 +1522,7 @@ function renderBoard(){
     if(p){ cells[r+"-"+slot] = {p, mine:e.who==="me"}; maxR = Math.max(maxR, r); }
   });
   let h = '<table style="border-collapse:collapse;font-size:10.5px;min-width:'+(t*92)+'px"><tr><th style="padding:4px 6px"></th>';
-  for(let s2=1;s2<=t;s2++) h += '<th style="padding:4px 6px;color:'+(s2===mySlot?'var(--green)':'var(--faint)')+';font-size:9.5px">'+(s2===mySlot?'YOU':'T'+s2)+'</th>';
+  for(let s2=1;s2<=t;s2++) h += '<th data-slotname="'+s2+'" title="Click to rename" style="cursor:pointer;padding:4px 6px;color:'+(s2===mySlot?'var(--green)':'var(--faint)')+';font-size:9px;max-width:90px;overflow:hidden;text-overflow:ellipsis">'+esc(slotName(s2))+(s2===mySlot?' ★':'')+'</th>';
   h += '</tr>';
   for(let r=1;r<=Math.min(maxR+1,S.settings.roster);r++){
     h += '<tr><td class="mono" style="color:var(--faint);padding:3px 6px">R'+r+'</td>';
@@ -1453,7 +1533,58 @@ function renderBoard(){
     }
     h += '</tr>';
   }
-  $("#boardGrid").innerHTML = h + '</table>';
+  h += '</table>';
+  // projected standings from tracked rosters
+  const ros = teamRosters();
+  if(S.log.length >= t){
+    const rows = [];
+    for(let s2=1;s2<=t;s2++){
+      const ids = s2===mySlot ? S.mine : ros[s2];
+      rows.push({s:s2, pts: ids.length ? bestStarters(ids, byId).pts : 0, n: ids.length});
+    }
+    rows.sort((a,b)=>b.pts-a.pts);
+    h += '<div class="sechead" style="margin-top:16px">🏆 Projected standings (optimal starters so far)</div><table class="stattbl" style="max-width:420px">'+
+      '<tr><th style="text-align:left">#</th><th style="text-align:left">Team</th><th>Starters</th><th>Picks</th></tr>'+
+      rows.map((r2,i)=>'<tr'+(r2.s===mySlot?' style="color:var(--green);font-weight:700"':'')+'><td style="text-align:left">'+(i+1)+'</td><td style="text-align:left">'+esc(slotName(r2.s))+'</td><td>'+Math.round(r2.pts)+'</td><td>'+r2.n+'</td></tr>').join("")+
+      '</table>';
+  } else {
+    h += '<div class="dimtxt" style="margin-top:12px">Standings appear after round 1 is fully logged.</div>';
+  }
+  // trade calculator
+  h += '<div class="sechead" style="margin-top:16px">⇄ Pick trade calculator</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
+      '<input class="search" id="tradeGive" style="flex:1;min-width:130px" placeholder="You give: 1.12, 6.01">'+
+      '<input class="search" id="tradeGet" style="flex:1;min-width:130px" placeholder="You get: 2.01, 3.12">'+
+      '<button class="hbtn" id="tradeGo">Evaluate</button>'+
+    '</div><div class="note" id="tradeOut" style="margin-top:8px"></div>';
+  $("#boardGrid").innerHTML = h;
+}
+/* value of an overall pick = VORP of the nth-best player on the full board */
+function pickValueCurve(){
+  return cached("pvc", ()=>{
+    const players = allPlayers(), repl = replacementLevels(players);
+    return players.map(p=>Math.max(0, p.proj-(repl[p.pos]||0))).sort((a,b)=>b-a);
+  });
+}
+function parsePicks(str){
+  const t = S.settings.teams, out = [];
+  String(str).split(/[,\s]+/).filter(Boolean).forEach(tok=>{
+    const m = tok.match(/^(\d+)\.(\d+)$/);
+    if(m) out.push((+m[1]-1)*t + Math.min(t,+m[2]));
+    else if(/^\d+$/.test(tok)) out.push(+tok);
+  });
+  return out;
+}
+function tradeEval(){
+  const curve = pickValueCurve();
+  const v = n => curve[Math.min(curve.length-1, Math.max(0, n-1))] || 0;
+  const give = parsePicks($("#tradeGive").value), get = parsePicks($("#tradeGet").value);
+  if(!give.length || !get.length){ $("#tradeOut").textContent = "Enter picks on both sides (1.12 or overall numbers)."; return; }
+  const gv = give.reduce((a,n)=>a+v(n),0), rv = get.reduce((a,n)=>a+v(n),0);
+  const d = Math.round(rv-gv);
+  $("#tradeOut").innerHTML = 'Give #'+give.join(", #")+' ('+Math.round(gv)+' pts of value) for #'+get.join(", #")+' ('+Math.round(rv)+') → '+
+    '<b style="color:'+(d>=0?"var(--green)":"var(--red)")+'">'+(d>=0?"ACCEPT — you gain ~"+d:"DECLINE — you lose ~"+(-d))+' pts</b>'+
+    '<span class="dimtxt"> (value = nth-best player remaining on a full board)</span>';
 }
 $("#boardBtn").addEventListener("click", ()=>{ renderBoard(); $("#boardOverlay").classList.add("show"); });
 $("#boardClose").addEventListener("click", ()=>$("#boardOverlay").classList.remove("show"));
@@ -1494,6 +1625,9 @@ $("#settingsBtn").addEventListener("click", ()=>{
   $("#setSlot").value=S.settings.slot; $("#setScoring").value=S.settings.scoring;
   $("#setName").value=S.settings.name||"Buck Breakers";
   $("#setCompact").checked=!!S.settings.compact;
+  const cols=S.settings.cols||{};
+  $("#colADP").checked=cols.adp!==false; $("#colEdge").checked=cols.edge!==false; $("#colRd").checked=cols.rd!==false;
+  $("#setSound").checked=S.settings.sound!==false;
   refreshProfiles(); refreshProjStatus();
   $("#setPtd").value=String(S.settings.ptd||6);
   for(const pos of POSITIONS) $("#min"+pos).value=S.settings.min[pos]||0;
@@ -1508,6 +1642,8 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.ptd = +$("#setPtd").value===4 ? 4 : 6;
   S.settings.name = $("#setName").value.trim() || "Buck Breakers";
   S.settings.compact = $("#setCompact").checked;
+  S.settings.sound = $("#setSound").checked;
+  S.settings.cols = {adp:$("#colADP").checked, edge:$("#colEdge").checked, rd:$("#colRd").checked};
   applyTheme();
   for(const pos of POSITIONS) S.settings.min[pos] = Math.max(0, +$("#min"+pos).value||0);
   $("#settingsOverlay").classList.remove("show");
@@ -1684,6 +1820,35 @@ $("#profDel").addEventListener("click", ()=>{
   refreshProfiles();
 });
 
+async function copyShareLink(){
+  try{
+    const cs = new Blob([JSON.stringify(S)]).stream().pipeThrough(new CompressionStream("gzip"));
+    const buf = new Uint8Array(await new Response(cs).arrayBuffer());
+    let bin = ""; buf.forEach(b=>bin+=String.fromCharCode(b));
+    const b64 = btoa(bin).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+    const url = location.origin+location.pathname+"#b="+b64;
+    await navigator.clipboard.writeText(url);
+    toast("🔗 Board snapshot link copied ("+(url.length/1024).toFixed(1)+" KB)");
+  }catch(e){ toast("Share link failed: "+esc(e.message), {warn:true}); }
+}
+async function loadSharedBoard(){
+  const m = location.hash.match(/#b=([A-Za-z0-9_-]+)/);
+  if(!m) return false;
+  try{
+    const bin = Uint8Array.from(atob(m[1].replace(/-/g,"+").replace(/_/g,"/")), c=>c.charCodeAt(0));
+    const ds = new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"));
+    const j = JSON.parse(await new Response(ds).text());
+    backupState();
+    S = Object.assign(defaultState(), j);
+    S.slotNames = Object.assign(defaultState().slotNames, j.slotNames||{});
+    history.replaceState(null, "", location.pathname);
+    save();
+    toast("📥 Shared board loaded — your previous board is in Settings → Restore backup");
+    return true;
+  }catch(e){ toast("Share link unreadable", {warn:true}); return false; }
+}
+document.getElementById("shareBtn").addEventListener("click", copyShareLink);
+
 /* Auto-backup before destructive actions */
 function backupState(){
   try{ localStorage.setItem(LS_KEY+"-backup", JSON.stringify({when:new Date().toLocaleString(), state:S})); }catch(e){}
@@ -1715,16 +1880,49 @@ $("#resetBtn").addEventListener("click", ()=>{
   }
 });
 
+/* ---------- Lock screen ---------- */
+const LOCK_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"; // sha256("1234")
+async function sha256hex(s){
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
+}
+function initLock(){
+  const scr = document.getElementById("lockScreen");
+  const e2e = location.search.indexOf("e2e") >= 0;
+  if(e2e || !window.crypto || !crypto.subtle){ scr.remove(); return; }
+  try{ if(localStorage.getItem(LS_KEY+"-auth")===LOCK_HASH){ scr.remove(); return; } }catch(e){}
+  scr.style.display = "flex";
+  document.getElementById("lockPass").focus();
+  document.getElementById("lockForm").addEventListener("submit", async ev=>{
+    ev.preventDefault();
+    const v = document.getElementById("lockPass").value;
+    if((await sha256hex(v)) === LOCK_HASH){
+      try{ localStorage.setItem(LS_KEY+"-auth", LOCK_HASH); }catch(e){}
+      scr.classList.add("unlocking");
+      setTimeout(()=>scr.remove(), 450);
+      toast("🏈 Welcome back, Otto — let's get this done.");
+    } else {
+      const box = scr.querySelector(".lockbox");
+      box.classList.remove("shake"); void box.offsetWidth; box.classList.add("shake");
+      document.getElementById("lockNote").textContent = "nope — try the classic";
+      document.getElementById("lockPass").value = "";
+    }
+  });
+}
+initLock();
+
 /* ---------- Boot ---------- */
 load();
+if(location.hash.indexOf("#b=")===0){ loadSharedBoard().then(ok=>{ if(ok){ initInjuries(); render(); } }); }
 initInjuries();
-if(location.protocol.indexOf("http")===0){
+const E2E_MODE = location.search.indexOf("e2e") >= 0;   // deterministic test runs: no network side-effects
+if(!E2E_MODE && location.protocol.indexOf("http")===0){
   setTimeout(()=>{ refreshInjuries(true); refreshTrending(); }, 1500);
   setInterval(()=>{ if(document.visibilityState==="visible") refreshInjuries(true); }, 5*60e3);
   setInterval(()=>{ if(document.visibilityState==="visible") refreshTrending(); }, 15*60e3);
 }
 document.querySelectorAll(".modal").forEach(m=>{ m.setAttribute("role","dialog"); m.setAttribute("aria-modal","true"); });
-const BUILD = "3.1";
+const BUILD = "4.0";
 /* Theme: auto follows the OS, or force dark/light */
 function applyTheme(){
   const pref = S.settings.theme || "auto";
@@ -1735,7 +1933,48 @@ function applyTheme(){
   const b = document.getElementById("themeBtn");
   if(b) b.textContent = pref==="auto" ? "🌓" : (pref==="dark" ? "🌙" : "☀️");
   document.body.classList.toggle("compact", !!S.settings.compact);
+  document.body.classList.toggle("live", !!S.ui.live);
+  const cols = S.settings.cols || {};
+  document.body.classList.toggle("hidecol-adp", cols.adp===false);
+  document.body.classList.toggle("hidecol-edge", cols.edge===false);
+  document.body.classList.toggle("hidecol-rd", cols.rd===false);
 }
+function setLive(on){
+  S.ui.live = on;
+  if(on){ S.ui.liveStart = Date.now(); S.ui.liveLen0 = S.log.length; }
+  document.body.classList.toggle("live", on);
+  const b = document.getElementById("liveBtn");
+  b.classList.toggle("liveon", on);
+  b.textContent = on ? "🔴 LIVE" : "⚪ Live";
+  save(); render();
+  toast(on ? "🔴 Draft Day mode ON — chime + panic button armed" : "Live mode off");
+}
+document.getElementById("liveBtn").addEventListener("click", ()=>setLive(!S.ui.live));
+function chime(){
+  if(S.settings.sound===false) return;
+  try{
+    const ac = new (window.AudioContext||window.webkitAudioContext)();
+    [[880,0],[1174.7,0.18]].forEach(([f,at])=>{
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.frequency.value=f; o.type="sine"; o.connect(g); g.connect(ac.destination);
+      g.gain.setValueAtTime(0.001, ac.currentTime+at);
+      g.gain.exponentialRampToValueAtTime(0.22, ac.currentTime+at+0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+at+0.5);
+      o.start(ac.currentTime+at); o.stop(ac.currentTime+at+0.55);
+    });
+  }catch(e){}
+}
+function updatePanic(hz, top){
+  let bar = document.getElementById("panicBar");
+  const want = hz && hz.onClock && S.ui.live && window._panicDismissed!==hz.cur && top;
+  if(!want){ if(bar) bar.remove(); return; }
+  if(!bar){ bar = document.createElement("div"); bar.id="panicBar"; document.body.appendChild(bar); }
+  bar.innerHTML = '<span>🚨 PICK #'+hz.cur+' — YOU ARE ON THE CLOCK</span>'+
+    '<button class="pick" data-pick="'+top.p.id+'" style="font-size:15px;padding:10px 18px">✓ TAKE '+esc(top.p.name.toUpperCase())+'</button>'+
+    '<button class="undo1" id="panicDismiss">✕</button>';
+  bar.querySelector("#panicDismiss").addEventListener("click", ()=>{ window._panicDismissed=hz.cur; bar.remove(); });
+}
+
 document.getElementById("themeBtn").addEventListener("click", ()=>{
   const order = ["auto","dark","light"];
   S.settings.theme = order[(order.indexOf(S.settings.theme||"auto")+1)%3];
@@ -1749,6 +1988,10 @@ window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", ap
   if(el) el.textContent = "build v"+BUILD+" · projections "+(typeof DATA_STAMP!=="undefined"?DATA_STAMP:"?")+" · press ? for help";
   if(window._recovered) setTimeout(()=>toast("♻️ Save was corrupt — restored backup from "+esc(window._recovered), {warn:true}), 400);
   applyTheme();
+  if(!S.seenTour && (typeof E2E_MODE==="undefined" || !E2E_MODE)){
+    S.seenTour = true; save();
+    setTimeout(()=>{ document.getElementById("helpOverlay").classList.add("show"); }, 900);
+  }
   // stale projections hint (#58)
   try{
     const age = (Date.now() - new Date(DATA_STAMP).getTime())/86400000;
@@ -1766,7 +2009,7 @@ window.addEventListener("error", e=>surfaceError(e.message||"script error"));
 window.addEventListener("unhandledrejection", e=>surfaceError((e.reason&&e.reason.message)||e.reason||"async error"));
 
 /* #53: tell open sessions when a new version takes over */
-if("serviceWorker" in navigator && location.protocol.indexOf("http")===0){
+if(typeof E2E_MODE!=="undefined" && !E2E_MODE && "serviceWorker" in navigator && location.protocol.indexOf("http")===0){
   const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener("controllerchange", ()=>{
     if(hadController) toast("⬆️ New version deployed", {action:{label:"RELOAD", fn:()=>location.reload()}});
