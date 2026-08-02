@@ -85,6 +85,13 @@ header{
 .stackchip{font-size:9.5px; background:rgba(255,201,77,.14); color:var(--gold); border:1px solid rgba(255,201,77,.35); padding:1px 6px; border-radius:999px; margin-left:6px; vertical-align:middle}
 .ib{font-size:11px; margin-left:4px; cursor:help}
 .ib.gold{color:var(--gold)} .ib.bull{color:var(--green)} .ib.bear{color:var(--red)}
+.tier{display:inline-block; font-size:9px; font-weight:800; margin-left:5px; padding:1px 4px; border-radius:4px; border:1px solid var(--line); color:var(--faint); vertical-align:middle}
+.tier.t1{color:var(--gold); border-color:rgba(255,201,77,.5)}
+.tier.t2{color:var(--green); border-color:rgba(47,212,122,.45)}
+.tier.t3{color:var(--wr); border-color:rgba(90,169,255,.45)}
+.ok{color:var(--green)} .mid{color:var(--gold)} .low{color:var(--red)}
+.slotlab{width:34px; flex:none; font-size:9px; font-weight:800; letter-spacing:.5px; color:var(--faint)}
+.benchhead{font-size:9.5px; letter-spacing:2px; color:var(--faint); text-transform:uppercase; padding:9px 8px 3px; border-top:1px solid var(--line); margin-top:7px}
 .pickline{font-size:11.5px; color:var(--dim); margin-bottom:10px; padding:7px 10px; background:var(--bg2); border:1px solid var(--line); border-radius:8px}
 
 /* ---------- Pool ---------- */
@@ -294,7 +301,7 @@ footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--fa
 
 <footer>
   Projections from your uploaded 2026 CSV with <b>6-pt passing TDs baked into QB totals</b> (+2 × projected pass TDs). Click any projection to edit it.<br>
-  ⭐ analyst target · ▲/▼ prop-market lean · 🔥 gone before your next pick · ⏳ coin-flip — hover any badge for the why. Everything autosaves to this browser.
+  ⭐ analyst target · ▲/▼ prop-market lean · 🔥 gone before your next pick · ⏳ coin-flip · T# position tier · <b>% back</b> = simulated odds he survives to your next pick. Hover anything for the why. Everything autosaves to this browser.
 </footer>
 
 <!-- Settings modal -->
@@ -1142,6 +1149,63 @@ function roundInfo(players){
   return m;
 }
 
+/* Position tiers from projection gaps: a new tier starts wherever the
+   drop-off from the previous player is meaningful (4.5% or 8+ pts). */
+function tierMap(players){
+  const m = {};
+  for(const pos of POSITIONS){
+    const list = players.filter(p=>p.pos===pos).sort((a,b)=>b.proj-a.proj);
+    let tier = 1;
+    for(let i=0;i<list.length;i++){
+      if(i>0){
+        const gap = list[i-1].proj - list[i].proj;
+        if(gap >= Math.max(8, list[i-1].proj*0.045) && tier<9) tier++;
+      }
+      m[list[i].id] = tier;
+    }
+  }
+  return m;
+}
+
+/* Monte Carlo: % chance each available player survives the CPU picks
+   between now and my next pick. Seeded by board state so it's stable
+   until another pick happens. Back-to-back turn picks → 100%. */
+function survivalOdds(){
+  const h = nextPickHorizon(); if(!h) return null;
+  const from = S.log.length+1, to = h.next;
+  const players = allPlayers();
+  if(to <= from){ const o={}; players.forEach(p=>o[p.id]=100); return o; }
+  const rinfo = roundInfo(players);
+  const t = S.settings.teams;
+  const myPicks = new Set(myOverallPicks());
+  const trials = 30, surv = {};
+  for(let k=0;k<trials;k++){
+    const rng = mulberry32(987654 + k*104729 + S.log.length*7919);
+    const taken = new Set(Object.keys(S.taken)); S.mine.forEach(id=>taken.add(id));
+    const greed = {};
+    for(let pk=from; pk<to; pk++){
+      if(myPicks.has(pk)) continue;
+      const r = Math.ceil(pk/t), idx = pk-(r-1)*t, slot = (r%2===1)?idx:t+1-idx;
+      if(greed[slot]===undefined) greed[slot] = 0.5+rng()*0.55;
+      let best=null, bk=1e9;
+      for(const p of players){
+        if(taken.has(p.id)) continue;
+        if(p.pos==="DEF" && r<12) continue;
+        let e = rinfo[p.id].eadp;
+        if(p.pos==="QB") e *= greed[slot];
+        e += (rng()*2-1)*9;
+        if(e<bk){bk=e; best=p;}
+      }
+      if(best) taken.add(best.id);
+    }
+    for(const p of players){ if(!taken.has(p.id)) surv[p.id]=(surv[p.id]||0)+1; }
+  }
+  const out = {};
+  for(const p of players) out[p.id] = Math.round(100*(surv[p.id]||0)/trials);
+  return out;
+}
+function oddsClass(v){ return v>=70 ? "ok" : v>=35 ? "mid" : "low"; }
+
 function nextPickHorizon(){
   const cur = S.log.length + 1;               // pick currently on the clock
   const mine = myOverallPicks().filter(x=>x>=cur);
@@ -1218,6 +1282,9 @@ function scoreBoard(){
   const mustFill = totalNeeded >= picksLeft && picksLeft > 0; // out of slack: only needed positions
   const horizon = nextPickHorizon();
   const avail = players.filter(p => !S.taken[p.id] && !S.mine.includes(p.id));
+  const tm = tierMap(players);
+  const tierLeft = {};
+  for(const p of avail){ const k=p.pos+tm[p.id]; tierLeft[k]=(tierLeft[k]||0)+1; }
 
   const scored = avail.map(p=>{
     const vorp = p.proj - (repl[p.pos]||0);
@@ -1245,13 +1312,19 @@ function scoreBoard(){
       if(p.intel.lean>0){ score *= 1.03; why.push("▲ prop market leans bullish on his volume"); }
       if(p.intel.lean<0){ score *= 0.97; why.push("▼ prop market leans bearish on his volume"); }
     }
+    // Tier cliff: the last players in a tier are worth reaching for
+    const left = tierLeft[p.pos+tm[p.id]];
+    if(left<=2 && vorp>15){
+      score *= 1.05;
+      why.push("⚠️ tier cliff — "+(left===1?"LAST one":"only "+left)+" left in "+p.pos+" Tier "+tm[p.id]);
+    }
     // Will he survive to my next pick? (snake, slot-aware)
     let backRisk = null;
     if(p.adp && horizon){
       if(p.adp <= horizon.next){ backRisk="gone"; why.push("🔥 won't make it back to your pick #"+horizon.next+" (ADP "+p.adp+")"); }
       else if(p.adp <= horizon.next+8){ backRisk="risky"; why.push("⏳ coin-flip to survive until pick #"+horizon.next+" (ADP "+p.adp+")"); }
     }
-    return {p, vorp, score, why, stack, backRisk};
+    return {p, vorp, score, why, stack, backRisk, tier:tm[p.id]};
   }).filter(x=>x.score > -9000);
 
   scored.sort((a,b)=>b.score-a.score);
@@ -1305,9 +1378,9 @@ function bestStarters(ids, byId){
   const ps = ids.map(id=>byId[id]).filter(Boolean).sort((a,b)=>b.proj-a.proj);
   const used = new Set();
   const take = poss => { for(const p of ps){ if(!used.has(p.id) && poss.includes(p.pos)){ used.add(p.id); return p; } } return null; };
-  const slots = [["QB"],["RB"],["RB"],["WR"],["WR"],["TE"],["RB","WR","TE"],["QB","RB","WR","TE"],["DEF"]];
-  const line = slots.map(take);
-  return {starterIds:new Set([...used]), pts:line.reduce((a,p)=>a+(p?p.proj:0),0)};
+  const slots = [["QB",["QB"]],["RB1",["RB"]],["RB2",["RB"]],["WR1",["WR"]],["WR2",["WR"]],["TE",["TE"]],["FLEX",["RB","WR","TE"]],["SFLX",["QB","RB","WR","TE"]],["DEF",["DEF"]]];
+  const line = slots.map(([lab,poss])=>({lab, p:take(poss)}));
+  return {line, starterIds:new Set([...used]), pts:line.reduce((a,s)=>a+(s.p?s.p.proj:0),0)};
 }
 
 function runMock(strat, seed){
@@ -1432,6 +1505,7 @@ function renderPool(){
   const players = allPlayers();
   const repl = replacementLevels(players);
   const rinfo = roundInfo(players);
+  const tm = tierMap(players);
   const q = $("#search").value.trim().toLowerCase();
 
   let rows = players.map(p=>({
@@ -1489,7 +1563,7 @@ function renderPool(){
     return '<tr class="'+cls+'">'+
       '<td class="mono" style="color:var(--faint)">'+(i+1)+'</td>'+
       '<td><span class="pname">'+r.p.name+'</span>'+intelBadges(r.p)+(r.stack?'<span class="stackchip">🔗 stack</span>':'')+(r.backRisk==="gone"?'<span class="ib" title="Won\'t make it back to your next pick">🔥</span>':r.backRisk==="risky"?'<span class="ib" title="Coin-flip to survive to your next pick">⏳</span>':'')+'</td>'+
-      '<td>'+posBadge(r.p.pos)+'</td>'+
+      '<td>'+posBadge(r.p.pos)+'<span class="tier t'+Math.min(tm[r.p.id],5)+'">T'+tm[r.p.id]+'</span></td>'+
       '<td class="mono" style="color:var(--dim)">'+r.p.team+'</td>'+
       '<td><span class="proj mono" data-edit="'+r.p.id+'">'+r.p.proj+'</span></td>'+
       '<td class="mono" style="color:'+(r.vorp>=0?'var(--green)':'var(--faint)')+'">'+(r.vorp>0?"+":"")+Math.round(r.vorp)+'</td>'+
@@ -1502,6 +1576,8 @@ function renderPool(){
 function renderBest(){
   const {scored} = scoreBoard();
   const rinfo = roundInfo(allPlayers());
+  const odds = survivalOdds();
+  const hz = nextPickHorizon();
   const top = scored[0];
   const hero = $("#hero");
   if(!top){ hero.innerHTML = '<div class="empty">Board is empty — nice draft!</div>'; $("#baList").innerHTML=""; return; }
@@ -1518,7 +1594,7 @@ function renderBest(){
     '<div class="toppick">'+
       '<div class="tag">⭐ Top Pick Right Now</div>'+
       '<div class="name">'+p.name+'</div>'+
-      '<div class="meta">'+posBadge(p.pos)+' &nbsp;'+p.team+' &nbsp;·&nbsp; <span class="mono">'+p.proj+' proj</span> &nbsp;·&nbsp; <span class="mono" style="color:var(--green)">+'+Math.round(top.vorp)+' vs replacement</span>'+(rinfo[p.id]&&!rinfo[p.id].ud?' &nbsp;·&nbsp; <span class="rd">'+rinfo[p.id].label+'</span>':'')+'</div>'+
+      '<div class="meta">'+posBadge(p.pos)+' &nbsp;'+p.team+' &nbsp;·&nbsp; <span class="mono">'+p.proj+' proj</span> &nbsp;·&nbsp; <span class="mono" style="color:var(--green)">+'+Math.round(top.vorp)+' vs replacement</span>'+(rinfo[p.id]&&!rinfo[p.id].ud?' &nbsp;·&nbsp; <span class="rd">'+rinfo[p.id].label+'</span>':'')+(odds&&hz&&odds[p.id]!=null?' &nbsp;·&nbsp; <b class="'+oddsClass(odds[p.id])+'" title="Monte Carlo: chance he survives the CPU picks before your #'+hz.next+'">'+odds[p.id]+'% at #'+hz.next+'</b>':'')+'</div>'+
       '<div class="why">'+why+'</div>'+
       '<div class="actions">'+
         '<button class="pick" data-pick="'+p.id+'">✓ DRAFT HIM</button>'+
@@ -1530,7 +1606,7 @@ function renderBest(){
       '<div class="rk mono">'+(i+2)+'</div>'+
       posBadge(s.p.pos)+
       '<div class="info"><div class="nm">'+s.p.name+intelBadges(s.p)+(s.stack?'<span class="stackchip">🔗</span>':'')+(s.backRisk==="gone"?' 🔥':s.backRisk==="risky"?' ⏳':'')+'</div>'+
-      '<div class="sm">'+s.p.team+' · '+s.p.proj+' pts'+(s.p.adp?' · ADP '+s.p.adp:'')+(rinfo[s.p.id]&&!rinfo[s.p.id].ud?' · '+rinfo[s.p.id].label:'')+'</div></div>'+
+      '<div class="sm">'+s.p.team+' · '+s.p.proj+' pts'+(s.p.adp?' · ADP '+s.p.adp:'')+(odds&&odds[s.p.id]!=null?' · <b class="'+oddsClass(odds[s.p.id])+'">'+odds[s.p.id]+'% back</b>':'')+'</div></div>'+
       '<div class="val mono">+'+Math.round(s.vorp)+'</div>'+
       '<button class="pick" data-pick="'+s.p.id+'">✓</button>'+
       '<button class="kill" data-take="'+s.p.id+'">✕</button>'+
@@ -1568,13 +1644,22 @@ function renderRoster(){
     warn.innerHTML = '<div class="warn" style="color:var(--green)">✓ All requirements met — draft best value / upside.</div>';
   }
 
-  $("#myRoster").innerHTML = S.mine.length ? S.mine.map((id,i)=>{
-    const p = byId[id]; if(!p) return "";
-    return '<div class="myp">'+posBadge(p.pos)+
+  let bs = null;
+  if(!S.mine.length){
+    $("#myRoster").innerHTML = '<div class="empty">No picks yet.<br>Hit <b style="color:var(--green)">✓ MINE</b> on a player when you draft them.</div>';
+  } else {
+    bs = bestStarters(S.mine, byId);
+    const orderOf = {}; S.mine.forEach((id,i)=>orderOf[id]=i+1);
+    const rowFor = (p, lab) => '<div class="myp"><span class="slotlab">'+lab+'</span>'+posBadge(p.pos)+
       '<div class="n">'+p.name+' <span class="t">'+p.team+' · <span class="mono">'+p.proj+'</span></span></div>'+
-      '<span class="t mono">R'+(i+1)+'</span>'+
-      '<span class="x" data-drop="'+id+'" title="Remove from my roster">✕</span></div>';
-  }).join("") : '<div class="empty">No picks yet.<br>Hit <b style="color:var(--green)">✓ MINE</b> on a player when you draft them.</div>';
+      '<span class="t mono">R'+orderOf[p.id]+'</span>'+
+      '<span class="x" data-drop="'+p.id+'" title="Remove from my roster">✕</span></div>';
+    let html = bs.line.map(sl => sl.p ? rowFor(sl.p, sl.lab) :
+      '<div class="myp" style="opacity:.45"><span class="slotlab">'+sl.lab+'</span><span class="t">— open</span></div>').join("");
+    const bench = S.mine.filter(id=>!bs.starterIds.has(id)).map(id=>byId[id]).filter(Boolean);
+    if(bench.length) html += '<div class="benchhead">Bench</div>' + bench.map(p=>rowFor(p,"BN")).join("");
+    $("#myRoster").innerHTML = html;
+  }
 
   // Stacks summary
   const teams={};
@@ -1588,7 +1673,16 @@ function renderRoster(){
   $("#stackBox").innerHTML = html;
 
   const total = S.mine.reduce((a,id)=>a+((byId[id]||{}).proj||0),0);
-  if(S.mine.length) $("#stackBox").innerHTML += '<br>Σ projected roster points: <b class="mono">'+Math.round(total)+'</b>';
+  if(S.mine.length) $("#stackBox").innerHTML += '<br>Starters proj: <b class="mono">'+Math.round(bs?bs.pts:0)+'</b> · full roster: <span class="mono">'+Math.round(total)+'</span>';
+
+  // Positional run detector — 4+ of the last 10 picks at one position
+  const recent = S.log.slice(-10);
+  const rc = {};
+  recent.forEach(e=>{ const p=byId[e.id]; if(p) rc[p.pos]=(rc[p.pos]||0)+1; });
+  const runs = Object.entries(rc).filter(([pos,v])=>v>=4 && pos!=="DEF");
+  if(runs.length && picksLeft>0 && recent.length>=6){
+    warn.innerHTML += '<div class="warn crit">🚨 '+runs.map(([pos,v])=>'<b>'+pos+' RUN</b> — '+v+' of the last '+recent.length+' picks').join(' · ')+'. If you need one, move now.</div>';
+  }
 }
 
 function renderLog(){
