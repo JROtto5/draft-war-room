@@ -4,10 +4,21 @@ const POSITIONS = ["QB","RB","WR","TE","DEF"];
 const LS_KEY = "draft-war-room-v2";
 
 /* ---------- State ---------- */
-const STATE_V = 2;
+const STATE_V = 3;
 const MIGRATIONS = {
   // 1 -> 2: keepers/queue introduced (defaults suffice); stamp only
   1: s => { s.keepers = s.keepers||{}; s.queue = s.queue||[]; return s; },
+  // 2 -> 3: keepers gain a round cost — old shape was id -> slot number
+  2: s => {
+    const k = {};
+    for(const id in (s.keepers||{})){
+      const v = s.keepers[id];
+      k[id] = typeof v === "object" ? v : {s:+v, r:0};
+    }
+    s.keepers = k;
+    s.boost = s.boost||{}; s.adpOverride = s.adpOverride||{}; s.tierBump = s.tierBump||{};
+    return s;
+  },
 };
 function migrate(p){
   let v = p.v || 1;
@@ -24,6 +35,9 @@ const defaultState = () => ({
   pickOffset: 0,        // manual correction: real overall pick - marked picks
   keepers: {},          // id -> slot number (kept pre-draft, consumes no pick)
   queue: [],            // ids, user watch/queue order
+  boost: {},            // id -> +1 (my guy) / -1 (fade)
+  adpOverride: {},      // id -> manual ADP
+  tierBump: {},         // id -> +/- tier levels
   notes: {},            // id -> personal note
   dnd: {},              // id -> true (do-not-draft)
   mine: [],             // ids in pick order
@@ -42,7 +56,7 @@ let S = defaultState();
 let _memo = {key:null};
 function stateKey(){
   return S.log.length+"|"+S.mine.length+"|"+Object.keys(S.taken).length+"|"+S.custom.length+"|"+
-         JSON.stringify(S.overrides)+"|"+(S.pickOffset||0)+"|"+(S.dataRev||0)+"|"+INJ.at+"|"+JSON.stringify(S.settings);
+         JSON.stringify(S.overrides)+"|"+JSON.stringify(S.boost||{})+"|"+JSON.stringify(S.adpOverride||{})+"|"+JSON.stringify(S.tierBump||{})+"|"+(S.pickOffset||0)+"|"+(S.dataRev||0)+"|"+INJ.at+"|"+JSON.stringify(S.settings);
 }
 function cached(name, fn){
   const k = stateKey();
@@ -54,7 +68,7 @@ function pickNow(){ return S.log.length + 1 + (S.pickOffset||0); }
 function slotName(s){ return (S.slotNames && S.slotNames[s]) || ("T"+s); }
 function myKeeperIds(){
   const mySlot = Math.min(S.settings.slot, S.settings.teams);
-  return Object.keys(S.keepers||{}).filter(id=>+S.keepers[id]===mySlot);
+  return Object.keys(S.keepers||{}).filter(id=>+(S.keepers[id].s!=null?S.keepers[id].s:S.keepers[id])===mySlot);
 }
 function myIds(){ return S.mine.concat(myKeeperIds()); }
 function offBoard(id){ return S.taken[id] || S.mine.includes(id) || (S.keepers && S.keepers[id]); }
@@ -62,7 +76,7 @@ function offBoard(id){ return S.taken[id] || S.mine.includes(id) || (S.keepers &
 function teamRosters(){
   const byId = idIndex(), t = S.settings.teams, ros = {};
   for(let s=1;s<=t;s++) ros[s] = [];
-  for(const id in (S.keepers||{})){ const s2=+S.keepers[id]; if(ros[s2] && byId[id]) ros[s2].push(id); }
+  for(const id in (S.keepers||{})){ const s2=+(S.keepers[id].s!=null?S.keepers[id].s:S.keepers[id]); if(ros[s2] && byId[id]) ros[s2].push(id); }
   S.log.forEach((e,i)=>{
     const n = i+1+(S.pickOffset||0), r = Math.ceil(n/t), idx = n-(r-1)*t;
     const slot = (r%2===1) ? idx : t+1-idx;
@@ -84,6 +98,9 @@ function load(){
       S.slotNames = Object.assign(defaultState().slotNames, p.slotNames||{});
       S.keepers = p.keepers || {};
       S.queue = p.queue || [];
+      S.boost = p.boost || {};
+      S.adpOverride = p.adpOverride || {};
+      S.tierBump = p.tierBump || {};
     }
   }catch(e){
     console.warn("load failed, trying backup", e);
@@ -130,6 +147,7 @@ function allPlayers(){
   const all = base.concat(customs);
   for(const p of all){
     if(S.overrides[p.id]!=null) p.proj = S.overrides[p.id];
+    if(S.adpOverride && S.adpOverride[p.id]!=null) p.adp = S.adpOverride[p.id];
     p.intel = INTEL[normName(p.name)] || null;
   }
   return all;
@@ -248,12 +266,52 @@ function survivalOddsRaw(){
   for(const pos in gone) gone[pos] = Math.round(gone[pos]/trials*10)/10;
   return {at1, at2: at2||null, h1:out1, h2: at2?out2:null, posGone:gone};
 }
-function tierMap(players){ return cached("tiers", ()=>tierMapRaw(players)); }
+function tierMap(players){
+  return cached("tiers", ()=>{
+    const m = tierMapRaw(players);
+    for(const id in (S.tierBump||{})) if(m[id]!=null) m[id] = Math.max(1, m[id]-S.tierBump[id]);
+    return m;
+  });
+}
 function survivalOdds(){ return cached("odds", survivalOddsRaw); }
 function roundInfo(players){ return cached("rounds", ()=>roundInfoRaw(players)); }
 function replacementLevels(players){ return cached("repl", ()=>replacementLevelsRaw(players)); }
 function oddsClass(v){ return v>=70 ? "ok" : v>=35 ? "mid" : "low"; }
 
+function simToMyPick(){
+  const h = nextPickHorizon();
+  if(!h || h.onClock){ toast("You're already on the clock"); return; }
+  const players = allPlayers(), rinfo = roundInfo(players), t = S.settings.teams, R = S.settings.roster;
+  const rng = mulberry32(Date.now() % 100000);
+  const cpu = seedCpuTeams(rng);
+  let made = 0;
+  while(!nextPickHorizon().onClock && made < t){
+    const pk = pickNow(), r = Math.ceil(pk/t), idx = pk-(r-1)*t, slot = (r%2===1)?idx:t+1-idx;
+    const avail = players.filter(p=>!offBoard(p.id));
+    const best = cpuPick(avail, cpu[slot], r, rng, rinfo, R);
+    if(!best) break;
+    redoStack.length=0;
+    S.taken[best.id]=true; S.log.push({id:best.id, who:"other", t:Date.now()});
+    cpu[slot][best.pos]++;
+    made++;
+  }
+  pruneQueue(); commit();
+  toast("⏩ Simmed "+made+" CPU picks — you're up");
+}
+function predictNextPicks(){
+  const h = nextPickHorizon();
+  if(!h || h.onClock) return null;
+  const t = S.settings.teams, pk = h.cur, r = Math.ceil(pk/t), idx = pk-(r-1)*t;
+  const slot = (r%2===1)?idx:t+1-idx;
+  const players = allPlayers(), rinfo = roundInfo(players);
+  const ros = teamRosters(), byId = idIndex();
+  const c = {QB:0,RB:0,WR:0,TE:0,DEF:0};
+  (ros[slot]||[]).forEach(id=>{ const p=byId[id]; if(p) c[p.pos]++; });
+  const cand = players.filter(p=>!offBoard(p.id) && !(p.pos==="DEF" && r<12))
+    .map(p=>({p, e: rinfo[p.id].eadp * injAdpFactor(p) * (p.pos==="QB" ? (c.QB<1?0.7:0.95) : 1)}))
+    .sort((a,b)=>a.e-b.e).slice(0,3);
+  return {slot, cand};
+}
 function nextPickHorizon(){
   const cur = pickNow();                       // pick currently on the clock
   const mine = myOverallPicks().filter(x=>x>=cur);
@@ -360,6 +418,10 @@ function scoreBoard(){
       if(p.intel.lean>0){ score *= 1.03; why.push("▲ prop market leans bullish on his volume"); }
       if(p.intel.lean<0){ score *= 0.97; why.push("▼ prop market leans bearish on his volume"); }
     }
+    // Personal boost/fade (my-guys list)
+    const bf = (S.boost||{})[p.id];
+    if(bf===1){ score *= 1.1; why.push("▲ on your boost list"); }
+    if(bf===-1){ score *= 0.88; why.push("▼ on your fade list"); }
     // Tier cliff: the last players in a tier are worth reaching for
     const left = tierLeft[p.pos+tm[p.id]];
     if(left<=2 && vorp>15){
@@ -428,14 +490,31 @@ function markTaken(id){
   redoStack.length=0; S.taken[id]=true; S.log.push({id, who:"other", t:Date.now()}); commit();
   const p = idIndex()[id];
   if(p) toast("✕ <b>"+esc(p.name)+"</b> off the board", {undo:undoLast});
+  {
+    const n = S.log.length+(S.pickOffset||0), t2 = S.settings.teams;
+    const r2 = Math.ceil(n/t2), idx2 = n-(r2-1)*t2, slot2 = (r2%2===1)?idx2:t2+1-idx2;
+    if(+S.settings.rivalSlot===slot2 && p) toast("😤 Rival <b>"+esc(slotName(slot2))+"</b> took "+esc(p.name), {warn:true});
+    if(S.queue.includes(id) && p) toast("🎯 SNIPED — <b>"+esc(p.name)+"</b> was in your queue", {warn:true});
+  }
   if(p) announce(p.name+", off the board.");
   blip();
   pruneQueue();
 }
 function pickMine(id){
+  let gradeChip = "";
+  try{
+    const {scored} = scoreBoard();
+    const me = scored.find(s=>s.p.id===id);
+    if(me && scored.length){
+      const best = scored[0].vorp;
+      const ratio = best>0 ? me.vorp/best : 1;
+      const g = ratio>=0.92 ? "A" : ratio>=0.75 ? "B" : ratio>=0.5 ? "C" : "D";
+      gradeChip = ' <b class="'+(g==="A"?"ok":g==="B"?"mid":"low")+'">['+g+']</b>';
+    }
+  }catch(e){}
   redoStack.length=0; S.mine.push(id); S.log.push({id, who:"me", t:Date.now()}); commit();
   const p = idIndex()[id];
-  if(p) toast("✓ Drafted <b style='color:var(--green)'>"+esc(p.name)+"</b>", {undo:undoLast});
+  if(p) toast("✓ Drafted <b style='color:var(--green)'>"+esc(p.name)+"</b>"+gradeChip, {undo:undoLast});
   if(p) announce("Pick "+pickNow()+". You drafted "+p.name+".");
   blip();
 }
@@ -650,7 +729,7 @@ function openTeamPage(slot){
   document.getElementById("boardOverlay").classList.remove("show");
   $("#cardBody").innerHTML =
     '<div class="chead"><div class="cid"><div class="cname">'+esc(slotName(slot))+(slot===mySlot?' ★':'')+'</div>'+
-    '<div class="csub">slot '+slot+' · '+ps.length+' players'+(bs?' · projected starters <b class="mono">'+Math.round(bs.pts)+'</b>':'')+'</div></div></div>'+
+    '<div class="csub">slot '+slot+' · '+ps.length+' players'+(bs?' · projected starters <b class="mono">'+fmt(bs.pts)+'</b>':'')+'</div></div></div>'+
     (ps.length ? POSITIONS.map(pos=> byPos[pos] ?
       '<div class="cintel"><b>'+pos+'</b> — '+byPos[pos].sort((a,b)=>b.proj-a.proj).map(p=>esc(p.name)+' <span class="dimtxt mono">'+p.proj+'</span>').join(" · ")+'</div>' : "").join("")
       : '<div class="empty">No tracked picks yet.</div>')+
@@ -673,7 +752,7 @@ function renderInjCenter(){
     ? "as of "+new Date(INJ.at).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"})+" · "+INJ.src
     : "baked snapshot ("+(typeof DATA_STAMP!=="undefined"?DATA_STAMP:"")+") — refresh for live";
   let h = hurt.length ? hurt.map(x=>
-    '<div class="injrow" data-card="'+x.p.id+'">'+
+    '<div class="injrow" data-card="'+x.p.id+'" data-tabpre="hist">'+
       avatarImg(x.p,30)+
       '<div class="info"><div class="nm">'+x.p.name+
         (S.mine.includes(x.p.id)?' <span class="stackchip">YOURS</span>':'')+
@@ -760,50 +839,103 @@ function openCard(id){
     add("PPG", L&&L[0]?L[10]/L[0]:null, PR&&PR[0]?p.proj/PR[0]:null, true);
     tbl = '<table class="stattbl"><tr><th></th><th>'+LAST_SEASON+'</th><th>\u201926 proj</th></tr>'+rows.join("")+'</table>';
   }
+  const hw = hometownOf(p), ci = collegeInfo(p), h3 = hist3For(p), fav = isFav(p), cons = consistencyOf(p);
+  const stars = playoffStars(p.team);
+  const tab = window._cardTab || "ov";
+  const tabBtn = (id2,lab)=>'<button class="ctab'+(tab===id2?" on":"")+'" data-cardtab="'+id2+'" data-cardid="'+id+'">'+lab+'</button>';
+  // History tab pieces
+  const maxPts = Math.max(1, ...h3.map(x=>x[2]), p.proj);
+  const barRow = (label, pts, extra)=>'<div class="h3row"><span class="h3y mono">'+label+'</span>'+
+    '<span class="h3bar"><span class="h3fill" style="width:'+Math.round(pts/maxPts*100)+'%"></span></span>'+
+    '<span class="h3v mono">'+pts.toFixed(1)+'</span><span class="h3x dimtxt">'+extra+'</span></div>';
+  const histBars = h3.map(x=>barRow(String(x[0]), x[2], (x[3]?p.pos+x[3]+" · ":"")+x[1]+" gm"+(x[1]<14?" 🩹":""))).join("")+
+    barRow("'26*", p.proj, "projected");
+  let trendLine = "";
+  if(h3.length>=2){
+    if(p.pos==="QB"){
+      trendLine = "Pass yds: "+h3.map(x=>fmt(x[5])).join(" → ")+" · Rush yds: "+h3.map(x=>fmt(x[6])).join(" → ");
+    } else {
+      trendLine = (h3.some(x=>x[4])?"Targets: "+h3.map(x=>x[4]).join(" → ")+" · ":"")+"Rush yds: "+h3.map(x=>fmt(x[6])).join(" → ");
+    }
+  }
+  const effLine = (()=>{
+    const L2 = lastFor(p); if(!L2) return "";
+    if((p.pos==="WR"||p.pos==="TE") && L2[6]>0) return "Yards per target ("+LAST_SEASON+"): "+(L2[8]/L2[6]).toFixed(1);
+    if(p.pos==="RB" && L2[0]>0) return "Scrimmage yds/game ("+LAST_SEASON+"): "+((L2[4]+L2[8])/L2[0]).toFixed(1);
+    return "";
+  })();
+  const careerHigh = h3.length ? Math.max(...h3.map(x=>x[2])) : null;
+  const myCollegeMate = (()=>{
+    if(!ci) return null;
+    const mate = myIds().map(id2=>idIndex()[id2]).filter(Boolean).find(q=>q.id!==p.id && collegeInfo(q) && collegeInfo(q).name===ci.name);
+    return mate ? mate.name : null;
+  })();
+  const ovChips = chips.slice();
+  if(fav) ovChips.unshift('<span class="chip" style="color:#ff7bac;border-color:#ff7bac">💖 one of yours</span>');
+  if(breakoutTag(p)) ovChips.push('<span class="chip" style="color:var(--green)">🚀 breakout profile</span>');
+  if(bustTag(p)) ovChips.push('<span class="chip warn">⚠ bust profile</span>');
+  if(tdRegressTag(p)) ovChips.push('<span class="chip warn">📉 TD regression</span>');
+  if(p.adp && p.adp>=60 && p.adp<=90 && p.pos==="RB") ovChips.push('<span class="chip">☠ RB dead zone</span>');
+  const wi = winnerIndex(p);
+  if(wi>=3) ovChips.push('<span class="chip" style="color:var(--gold)">🏆 league-winner index '+wi+'/5</span>');
+  if(myCollegeMate) ovChips.push('<span class="chip">🎓 '+esc(ci.name)+' with '+esc(myCollegeMate)+'</span>');
+  const bioLine2 = bio + (m&&m[13]?' · b. '+m[13].slice(0,10):'');
+  const overview =
+    (ovChips.length?'<div class="chips">'+ovChips.join("")+'</div>':'')+
+    '<div class="cstats">'+
+      stat("Projected", p.proj)+stat("Value", (vorp>0?"+":"")+vorp)+stat("ADP", p.adp||"—")+
+      stat("Round", rinfo[p.id]?rinfo[p.id].label:"—")+
+      stat("At #"+(odds?odds.at1:"?"), odds&&odds.h1[id]!=null?odds.h1[id]+"%":"—")+
+      stat(odds&&odds.at2?"At #"+odds.at2:"Later", odds&&odds.h2&&odds.h2[id]!=null?odds.h2[id]+"%":"—")+
+    '</div>'+
+    '<div class="cstory">'+esc(storyOf(p))+'</div>'+
+    (sc && sc.why.length ? '<div class="cwhy">▸ '+sc.why.join("<br>▸ ")+'</div>' : '')+
+    (qbName?'<div class="cintel dim">🎯 His QB: <b>'+esc(qbName)+'</b>'+(myQBhere?' — <span class="ok">your stack ✓</span>':'')+'</div>':'')+
+    (injE?'<div class="cintel" style="color:var(--red)">🩹 <b>'+esc(injE.s)+'</b>'+(m&&m[9]?' ('+esc(m[9])+')':'')+(injE.c?' — '+esc(injE.c):'')+(injE.d?' <span class="dimtxt">('+injE.d+' · '+injE.src+')</span>':'')+'</div>':'');
+  const history =
+    '<div class="cintel"><b>Season points</b></div><div style="padding:0 20px 8px">'+histBars+'</div>'+
+    (trendLine?'<div class="cintel dim">'+trendLine+'</div>':'')+
+    (effLine?'<div class="cintel dim">'+effLine+'</div>':'')+
+    (careerHigh?'<div class="cintel dim">Career high: <b>'+careerHigh.toFixed(1)+'</b> PPR'+(cons?' · PPG band '+cons.lo.toFixed(1)+'–'+cons.hi.toFixed(1)+' ('+cons.label+')':'')+'</div>':'<div class="cintel dim">'+(m&&m[1]===0?"Rookie — class of "+(m[12]||"2026")+", no NFL seasons yet.":"No recent season data.")+'</div>')+
+    (tbl?'<div class="cwiki">'+tbl+'</div>':'');
+  const intelTab =
+    (p.intel&&p.intel.t?'<div class="cintel">⭐ '+esc(p.intel.t)+'</div>':'')+
+    (p.intel&&p.intel.p?'<div class="cintel dim">'+esc(p.intel.p)+'</div>':'')+
+    ((()=>{const n=newsFor(p); return n?'<div class="cintel dim">📰 '+(n.u?'<a href="'+esc(n.u)+'" target="_blank" rel="noopener" style="color:var(--green)">':'')+esc(n.h)+(n.u?'</a>':'')+' <span class="dimtxt">'+n.d+'</span></div>':"";})())+
+    (buzzOf(p)>500?'<div class="cintel dim">📈 '+buzzOf(p).toLocaleString()+' Sleeper adds in 24h</div>':'')+
+    (ps?'<div class="cintel dim">🗓 '+ps.short+' · playoff softness '+"★".repeat(stars)+"☆".repeat(5-stars)+'</div>':'')+
+    '<div class="cintel dim">Market: <button class="undo1" data-adpedit="'+id+'">ADP '+(p.adp||"—")+' ✎</button> '+
+    '<button class="undo1" data-tierup="'+id+'">tier ▲</button><button class="undo1" data-tierdn="'+id+'">tier ▼</button> '+
+    '<button class="undo1" data-boost="'+id+'">'+((S.boost||{})[id]===1?"▲ boosted":"▲ boost")+'</button>'+
+    '<button class="undo1" data-fade="'+id+'">'+((S.boost||{})[id]===-1?"▼ faded":"▼ fade")+'</button></div>'+
+    '<div class="cnote" id="cardNote">'+(S.notes[id]?'📝 '+esc(S.notes[id]):'')+'</div>';
   $("#cardBody").innerHTML =
     '<div class="chead">'+
       (logoUrl(p.team)?'<img class="clogo" src="'+logoUrl(p.team)+'" alt="">':'')+
       avatarImg(p,84)+
-      '<div class="cid"><div class="cname">'+p.name+intelBadges(p)+'</div>'+
+      '<div class="cid"><div class="cname">'+p.name+intelBadges(p)+(fav?' 💖':'')+'</div>'+
       '<div class="csub">'+posBadge(p.pos)+' &nbsp;'+p.team+' · T'+tm[p.id]+' · '+status+'</div>'+
-      (bio?'<div class="cbio">'+bio+'</div>':'')+
-      '</div>'+
+      (bioLine2?'<div class="cbio">'+bioLine2+'</div>':'')+
+      '<div class="cbio">'+
+        (hw?'<span class="chip">🏠 '+esc(hw.town)+(hw.st?', '+hw.st:'')+'</span> ':'')+
+        (ci?'<span class="chip" style="'+(ci.color?'color:#fff;background:'+ci.color+';border-color:'+ci.color:'')+'">🎓 '+esc(ci.name)+(ci.conf?' · '+ci.conf:'')+'</span>':'')+
+      '</div></div>'+
     '</div>'+
-    (chips.length?'<div class="chips">'+chips.join("")+'</div>':'')+
-    '<div class="cstats">'+
-      stat("Projected", p.proj)+
-      stat("Value", (vorp>0?"+":"")+vorp)+
-      stat("ADP", p.adp||"—")+
-      stat("Round", rinfo[p.id]?rinfo[p.id].label:"—")+
-      stat("At #"+(odds?odds.at1:"?"), odds&&odds.h1[id]!=null?odds.h1[id]+"%":"—")+
-      stat(odds&&odds.at2?"At #"+odds.at2:"Later", odds&&odds.h2&&odds.h2[id]!=null?odds.h2[id]+"%":"—")+
-      ((p.pos==="TE"||p.pos==="DEF") ? (()=>{
-        const posAll = players.filter(x=>x.pos===p.pos).sort((a,b)=>b.proj-a.proj);
-        const streamer = posAll[Math.min(12, posAll.length-1)];
-        const d2 = Math.round(p.proj - streamer.proj);
-        return stat("vs streamer", (d2>0?"+":"")+d2);
-      })() : "")+
-    '</div>'+
-    (tbl?'<div class="cwiki">'+tbl+'</div>':'')+
-    (injE?'<div class="cintel" style="color:var(--red)">🩹 <b>'+esc(injE.s)+'</b>'+(m&&m[9]?' ('+esc(m[9])+')':'')+(injE.c?' — '+esc(injE.c):'')+(injE.d?' <span class="dimtxt">('+injE.d+' · '+injE.src+')</span>':'')+'</div>':'')+
-    ((()=>{const n=newsFor(p); return n?'<div class="cintel dim">📰 '+(n.u?'<a href="'+esc(n.u)+'" target="_blank" rel="noopener" style="color:var(--green)">':'')+esc(n.h)+(n.u?'</a>':'')+' <span class="dimtxt">'+n.d+'</span></div>':"";})())+
-    (qbName?'<div class="cintel dim">🎯 His QB: <b>'+esc(qbName)+'</b>'+(myQBhere?' — <span class="ok">your stack ✓</span>':'')+'</div>':'')+
-    (sc && sc.why.length ? '<div class="cwhy">▸ '+sc.why.join("<br>▸ ")+'</div>' : '')+
-    (p.intel&&p.intel.t?'<div class="cintel">⭐ '+esc(p.intel.t)+'</div>':'')+
-    (p.intel&&p.intel.p?'<div class="cintel dim">'+esc(p.intel.p)+'</div>':'')+
-    (ps?'<div class="cintel dim">🗓 '+ps.short+'</div>':'')+
-    '<div class="cnote" id="cardNote">'+(S.notes[id]?'📝 '+esc(S.notes[id]):'')+'</div>'+
+    '<div class="ctabs">'+tabBtn("ov","Overview")+tabBtn("hist","History")+tabBtn("intel","Intel")+'</div>'+
+    '<div class="ctabbody">'+(tab==="hist"?history:tab==="intel"?intelTab:overview)+'</div>'+
     '<div class="cacts">'+
       (status==="available"||status==="do-not-draft" ?
         '<button class="pick" data-pick="'+id+'">✓ MINE</button>'+
         '<button class="kill" data-take="'+id+'">✕ taken</button>'+
         '<button class="undo1" data-dnd="'+id+'">'+(S.dnd[id]?"↩ allow":"🚫 never")+'</button>' : '')+
-      '<button class="undo1" data-note="'+id+'">📝 note</button>'+
-      '<button class="undo1" data-cmpfrom="'+id+'">⚖ compare…</button>'+
-      '<button class="undo1" data-keeper="'+id+'">'+(S.keepers[id]?"👑 unkeep":"👑 keeper")+'</button>'+
-      '<button class="undo1" data-queue="'+id+'">'+(S.queue.includes(id)?"★ unqueue":"☆ queue")+'</button>'+
+      (status==="on your roster" ? '<button class="undo1" data-unpickpre="'+id+'">↩ what-if drop</button>' : '')+
+      '<button class="undo1" data-note="'+id+'">📝</button>'+
+      '<button class="undo1" data-cmpfrom="'+id+'">⚖</button>'+
+      '<button class="undo1" data-keeper="'+id+'">👑</button>'+
+      '<button class="undo1" data-queue="'+id+'">'+(S.queue.includes(id)?"★":"☆")+'</button>'+
+      '<button class="undo1" data-onepager="'+id+'">📋 one-pager</button>'+
     '</div>';
-  $("#cardOverlay").classList.add("show");
+    $("#cardOverlay").classList.add("show");
 }
 function ordSuffix(n){ return n%10===1&&n%100!==11?"st":n%10===2&&n%100!==12?"nd":n%10===3&&n%100!==13?"rd":"th"; }
 document.getElementById("cardClose").addEventListener("click", ()=>document.getElementById("cardOverlay").classList.remove("show"));
@@ -843,6 +975,13 @@ function renderCompare(){
     '<tr><td></td><td style="font-weight:700">'+A.name+intelBadges(A)+'</td><td style="font-weight:700">'+B.name+intelBadges(B)+'</td></tr>'+
     row("Pos · Team", A.pos+" · "+A.team, B.pos+" · "+B.team) +
     row("Projected pts", A.proj, B.proj, 1) +
+    ((()=>{
+      const ha = hist3For(A), hb = hist3For(B);
+      const yr = y => { const fa=ha.find(x=>x[0]===y), fb=hb.find(x=>x[0]===y);
+        return (fa||fb) ? row(String(y)+" pts", fa?fa[2]:"—", fb?fb[2]:"—", 1) : ""; };
+      const ys = [...new Set(ha.concat(hb).map(x=>x[0]))].sort();
+      return ys.map(yr).join("");
+    })()) +
     row("Value vs repl.", (a.vorp>0?"+":"")+a.vorp, (b.vorp>0?"+":"")+b.vorp, 1) +
     row("Tier", "T"+a.tier+" "+A.pos, "T"+b.tier+" "+B.pos) +
     row("ADP", A.adp||"—", B.adp||"—") +
@@ -1015,6 +1154,104 @@ function newsFor(p){
   return NEWS.list.find(n=>n.h.includes(p.name) || (last.length>4 && n.h.includes(last)));
 }
 
+function hist3For(p){ return (typeof LAST3!=="undefined" && LAST3[normName(p.name)]) || []; }
+function hometownOf(p){
+  const m = metaFor(p); if(!m || !m[11]) return null;
+  const mm = String(m[11]).match(/^(.*?)\s*\(([A-Z]{2})\)\s*$/);
+  return mm ? {town:mm[1], st:mm[2]} : {town:String(m[11]), st:""};
+}
+function collegeInfo(p){
+  const m = metaFor(p);
+  if(!m || !m[2]) return null;
+  const c = (typeof COLLEGE!=="undefined" && COLLEGE[m[2]]) || null;
+  return {name:m[2], conf:c?c[0]:"", color:c?c[1]:""};
+}
+function isFav(p){
+  const st = (S.settings.favState||"").toUpperCase().trim();
+  const col = (S.settings.favCollege||"").toLowerCase().trim();
+  const hw = hometownOf(p), ci = collegeInfo(p);
+  const stHit = st && hw && hw.st===st;
+  const colHit = col && ci && ci.name.toLowerCase().includes(col);
+  return stHit || colHit ? {st:stHit, col:colHit} : null;
+}
+function consistencyOf(p){
+  const h = hist3For(p).filter(x=>x[1]>=8);
+  if(h.length<2) return null;
+  const ppg = h.map(x=>x[2]/x[1]);
+  const mean = ppg.reduce((a,b)=>a+b,0)/ppg.length;
+  if(mean<=0) return null;
+  const sd = Math.sqrt(ppg.reduce((a,b)=>a+(b-mean)*(b-mean),0)/ppg.length);
+  const cv = sd/mean;
+  return {mean, lo:Math.min(...ppg), hi:Math.max(...ppg),
+          label: cv<0.12 ? "metronome" : cv<0.25 ? "steady" : "boom-bust"};
+}
+function breakoutTag(p){
+  const m = metaFor(p);
+  if(!m || !(p.pos==="WR"||p.pos==="TE"||p.pos==="RB")) return false;
+  if(m[1]<1 || m[1]>2) return false;
+  const h = hist3For(p);
+  if(!h.length) return m[1]>=1;                       // year-2 with thin data still qualifies
+  const last = h[h.length-1], prev = h.length>1 ? h[h.length-2] : null;
+  const tgtGrowth = prev && prev[4]>0 ? last[4]/prev[4] : 2;
+  return tgtGrowth >= 1.15 || (PROJ26[normName(p.name)] && PROJ26[normName(p.name)][6] > (last[4]||0)*1.15);
+}
+function tdRegressTag(p){
+  const L = lastFor(p), PR = projFor(p);
+  if(!L || !PR) return false;
+  const lastTD = (L[5]||0)+(L[9]||0)+(p.pos==="QB"?(L[2]||0):0);
+  const projTD = (PR[5]||0)+(PR[9]||0)+(p.pos==="QB"?(PR[2]||0):0);
+  return lastTD >= 8 && projTD > 0 && lastTD > projTD*1.35;
+}
+function bustTag(p){
+  return !!(p.adp && p.adp<=70 && (ageCliff(p) || tdRegressTag(p)));
+}
+function winnerIndex(p){
+  const m = metaFor(p);
+  let sc = 0;
+  if(m && m[0] && m[0]<=25) sc++;
+  if(breakoutTag(p)) sc++;
+  if(p.intel && p.intel.t!=null) sc++;
+  if(buzzOf(p)>1000) sc++;
+  const c = consistencyOf(p);
+  if(c && c.hi>=15) sc++;
+  return sc;
+}
+function playoffStars(team){
+  const s = typeof PSOS!=="undefined" ? PSOS[team] : null;
+  if(!s) return 0;
+  return Math.max(1, Math.min(5, Math.round((s.r[0]+s.r[1]+s.r[2])/3/32*5)));
+}
+const PRIME = {RB:[23,27], WR:[24,29], TE:[25,30], QB:[26,36]};
+function primeNote(p){
+  const m = metaFor(p);
+  if(!m || !m[0] || !PRIME[p.pos]) return "";
+  const [lo,hi] = PRIME[p.pos], a = m[0];
+  return a<lo ? "pre-prime ("+p.pos+" prime "+lo+"–"+hi+")" : a<=hi ? "in his prime years" : "past the typical "+p.pos+" prime";
+}
+function storyOf(p){
+  const m = metaFor(p), hw = hometownOf(p), ci = collegeInfo(p), h = hist3For(p);
+  const bits = [];
+  if(hw) bits.push((hw.town?hw.town+", ":"")+(hw.st||"")+" kid");
+  if(ci) bits.push(ci.name+(ci.conf?" ("+ci.conf+")":"")+" product");
+  if(m && m[12]) bits.push(m[1]===0 ? "arrives in the "+m[12]+" class" : "in the league since "+m[12]);
+  let arc = "";
+  if(h.length>=2){
+    const pts = h.map(x=>Math.round(x[2]));
+    const dir = pts[pts.length-1] > pts[0]*1.15 ? "climbing" : pts[pts.length-1] < pts[0]*0.85 ? "sliding" : "holding steady";
+    arc = "Fantasy arc: "+pts.join(" → ")+" — "+dir+".";
+  } else if(m && m[1]===0){
+    arc = "No NFL tape yet — the projection is the bet.";
+  }
+  const pn = primeNote(p);
+  const inj = injuryOf(p);
+  let out = bits.length ? bits.join(", ")+". " : "";
+  out += arc ? arc+" " : "";
+  if(pn) out += pn.charAt(0).toUpperCase()+pn.slice(1)+". ";
+  if(inj) out += "Currently "+injSeverity(inj.s).label.toLowerCase()+". ";
+  const fav = isFav(p);
+  if(fav) out += "And yes — one of yours"+(fav.st?" ("+(S.settings.favState||"").toUpperCase()+" roots)":"")+". 💖";
+  return out.trim();
+}
 function metaFor(p){ return (typeof PLAYERMETA!=="undefined" && PLAYERMETA[normName(p.name)]) || null; }
 function lastFor(p){ return (typeof LASTSZN!=="undefined" && LASTSZN[normName(p.name)]) || null; }
 function projFor(p){ return (typeof PROJ26!=="undefined" && PROJ26[normName(p.name)]) || null; }
@@ -1034,6 +1271,7 @@ function headshotUrl(p){
   return id ? "https://sleepercdn.com/content/nfl/players/thumb/"+id+".jpg" : null;
 }
 function logoUrl(team){
+  if(S.settings && S.settings.lowData) return null;
   const s = typeof TEAMLOGO!=="undefined" ? TEAMLOGO[team] : null;
   return s ? "https://a.espncdn.com/i/teamlogos/nfl/500/"+s+".png" : null;
 }
@@ -1049,9 +1287,14 @@ document.addEventListener("error", e=>{
   img.replaceWith(ph);
 }, true);
 function avatarImg(p, size){
+  if(S.settings && S.settings.lowData){
+    const init = p.name.split(" ").map(w=>w[0]).slice(0,2).join("");
+    return '<span class="avatar ph pos'+p.pos+'" style="width:'+size+'px;height:'+size+'px">'+esc(init)+'</span>';
+  }
   const u = headshotUrl(p);
-  if(u && window._noimg.has(u)) return '<span class="avatar ph" style="width:'+size+'px;height:'+size+'px">'+esc(p.name[0])+'</span>';
-  if(!u) return '<span class="avatar ph" style="width:'+size+'px;height:'+size+'px">'+p.name[0]+'</span>';
+  const init2 = p.name.split(" ").map(w=>w[0]).slice(0,2).join("");
+  if(u && window._noimg.has(u)) return '<span class="avatar ph pos'+p.pos+'" style="width:'+size+'px;height:'+size+'px">'+esc(init2)+'</span>';
+  if(!u) return '<span class="avatar ph pos'+p.pos+'" style="width:'+size+'px;height:'+size+'px">'+esc(init2)+'</span>';
   return '<img class="avatar" src="'+u+'" width="'+size+'" height="'+size+'"'+(size>=56?' fetchpriority="high"':' loading="lazy"')+' decoding="async" alt="">';
 }
 function psosFor(team){
@@ -1178,7 +1421,7 @@ function renderPool(){
     }
     return div + '<tr class="'+cls+'" data-pid="'+r.p.id+'">'+
       '<td class="mono" style="color:var(--faint)">'+(i+1)+'</td>'+
-      '<td><span class="pcell" data-card="'+r.p.id+'" title="Open player card">'+avatarImg(r.p,24)+'<span class="pname">'+hl(r.p.name)+'</span></span>'+(S.notes[r.p.id]?'<span class="ib gold" title="'+esc(S.notes[r.p.id])+'">📝</span>':'')+(S.dnd[r.p.id]&&!r.taken&&!r.mine?'<span class="ib bear" title="On your do-not-draft list">🚫</span>':'')+((()=>{const e=injuryOf(r.p); if(!e) return ""; const sv=injSeverity(e.s); return '<span class="ib '+sv.cls+'" title="'+esc(sv.label+(e.c?" — "+e.c:"")+(e.d?" ("+e.d+" · "+e.src+")":""))+'">●</span>';})())+(buzzOf(r.p)>3000?'<span class="ib bull" title="'+buzzOf(r.p).toLocaleString()+' Sleeper adds in 24h">📈</span>':'')+((metaFor(r.p)||[])[1]===0?'<span class="ib" title="Rookie">🎓</span>':'')+intelBadges(r.p)+(r.stack?'<span class="stackchip">🔗 stack</span>':'')+(!r.taken&&!r.mine&&r.p.adp&&(pickNow()-r.p.adp)>=10?'<span class="ib" title="Falling: '+(pickNow()-r.p.adp)+' picks past ADP '+r.p.adp+'">💎</span>':'')+(r.backRisk==="gone"?'<span class="ib" title="Won\'t make it back to your next pick">🔥</span>':r.backRisk==="risky"?'<span class="ib" title="Coin-flip to survive to your next pick">⏳</span>':'')+'</td>'+
+      '<td><span class="pcell" data-card="'+r.p.id+'" title="Open player card">'+avatarImg(r.p,24)+'<span class="pname">'+hl(r.p.name)+'</span></span>'+(S.notes[r.p.id]?'<span class="ib gold" title="'+esc(S.notes[r.p.id])+'">📝</span>':'')+(S.dnd[r.p.id]&&!r.taken&&!r.mine?'<span class="ib bear" title="On your do-not-draft list">🚫</span>':'')+((()=>{const e=injuryOf(r.p); if(!e) return ""; const sv=injSeverity(e.s); return '<span class="ib '+sv.cls+'" title="'+esc(sv.label+(e.c?" — "+e.c:"")+(e.d?" ("+e.d+" · "+e.src+")":""))+'">●</span>';})())+(buzzOf(r.p)>3000?'<span class="ib bull" title="'+buzzOf(r.p).toLocaleString()+' Sleeper adds in 24h">📈</span>':'')+((metaFor(r.p)||[])[1]===0?'<span class="ib" title="Rookie">🎓</span>':'')+(isFav(r.p)?'<span class="ib" style="color:#ff7bac" title="Your favorite state/college">💖</span>':'')+((S.boost||{})[r.p.id]===1?'<span class="ib bull" title="On your boost list">▲</span>':(S.boost||{})[r.p.id]===-1?'<span class="ib bear" title="On your fade list">▼</span>':'')+((()=>{const n=newsFor(r.p); return n && (Date.now()-new Date(n.d).getTime())<3*86400e3 ? '<span class="ib" title="'+esc(n.h)+'">📰</span>' : "";})())+intelBadges(r.p)+(r.stack?'<span class="stackchip">🔗 stack</span>':'')+(!r.taken&&!r.mine&&r.p.adp&&(pickNow()-r.p.adp)>=10?'<span class="ib" title="Falling: '+(pickNow()-r.p.adp)+' picks past ADP '+r.p.adp+'">💎</span>':'')+(r.backRisk==="gone"?'<span class="ib" title="Won\'t make it back to your next pick">🔥</span>':r.backRisk==="risky"?'<span class="ib" title="Coin-flip to survive to your next pick">⏳</span>':'')+'</td>'+
       '<td>'+posBadge(r.p.pos)+'<span class="tier t'+Math.min(tm[r.p.id],5)+'">T'+tm[r.p.id]+'</span></td>'+
       '<td class="mono" style="color:var(--dim)'+(psosFor(r.p.team)?';cursor:help':'')+'"'+(psosFor(r.p.team)?' title="'+esc(psosFor(r.p.team).txt)+'"':'')+'>'+(logoUrl(r.p.team)?'<img class="tlogo" src="'+logoUrl(r.p.team)+'" width="14" height="14" loading="lazy" decoding="async" alt=""> ':'')+r.p.team+'</td>'+
       '<td><span class="proj mono" data-edit="'+r.p.id+'">'+r.p.proj+'</span></td>'+
@@ -1222,8 +1465,8 @@ function openPalette(){
     const q2 = inp.value.trim();
     const acts = PALETTE_ACTIONS.filter(a=>!q2 || a[0].toLowerCase().includes(q2.toLowerCase())).slice(0,4)
       .map(a=>({label:a[0], run:a[1], kind:"act"}));
-    const ps = q2.length>=2 ? allPlayers().filter(p=>!offBoard(p.id) && matchesQuery(p,q2)).slice(0,7)
-      .map(p=>({label:p.name+" · "+p.pos+" "+p.team, p, kind:"player"})) : [];
+    const ps = q2.length>=2 ? allPlayers().filter(p=>matchesQuery(p,q2)).slice(0,7)
+      .map(p=>({label:p.name+" · "+p.pos+" "+p.team+(offBoard(p.id)?" · off board":""), p, kind:"player"})) : [];
     items = acts.concat(ps);
     sel = Math.min(sel, Math.max(0, items.length-1));
     list.innerHTML = items.map((it,i)=>'<div class="palrow'+(i===sel?" on":"")+'" data-pi="'+i+'">'+
@@ -1252,6 +1495,29 @@ function openPalette(){
   draw();
   inp.focus();
 }
+
+/* Hover mini-card preview (#225) */
+let _hovT = null;
+document.addEventListener("mouseover", e=>{
+  const cell = e.target.closest && e.target.closest(".pcell[data-card]");
+  const hc = document.getElementById("hoverCard");
+  if(!cell){ if(hc && !e.target.closest("#hoverCard")) hc.remove(); clearTimeout(_hovT); return; }
+  clearTimeout(_hovT);
+  _hovT = setTimeout(()=>{
+    const p = idIndex()[cell.dataset.card]; if(!p) return;
+    let el = document.getElementById("hoverCard");
+    if(!el){ el = document.createElement("div"); el.id = "hoverCard"; document.body.appendChild(el); }
+    const h3 = hist3For(p), hw = hometownOf(p), ci = collegeInfo(p);
+    el.innerHTML = '<div style="display:flex;gap:10px;align-items:center">'+avatarImg(p,44)+
+      '<div><b>'+esc(p.name)+'</b> '+(isFav(p)?"💖":"")+'<br><span class="dimtxt">'+p.pos+' '+p.team+
+      (ci?' · '+esc(ci.name):'')+(hw&&hw.st?' · '+hw.st:'')+'</span></div></div>'+
+      (h3.length?'<div class="dimtxt" style="margin-top:6px">'+h3.map(x=>x[0]+": <b>"+Math.round(x[2])+"</b>"+(x[3]?" ("+p.pos+x[3]+")":"")).join(" · ")+'</div>':'')+
+      '<div class="dimtxt" style="margin-top:4px">proj <b style="color:var(--green)">'+p.proj+'</b> · ADP '+(p.adp||"—")+'</div>';
+    const r2 = cell.getBoundingClientRect();
+    el.style.left = Math.min(r2.left, innerWidth-300)+"px";
+    el.style.top = (r2.bottom+6)+"px";
+  }, 350);
+});
 
 /* Right-click context menu on pool rows */
 document.addEventListener("contextmenu", e=>{
@@ -1320,14 +1586,27 @@ function renderBest(){
   if(h){
     pickline = '<div class="pickline'+(h.onClock?' onclock':'')+'" data-picksync="1" title="Click to correct the current overall pick if the board drifted" style="cursor:pointer">Pick <b class="mono">#'+h.cur+'</b> on the clock'+
       (h.onClock ? ' — <b style="color:var(--green)">THAT\'S YOU, DRAFT NOW</b>' : '') +
-      ' · your next: <b class="mono">#'+h.mine0+'</b>'+(h.mine1?' then <b class="mono">#'+h.mine1+'</b>':'')+'</div>';
+      ' · your next: <b class="mono">#'+h.mine0+'</b>'+(h.mine1?' then <b class="mono">#'+h.mine1+'</b>':'')+
+      (!h.onClock?' · <button class="undo1" data-simto="1" title="Let the engine make every CPU pick until your turn">⏩ sim to my pick</button>':'')+'</div>';
+  }
+  const pred = predictNextPicks();
+  if(pred){
+    pickline += '<div class="pickline" style="margin-top:-4px;font-size:10.5px">🔮 '+esc(slotName(pred.slot))+' likely takes: '+
+      pred.cand.map(x=>'<b>'+esc(x.p.name.split(" ").slice(-1)[0])+'</b> ('+x.p.pos+')').join(" or ")+'</div>';
   }
   document.title = (h && h.onClock ? "🟢 YOUR PICK — " : "") + "Draft War Room — 2QB";
   if(h && h.onClock && !window._wasOnClock && S.ui.live) chime();
   window._wasOnClock = !!(h && h.onClock);
   updatePanic(h, top);
+  if(S.ui.live && h && h.onClock && S.settings.timerSecs){
+    if(!window._clockT0) window._clockT0 = Date.now();
+    const left2 = Math.max(0, S.settings.timerSecs - (Date.now()-window._clockT0)/1000);
+    pickline += '<div class="pickline'+(left2<=30?' onclock':'')+'" style="margin-top:-4px">⏲ <b class="mono" style="font-size:14px;color:'+(left2<=30?'var(--red)':'var(--text)')+'">'+Math.floor(left2/60)+':'+String(Math.floor(left2%60)).padStart(2,"0")+'</b> on your clock</div>';
+    if(left2<=30 && !window._clockWarned){ window._clockWarned = true; chime(); toast("⏲ 30 seconds!", {warn:true}); }
+  }
+  if(h && !h.onClock){ window._clockT0 = 0; window._clockWarned = false; }
   if(S.ui.live && h && S.ui.liveStart){
-    const el = (Date.now()-S.ui.liveStart)/1000;
+    const el = (Date.now()-S.ui.liveStart-(S.ui.hiddenMs||0))/1000;
     const made = Math.max(0, S.log.length-(S.ui.liveLen0||0));
     const pace = made>2 ? el/made : 0;
     const left = S.settings.teams*S.settings.roster - h.cur + 1;
@@ -1432,6 +1711,7 @@ function renderBest(){
       '<div class="val mono">+'+Math.round(s.vorp)+'</div>'+
       '<button class="pick" data-pick="'+s.p.id+'">✓</button>'+
       '<button class="kill" data-take="'+s.p.id+'">✕</button>'+
+      '<button class="undo1" data-queue="'+s.p.id+'" title="Queue">'+(S.queue.includes(s.p.id)?"★":"☆")+'</button>'+
     '</div>'
   ).join("");
   // Stack opportunities: available partners for YOUR QBs / pass-catchers
@@ -1461,8 +1741,12 @@ function renderBest(){
     POSITIONS.map(pos=>{
       const s = bypos[pos];
       if(!s) return '<div class="barow"><div class="rk"></div>'+posBadge(pos)+'<div class="info"><div class="sm">— none left</div></div></div>';
+      const stash = pos==="QB" && myCounts().QB>=2
+        ? (()=>{ const st2 = scored.filter(x=>x.p.pos==="QB" && x.p.adp>100).slice(0,1)[0];
+                 return st2 ? ' · stash: '+esc(st2.p.name.split(" ").slice(-1)[0]) : ""; })()
+        : "";
       return '<div class="barow"><div class="rk"></div>'+posBadge(pos)+
-        '<div class="info"><div class="nm">'+s.p.name+'</div><div class="sm">'+s.p.proj+' pts'+(odds&&odds.h1[s.p.id]!=null?' · <b class="'+oddsClass(odds.h1[s.p.id])+'">'+odds.h1[s.p.id]+'%</b>':'')+'</div></div>'+
+        '<div class="info"><div class="nm">'+s.p.name+'</div><div class="sm">'+s.p.proj+' pts'+stash+(odds&&odds.h1[s.p.id]!=null?' · <b class="'+oddsClass(odds.h1[s.p.id])+'">'+odds.h1[s.p.id]+'%</b>':'')+'</div></div>'+
         '<div class="val mono">'+(s.vorp>0?"+":"")+Math.round(s.vorp)+'</div>'+
         '<button class="pick" data-pick="'+s.p.id+'">✓</button>'+
         '<button class="kill" data-take="'+s.p.id+'">✕</button></div>';
@@ -1518,8 +1802,19 @@ function renderRoster(){
     bs = bestStarters(mineAll, byId);
     const orderOf = {}; S.mine.forEach((id,i)=>orderOf[id]=i+1);
     myKeeperIds().forEach(id=>orderOf[id]="K");
+    const posBase = (()=>{
+      const players2 = allPlayers(), t2 = S.settings.teams;
+      const starters = {QB:t2*2, RB:t2*2.5, WR:t2*2.5, TE:t2, DEF:t2};
+      const b = {};
+      POSITIONS.forEach(pos=>{
+        const list2 = players2.filter(x=>x.pos===pos).sort((a,b)=>b.proj-a.proj).slice(0, Math.round(starters[pos]));
+        b[pos] = list2.length ? list2.reduce((a,x)=>a+x.proj,0)/list2.length : 0;
+      });
+      return b;
+    })();
     const rowFor = (p, lab) => '<div class="myp"><span class="slotlab">'+lab+'</span>'+avatarImg(p,22)+posBadge(p.pos)+((()=>{const e=injuryOf(p); if(!e) return ""; const sv=injSeverity(e.s); return '<span class="ib '+sv.cls+'" title="'+esc(sv.label+(e.c?" — "+e.c:""))+'">●</span>';})())+
       '<div class="n">'+p.name+' <span class="t">'+(logoUrl(p.team)?'<img class="tlogo" src="'+logoUrl(p.team)+'" width="12" height="12" loading="lazy" alt=""> ':'')+p.team+' · <span class="mono">'+p.proj+'</span></span></div>'+
+      (function(){const d3=Math.round(p.proj-posBase[p.pos]); return '<span class="mono" style="font-size:9.5px;color:'+(d3>=0?'var(--green)':'var(--red)')+'" title="vs average starter at position">'+(d3>0?'+':'')+d3+'</span>';})()+
       '<span class="t mono">'+(orderOf[p.id]==="K"?"👑":"R"+orderOf[p.id])+'</span>'+
       '<span class="x" data-drop="'+p.id+'" role="button" tabindex="0" aria-label="Remove '+esc(p.name)+' from my roster" title="Remove from my roster">✕</span></div>';
     let html = bs.line.map(sl => sl.p ? rowFor(sl.p, sl.lab) :
@@ -1543,10 +1838,45 @@ function renderRoster(){
   const total = S.mine.reduce((a,id)=>a+((byId[id]||{}).proj||0),0);
   if(S.mine.length) $("#stackBox").innerHTML += '<br>Starters proj: <b class="mono">'+Math.round(bs?bs.pts:0)+'</b> · full roster: <span class="mono">'+Math.round(total)+'</span>';
 
+  // FLEX advice late
+  if(bs && picksLeft>0 && picksLeft<=5){
+    const flexSlot = bs.line.find(sl=>sl.lab==="FLEX");
+    if(flexSlot && !flexSlot.p){
+      const bestFlex = scoreBoard().scored.find(s=>["RB","WR","TE"].includes(s.p.pos));
+      if(bestFlex) warn.innerHTML += '<div class="warn">🎯 Your FLEX is open — best fit now: <b>'+esc(bestFlex.p.name)+'</b> ('+bestFlex.p.pos+', +'+Math.round(bestFlex.vorp)+')</div>';
+    }
+  }
+  // Superflex musical chairs
+  {
+    const ros2 = teamRosters(), t2 = S.settings.teams;
+    let needQb = 0;
+    for(let s2=1;s2<=t2;s2++){
+      const ids2 = s2===Math.min(S.settings.slot,t2) ? myIds() : ros2[s2];
+      const qb2 = ids2.map(id2=>byId[id2]).filter(Boolean).filter(p2=>p2.pos==="QB").length;
+      if(qb2<2) needQb++;
+    }
+    const seats = allPlayers().filter(p2=>p2.pos==="QB" && !offBoard(p2.id) && !S.dnd[p2.id] && (p2.proj-(replacementLevels(allPlayers()).QB||0))>0).length;
+    if(needQb>0 && seats <= needQb && counts.QB<2 && picksLeft>0){
+      warn.innerHTML += '<div class="warn crit">🎵 Musical chairs: <b>'+needQb+'</b> teams (incl. you) still need a QB2 and only <b>'+seats+'</b> startable QBs remain.</div>';
+    }
+  }
   // My roster health warning
   const hurtMine = S.mine.map(id=>byId[id]).filter(Boolean).filter(p=>badInjury(p));
   if(hurtMine.length){
     warn.innerHTML += '<div class="warn crit">🩹 On your roster: '+hurtMine.map(p=>'<b>'+esc(p.name)+'</b> ('+esc(badInjury(p))+')').join(", ")+'</div>';
+  }
+  // Handcuff finder for my RBs
+  {
+    const myRbs = myIds().map(id2=>byId[id2]).filter(Boolean).filter(p2=>p2.pos==="RB");
+    if(myRbs.length){
+      const avail2 = allPlayers().filter(p2=>p2.pos==="RB" && !offBoard(p2.id));
+      const cuffs = [];
+      myRbs.forEach(rb=>{
+        const c2 = avail2.filter(p2=>p2.team===rb.team).sort((a,b)=>b.proj-a.proj)[0];
+        if(c2) cuffs.push(rb.name.split(" ").slice(-1)[0]+" → <b data-card=\""+c2.id+"\" style=\"cursor:pointer\">"+esc(c2.name)+"</b>");
+      });
+      if(cuffs.length) $("#stackBox").innerHTML += '<br>🔗 Handcuffs available: '+cuffs.join(" · ");
+    }
   }
   // Positional run detector — 4+ of the last 10 picks at one position
   const recent = S.log.slice(-10);
@@ -1562,12 +1892,12 @@ let logMineOnly = false;
 function undoLastN(n){ for(let i=0;i<n;i++) undoLast(); }
 function exportLogCsv(){
   const byId = idIndex(), t = S.settings.teams;
-  let csv = "Pick,Round,Team,Player,Pos,NFLTeam,Who\n";
+  let csv = "Pick,Round,Team,Player,Pos,NFLTeam,Who,Time\n";
   S.log.forEach((e,i)=>{
     const p = byId[e.id]; if(!p) return;
     const n = i+1+(S.pickOffset||0), r = Math.ceil(n/t), idx = n-(r-1)*t;
     const slot = (r%2===1)?idx:t+1-idx;
-    csv += [n, r+"."+String(idx).padStart(2,"0"), '"'+slotName(slot).replace(/"/g,'""')+'"', '"'+p.name.replace(/"/g,'""')+'"', p.pos, p.team, e.who].join(",")+"\n";
+    csv += [n, r+"."+String(idx).padStart(2,"0"), '"'+slotName(slot).replace(/"/g,'""')+'"', '"'+p.name.replace(/"/g,'""')+'"', p.pos, p.team, e.who, e.t?new Date(e.t).toISOString():""].join(",")+"\n";
   });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
@@ -1581,7 +1911,7 @@ function renderLog(){
     const p = byId[e.id]; if(!p) return "";
     if(logMineOnly && e.who!=="me") return "";
     const n = i+1+(S.pickOffset||0), r = Math.ceil(n/t), ri = n-(r-1)*t;
-    return '<div class="logrow"><span class="pickno mono">'+r+'.'+String(ri).padStart(2,"0")+'</span>'+
+    return '<div class="logrow"><span class="pickno mono">'+r+'.'+String(ri).padStart(2,"0")+'</span>'+avatarImg(p,18)+
       '<span class="who '+(e.who==="me"?"me":"")+'">'+(e.who==="me"?"MY PICK":"taken")+'</span>'+
       '<span class="n">'+(logoUrl(p.team)?'<img class="tlogo" src="'+logoUrl(p.team)+'" width="13" height="13" loading="lazy" alt=""> ':'')+p.name+' <span style="color:var(--faint)">'+p.pos+' · '+p.team+'</span></span>'+
       (function(){const v=Math.round(p.proj-(repl[p.pos]||0)); return '<span class="mono" style="font-size:10px;color:'+(v>25?'var(--green)':v>0?'var(--dim)':'var(--faint)')+'">'+(v>0?'+':'')+v+'</span>';})()+
@@ -1618,7 +1948,7 @@ function renderHeader(){
 
 /* ---------- Events (delegated) ---------- */
 document.addEventListener("click", e=>{
-  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-card],[data-cmpfrom],[data-slotname],[data-keeper],[data-queue],[data-qup],[data-qdn],[data-showall],#tradeGo,#logMineBtn,#logCsvBtn,#undo5Btn,th[data-sort]");
+  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-card],[data-cardtab],[data-boost],[data-fade],[data-adpedit],[data-tierup],[data-tierdn],[data-onepager],[data-unpickpre],[data-cmpfrom],[data-slotname],[data-keeper],[data-queue],[data-qup],[data-qfill],[data-qdn],[data-showall],[data-simto],#tradeGo,#logMineBtn,#logCsvBtn,#undo5Btn,th[data-sort]");
   if(!t){
     const rowEl = e.target.closest("#poolBody tr[data-pid]");
     if(rowEl){
@@ -1665,7 +1995,7 @@ document.addEventListener("click", e=>{
     navigator.clipboard.writeText(txt).then(()=>toast("📋 Results copied ("+S.log.length+" picks)"));
     return;
   }
-  if(t.dataset.card){ return openCard(t.dataset.card); }
+  if(t.dataset.card){ if(t.dataset.tabpre) window._cardTab = t.dataset.tabpre; return openCard(t.dataset.card); }
   if(t.dataset.keeper){
     const id = t.dataset.keeper;
     if(S.keepers[id]) delete S.keepers[id];
@@ -1674,18 +2004,61 @@ document.addEventListener("click", e=>{
       if(v===null) return;
       const s2 = parseInt(v,10);
       if(isNaN(s2) || s2<1 || s2>S.settings.teams) return toast("Bad slot", {warn:true});
-      S.keepers[id] = s2;
+      const rc = prompt("Which round does this keeper cost? (0 = free)", "0");
+      S.keepers[id] = {s:s2, r:Math.max(0, parseInt(rc,10)||0)};
     }
     $("#cardOverlay").classList.remove("show");
     return commit();
   }
   if(t.dataset.queue){ $("#cardOverlay").classList.remove("show"); return toggleQueue(t.dataset.queue); }
+  if(t.dataset.qfill){
+    const {scored} = scoreBoard();
+    scored.slice(0,8).forEach(s=>{ if(!S.queue.includes(s.p.id)) S.queue.push(s.p.id); });
+    commit(); return;
+  }
   if(t.dataset.qup!=null){ const i=+t.dataset.qup; if(i>0){ [S.queue[i-1],S.queue[i]]=[S.queue[i],S.queue[i-1]]; commit(); } return; }
   if(t.dataset.qdn!=null){ const i=+t.dataset.qdn; if(i<S.queue.length-1){ [S.queue[i+1],S.queue[i]]=[S.queue[i],S.queue[i+1]]; commit(); } return; }
   if(t.dataset.showall){ window._showAllRows = true; renderPool(); return; }
+  if(t.dataset.simto){ return simToMyPick(); }
   if(t.id==="undo5Btn"){ undoLastN(5); return; }
   if(t.id==="logMineBtn"){ logMineOnly = !logMineOnly; t.classList.toggle("on", logMineOnly); renderLog(); return; }
   if(t.id==="logCsvBtn"){ return exportLogCsv(); }
+  if(t.dataset.cardtab){ window._cardTab = t.dataset.cardtab; return openCard(t.dataset.cardid); }
+  if(t.dataset.boost){
+    const id = t.dataset.boost;
+    S.boost[id] = S.boost[id]===1 ? 0 : 1;
+    commit(); window._cardTab="intel"; return openCard(id);
+  }
+  if(t.dataset.fade){
+    const id = t.dataset.fade;
+    S.boost[id] = S.boost[id]===-1 ? 0 : -1;
+    commit(); window._cardTab="intel"; return openCard(id);
+  }
+  if(t.dataset.adpedit){
+    const id = t.dataset.adpedit, p = idIndex()[id];
+    const v = prompt("Manual ADP for "+p.name+" (blank = restore source):", p.adp||"");
+    if(v===null) return;
+    if(v.trim()==="") delete S.adpOverride[id]; else S.adpOverride[id] = Math.max(1, parseInt(v,10)||p.adp);
+    commit(); window._cardTab="intel"; return openCard(id);
+  }
+  if(t.dataset.tierup){ const id=t.dataset.tierup; S.tierBump[id]=(S.tierBump[id]||0)+1; commit(); window._cardTab="intel"; return openCard(id); }
+  if(t.dataset.tierdn){ const id=t.dataset.tierdn; S.tierBump[id]=(S.tierBump[id]||0)-1; commit(); window._cardTab="intel"; return openCard(id); }
+  if(t.dataset.onepager){
+    const id = t.dataset.onepager, p = idIndex()[id];
+    const h3 = hist3For(p);
+    const txt = p.name+" ("+p.pos+" "+p.team+")\n"+storyOf(p)+"\n"+
+      (h3.length?"Seasons: "+h3.map(x=>x[0]+": "+x[2]+" pts ("+p.pos+x[3]+")").join(" · ")+"\n":"")+
+      "2026 projection: "+p.proj+" · ADP "+(p.adp||"—");
+    navigator.clipboard.writeText(txt).then(()=>toast("📋 One-pager copied"));
+    return;
+  }
+  if(t.dataset.unpickpre){
+    const id = t.dataset.unpickpre, byId2 = idIndex();
+    const with2 = bestStarters(myIds(), byId2).pts;
+    const without = bestStarters(myIds().filter(x=>x!==id), byId2).pts;
+    toast("Without "+esc(byId2[id].name)+": lineup drops <b>"+Math.round(with2-without)+"</b> pts");
+    return;
+  }
   if(t.dataset.cmpfrom){
     const p = idIndex()[t.dataset.cmpfrom]; if(!p) return;
     $("#cardOverlay").classList.remove("show");
@@ -1773,6 +2146,17 @@ document.addEventListener("keydown", e=>{
     if(k==="d"){ e.preventDefault(); S.dnd[id] ? delete S.dnd[id] : S.dnd[id]=true; commit(); }
     if(k==="n"){ e.preventDefault(); editNote(id); }
     if(k==="q"){ e.preventDefault(); toggleQueue(id); return; }
+  }
+  if(/^[1-9]$/.test(e.key) && S.ui.live){
+    const {scored} = scoreBoard();
+    const s = scored[+e.key-1];
+    if(s){ e.preventDefault(); pickMine(s.p.id); }
+    return;
+  }
+  if(kbSel>=0 && trs[kbSel]){
+    const id = trs[kbSel].dataset.pid;
+    if(!id) return;
+    const k = e.key.toLowerCase();
     if(k==="c"){
       e.preventDefault();
       const p = idIndex()[id]; if(!p) return;
@@ -1803,7 +2187,7 @@ $("#recapBtn").addEventListener("click", ()=>{
   if(!S.mine.length) return toast("Nothing drafted yet", {warn:true});
   const bs = bestStarters(S.mine, byId);
   let txt = "🏈 "+(S.settings.name||"My league")+" — my draft (slot "+S.settings.slot+")\n";
-  bs.line.forEach(sl=>{ if(sl.p) txt += sl.lab.padEnd(5)+" "+sl.p.name+" ("+sl.p.team+", "+sl.p.proj+")\n"; });
+  bs.line.forEach(sl=>{ txt += sl.lab.padEnd(5)+" "+(sl.p ? sl.p.name+" ("+sl.p.team+", "+sl.p.proj+")" : "—")+"\n"; });
   const bench = S.mine.filter(id=>!bs.starterIds.has(id)).map(id=>byId[id]).filter(Boolean);
   if(bench.length) txt += "BENCH "+bench.map(p=>p.name).join(", ")+"\n";
   txt += "Projected starters: "+Math.round(bs.pts)+" pts";
@@ -1852,8 +2236,86 @@ function buildReport(){
       }).join("");
     }
   }
+  // analyst target capture (#247)
+  {
+    const got = myIds().map(id2=>byId[id2]).filter(Boolean).filter(p2=>p2.intel && p2.intel.t!=null);
+    h += '<div class="sechead">Analyst targets landed</div><div class="mkrow" style="white-space:normal"><span class="mn">'+
+      (got.length? '⭐ '+got.length+' — '+got.map(p2=>p2.name.split(" ").slice(-1)[0]).join(", ") : "None yet — the board disagreed with the experts.")+'</span></div>';
+  }
+  // roster age + volatility (#280/#281)
+  if(bs){
+    const ages = bs.line.filter(sl=>sl.p).map(sl=>({p:sl.p, a:(metaFor(sl.p)||[])[0]||0})).filter(x=>x.a);
+    if(ages.length){
+      const avg2 = ages.reduce((a,x)=>a+x.a,0)/ages.length;
+      const old = ages.sort((a,b)=>b.a-a.a)[0], young = ages[ages.length-1];
+      const vols = bs.line.filter(sl=>sl.p).map(sl=>consistencyOf(sl.p)).filter(Boolean);
+      const boomy = vols.filter(v=>v.label==="boom-bust").length;
+      h += '<div class="sechead">Roster profile</div><div class="mkrow" style="white-space:normal"><span class="mn">'+
+        'Avg starter age <b>'+avg2.toFixed(1)+'</b> · oldest '+esc(old.p.name.split(" ").slice(-1)[0])+' ('+old.a+') · youngest '+esc(young.p.name.split(" ").slice(-1)[0])+' ('+young.a+')'+
+        (vols.length?' · volatility: '+boomy+'/'+vols.length+' boom-bust starters':'')+'</span></div>';
+    }
+    // archetype (#287)
+    const first4 = S.log.filter(e=>e.who==="me").slice(0,4).map(e=>byId[e.id]).filter(Boolean);
+    if(first4.length>=3){
+      const rb = first4.filter(p2=>p2.pos==="RB").length;
+      const arch = rb===0 ? "Zero-RB" : rb===1 ? "Hero-RB" : rb>=3 ? "Robust-RB" : "Balanced";
+      h += '<div class="mkrow"><span class="mn">🏗 Build archetype: <b>'+arch+'</b> ('+first4.map(p2=>p2.pos).join("-")+' open)</span></div>';
+    }
+  }
+  // keeper surplus (#235)
+  {
+    const ks = Object.keys(S.keepers||{}).filter(id2=>byId[id2]);
+    if(ks.length){
+      const curve = pickValueCurve(), t2 = S.settings.teams;
+      h += '<div class="sechead">Keeper value</div>'+ks.map(id2=>{
+        const p2 = byId[id2], k2 = S.keepers[id2];
+        const rr = k2.r||0;
+        const cost = rr>0 ? (curve[Math.min(curve.length-1,(rr-1)*t2+Math.floor(t2/2))]||0) : 0;
+        const repl2 = replacementLevels(allPlayers());
+        const surplus = Math.round((p2.proj-(repl2[p2.pos]||0)) - cost);
+        return '<div class="mkrow"><span class="mn">👑 '+esc(p2.name)+' ('+esc(slotName(k2.s!=null?k2.s:k2))+(rr?', costs R'+rr:', free')+') → surplus <b style="color:'+(surplus>=0?'var(--green)':'var(--red)')+'">'+(surplus>0?'+':'')+surplus+'</b></span></div>';
+      }).join("");
+    }
+  }
+  // hindsight (#245) — replay the log, greedy-pick at each of my slots
+  if(S.log.length >= S.settings.teams){
+    const players2 = allPlayers(), repl2 = replacementLevels(players2);
+    const vorpOf = p2 => p2.proj-(repl2[p2.pos]||0);
+    const myPicksSet = new Set(myOverallPicks());
+    const gone = new Set();
+    let ideal = 0, actual = 0;
+    S.log.forEach((e,i)=>{
+      const n = i+1+(S.pickOffset||0);
+      if(myPicksSet.has(n)){
+        const bestNow = players2.filter(p2=>!gone.has(p2.id)).sort((a,b)=>vorpOf(b)-vorpOf(a))[0];
+        if(bestNow) ideal += Math.max(0, vorpOf(bestNow));
+        const mineP = byId[e.id];
+        if(mineP) actual += Math.max(0, vorpOf(mineP));
+      }
+      gone.add(e.id);
+    });
+    if(ideal>0){
+      const eff = Math.round(actual/ideal*100);
+      h += '<div class="sechead">Hindsight</div><div class="mkrow"><span class="mn">🔭 You captured <b>'+eff+'%</b> of the perfect-hindsight value at your picks ('+Math.round(actual)+' of '+Math.round(ideal)+').</span></div>';
+    }
+  }
+  // exposure across saved boards (#282)
+  {
+    const all2 = profAll(), names = Object.keys(all2);
+    if(names.length>=2){
+      const cnt2 = {};
+      names.forEach(nm2=>{ (all2[nm2].mine||[]).forEach(id2=>cnt2[id2]=(cnt2[id2]||0)+1); });
+      const multi = Object.entries(cnt2).filter(([,c2])=>c2>=2).map(([id2,c2])=>({p:byId[id2], c:c2})).filter(x=>x.p)
+        .sort((a,b)=>b.c-a.c).slice(0,6);
+      if(multi.length) h += '<div class="sechead">Exposure ('+names.length+' boards)</div><div class="mkrow" style="white-space:normal"><span class="mn">'+
+        multi.map(x=>esc(x.p.name.split(" ").slice(-1)[0])+' ×'+x.c).join(" · ")+'</span></div>';
+    }
+  }
   h += '<div class="sechead">Stacks</div>' + (stacks.length
-    ? stacks.map(([t,ps])=>'<div class="mkrow">'+(logoUrl(t)?'<img class="tlogo" src="'+logoUrl(t)+'" width="13" height="13" alt=""> ':'')+'<span class="mn">🔗 '+t+' — '+ps.map(x=>x.name.split(" ").slice(-1)[0]).join(" + ")+'</span></div>').join("")
+    ? stacks.map(([t,ps])=>{
+        const pcs = ps.filter(x=>x.pos==="WR"||x.pos==="TE").length;
+        return '<div class="mkrow">'+(logoUrl(t)?'<img class="tlogo" src="'+logoUrl(t)+'" width="13" height="13" alt=""> ':'')+'<span class="mn">🔗 '+t+' — '+ps.map(x=>x.name.split(" ").slice(-1)[0]).join(" + ")+(pcs>=2?' <b style="color:var(--gold)">DOUBLE STACK</b>':'')+'</span></div>';
+      }).join("")
     : '<div class="dimtxt">None yet — pair a WR/TE with one of your QBs.</div>');
   if(stacks.length) txt += "Stacks: "+stacks.map(([t,ps])=>t+" ("+ps.map(x=>x.name.split(" ").slice(-1)[0]).join("+")+")").join(", ")+"\n";
   // round-by-round value captured
@@ -1871,7 +2333,8 @@ function buildReport(){
   }
   if(Object.keys(rv).length){
     h += '<div class="sechead">Value by round</div><div class="mkrow" style="flex-wrap:wrap;white-space:normal">'+
-      Object.keys(rv).sort((a,b)=>a-b).map(r2=>'<span class="mono" style="margin-right:10px">R'+r2+' <b style="color:'+(rv[r2]>=60?'var(--green)':rv[r2]>=0?'var(--dim)':'var(--red)')+'">'+(rv[r2]>0?'+':'')+rv[r2]+'</b></span>').join("")+
+      (()=>{ const bestR = Object.keys(rv).sort((a,b)=>rv[b]-rv[a])[0];
+        return Object.keys(rv).sort((a,b)=>a-b).map(r2=>'<span class="mono" style="margin-right:10px">'+(r2===bestR?'🔥':'')+'R'+r2+' <b style="color:'+(rv[r2]>=60?'var(--green)':rv[r2]>=0?'var(--dim)':'var(--red)')+'">'+(rv[r2]>0?'+':'')+rv[r2]+'</b></span>').join(""); })()+
       ' <span class="mono">Σ <b>'+(rvTotal>0?'+':'')+rvTotal+'</b></span></div>';
   }
   // per-position delta vs sim baseline
@@ -2142,6 +2605,18 @@ $("#mocksReroll").addEventListener("click", renderMocks);
 $("#mocksClose").addEventListener("click", ()=>$("#mocksOverlay").classList.remove("show"));
 
 /* Settings modal */
+document.querySelectorAll("#settingsOverlay .sechead").forEach(sh=>{
+  sh.style.cursor = "pointer";
+  sh.addEventListener("click", ()=>{
+    let el = sh.nextElementSibling;
+    const hide = !sh.classList.contains("folded");
+    sh.classList.toggle("folded", hide);
+    while(el && !el.classList.contains("sechead")){
+      el.style.display = hide ? "none" : "";
+      el = el.nextElementSibling;
+    }
+  });
+});
 $("#settingsBtn").addEventListener("click", ()=>{
   $("#setTeams").value=S.settings.teams; $("#setRoster").value=S.settings.roster;
   $("#setSlot").value=S.settings.slot; $("#setScoring").value=S.settings.scoring;
@@ -2154,6 +2629,13 @@ $("#settingsBtn").addEventListener("click", ()=>{
   $("#setDraftDate").value=S.settings.draftDate||"";
   $("#setFlair").value=S.settings.flair||"";
   $("#setAccent").value=S.settings.accent||"green";
+  $("#setFavState").value=S.settings.favState||"";
+  $("#setFavCollege").value=S.settings.favCollege||"";
+  $("#setTimer").value=S.settings.timerSecs||0;
+  $("#setLowData").checked=!!S.settings.lowData;
+  const rs=$("#setRival");
+  rs.innerHTML='<option value="">none</option>'+Array.from({length:S.settings.teams},(_,i)=>i+1)
+    .filter(s2=>s2!==S.settings.slot).map(s2=>'<option value="'+s2+'"'+(+S.settings.rivalSlot===s2?' selected':'')+'>'+esc(slotName(s2))+'</option>').join("");
   renderTrophies();
   $("#setBaCount").value=S.settings.baCount||15;
   refreshProfiles(); refreshProjStatus();
@@ -2186,6 +2668,11 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.draftDate = $("#setDraftDate").value || null;
   S.settings.flair = $("#setFlair").value.trim();
   S.settings.accent = $("#setAccent").value;
+  S.settings.favState = $("#setFavState").value.trim().toUpperCase().slice(0,2);
+  S.settings.favCollege = $("#setFavCollege").value.trim();
+  S.settings.timerSecs = Math.max(0, +$("#setTimer").value||0);
+  S.settings.lowData = $("#setLowData").checked;
+  S.settings.rivalSlot = $("#setRival").value ? +$("#setRival").value : null;
   S.settings.cols = {adp:$("#colADP").checked, edge:$("#colEdge").checked, rd:$("#colRd").checked};
   S.settings.baCount = Math.min(30, Math.max(5, +$("#setBaCount").value||15));
   applyTheme();
@@ -2259,7 +2746,8 @@ $("#sheetBtn").addEventListener("click", ()=>{
     '<p>Buck Breakers · superflex · 6pt pass TD · slot '+S.settings.slot+' · top 200 by value over replacement · ★=analyst target ▲▼=prop lean</p>'+
     '<table><tr><th>#</th><th>Player</th><th>Pos</th><th>Tm</th><th>Tier</th><th>Proj</th><th>Value</th><th>ADP</th><th>Rd</th><th></th></tr>';
   rows.forEach((r,i)=>{
-    const p=r.p, badges=(p.intel&&p.intel.t!=null?"★":"")+(p.intel&&p.intel.lean>0?"▲":p.intel&&p.intel.lean<0?"▼":"");
+    const p=r.p, badges=(p.intel&&p.intel.t!=null?"★":"")+(p.intel&&p.intel.lean>0?"▲":p.intel&&p.intel.lean<0?"▼":"")+
+      ((S.boost||{})[p.id]===1?" MY-GUY":(S.boost||{})[p.id]===-1?" FADE":"")+((S.tierBump||{})[p.id]?" T-adj":"");
     html+='<tr class="'+(tm[p.id]===1?'t1':'')+'"><td>'+(i+1)+'</td><td>'+p.name+'</td><td>'+p.pos+'</td><td>'+p.team+'</td><td>T'+tm[p.id]+'</td><td>'+p.proj+'</td><td>'+Math.round(r.vorp)+'</td><td>'+(p.adp||"")+'</td><td>'+(rinfo[p.id]?rinfo[p.id].label:"")+'</td><td>'+badges+'</td></tr>';
   });
   html+='</table></body></html>';
@@ -2549,6 +3037,17 @@ initLock();
 
 /* ---------- Boot ---------- */
 load();
+if(location.search.indexOf("wall")>=0){
+  document.addEventListener("DOMContentLoaded", ()=>{});
+  setTimeout(()=>{
+    document.body.innerHTML = '<div id="wallWrap"><h1 style="color:var(--green);letter-spacing:2px">'+esc(S.settings.name||"DRAFT")+' — LIVE BOARD</h1><div id="boardGrid"></div></div>';
+    document.body.className = "wall";
+    const draw = ()=>{ try{ renderBoard(); }catch(e){} };
+    draw();
+    window.addEventListener("storage", e2=>{ if(e2.key===LS_KEY && e2.newValue){ try{ S = Object.assign(defaultState(), migrate(JSON.parse(e2.newValue))); _memo={key:null}; draw(); }catch(err){} } });
+    setInterval(draw, 30000);
+  }, 400);
+}
 if(location.search.indexOf("demo")>=0 && location.search.indexOf("e2e")<0){
   window._spectate = true;
   document.body.classList.add("spectate");
@@ -2578,6 +3077,12 @@ if(!E2E_MODE && location.protocol.indexOf("http")===0){
   setTimeout(()=>{ refreshInjuries(true); refreshTrending(); }, 1500);
   setInterval(()=>{ if(document.visibilityState==="visible") refreshInjuries(true); }, 5*60e3);
   setInterval(()=>{ if(document.visibilityState==="visible") refreshTrending(); }, 15*60e3);
+  setInterval(()=>{
+    if(S.ui.live && S.settings.timerSecs && document.visibilityState==="visible"){
+      const h2 = nextPickHorizon();
+      if(h2 && h2.onClock) renderBest();
+    }
+  }, 1000);
 }
 document.querySelectorAll(".modal").forEach((m,i)=>{
   m.setAttribute("role","dialog"); m.setAttribute("aria-modal","true");
@@ -2663,11 +3168,13 @@ function renderQueue(){
   const byId = idIndex();
   if(!S.queue.length){ box.innerHTML=""; box.style.display="none"; return; }
   box.style.display = "";
-  box.innerHTML = '<h2><span class="dot" style="background:var(--gold);box-shadow:0 0 8px var(--gold)"></span> My Queue</h2>'+
+  const oddsQ = survivalOdds();
+  box.innerHTML = '<h2><span class="dot" style="background:var(--gold);box-shadow:0 0 8px var(--gold)"></span> My Queue'+
+    '<button class="hbtn" data-qfill="1" style="margin-left:auto;padding:2px 8px;font-size:10px" title="Fill with the engine top needs">autofill</button></h2>'+
     '<div style="padding:6px 8px 10px">'+S.queue.map((id,i)=>{
       const p = byId[id]; if(!p) return "";
       return '<div class="barow" data-card="'+id+'">'+avatarImg(p,22)+posBadge(p.pos)+
-        '<div class="info"><div class="nm">'+p.name+'</div></div>'+
+        '<div class="info"><div class="nm">'+p.name+(oddsQ&&oddsQ.h1[id]!=null&&oddsQ.h1[id]<60?' <span class="ib bear" title="Under 60% to survive to your pick — snipe risk">🎯</span>':'')+'</div></div>'+
         '<button class="undo1" data-qup="'+i+'" aria-label="Move up"'+(i===0?' disabled':'')+'>↑</button>'+
         '<button class="undo1" data-qdn="'+i+'" aria-label="Move down"'+(i===S.queue.length-1?' disabled':'')+'>↓</button>'+
         '<button class="pick" data-pick="'+id+'">✓</button>'+
@@ -2730,6 +3237,11 @@ window.addEventListener("storage", e=>{
 });
 window.addEventListener("online", ()=>{ setOnlineUI(); refreshInjuries(true); });
 window.addEventListener("offline", setOnlineUI);
+let _hiddenAt = 0;
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState==="hidden") _hiddenAt = Date.now();
+  else if(_hiddenAt && S.ui.live){ S.ui.hiddenMs = (S.ui.hiddenMs||0) + (Date.now()-_hiddenAt); _hiddenAt = 0; save(); }
+});
 
 let _lastErrToast = 0;
 window._errLog = [];

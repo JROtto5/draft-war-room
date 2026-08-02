@@ -1,5 +1,8 @@
 # 🏈 Draft War Room — Buck Breakers Edition
 
+![player card](assets/player-card.png)
+
+
 The full draft-day cockpit for a **12-team superflex league, 6-pt passing TDs, slot 12**. Static site — pushes to `main` auto-deploy on Vercel. Installable PWA, works offline once loaded.
 
 **House key to enter:** the classic. 🔑
@@ -9,6 +12,13 @@ Flip **🔴 Live** on when the draft starts: pace clock + ETA, a chime and a pan
 
 ## The engine
 Value-over-replacement scaled for superflex scarcity, positional saturation (your 4th QB is worthless, your 3rd is insurance), requirement floors with hard locks, tier cliffs, team-stack boosts with stack-opportunity alerts, analyst targets ⭐, prop-market leans ▲▼, market Edge column, 💎 fallers, and **Monte Carlo survival odds at both of your turn picks** — with CPU teams seeded from the actual pick log and injury-discounted ADP.
+
+## Every player has a story
+Hometown (with 💖 favorite-state/college mode — set OH and feel it), college in
+school colors, high school, rookie class, three seasons of points and positional
+finishes with trend bars, breakout/bust/prime-year tags, and an auto-written
+scouting paragraph on every card. Research-mapped against FantasyPros Draft
+Wizard, PlayerProfiler, Sleeper and RotoWire — see BESTPRACTICES.md.
 
 ## Intelligence
 - **🩺 Injury Center** — live ESPN reports (auto-refresh every 5 min) graded Q/D/O/IR, mid-draft change toasts, roster-health warnings, ESPN headlines, Sleeper trending buzz 📈

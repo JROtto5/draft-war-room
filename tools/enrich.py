@@ -180,23 +180,29 @@ def main():
 
     # ---------- sleeper: ids, bio, injuries, depth; last-season stats ----------
     sleeper = fetch_json("https://api.sleeper.app/v1/players/nfl", "sleeper-players.json")
-    stats = fetch_json(f"https://api.sleeper.app/v1/stats/nfl/regular/{args.season}", f"stats-{args.season}.json")
+    seasons = [str(int(args.season)-2), str(int(args.season)-1), str(args.season)]
+    stats_by = {y: fetch_json(f"https://api.sleeper.app/v1/stats/nfl/regular/{y}", f"stats-{y}.json") for y in seasons}
+    stats = stats_by[str(args.season)]
     sidx = {}
     for pid, v in sleeper.items():
         if v.get("full_name") and pid.isdigit():
             sidx.setdefault((norm(v["full_name"]), v.get("position")), []).append((pid, v))
-    # positional finish ranks from actual pts_ppr
-    finish = {}
-    for pos in ("QB","RB","WR","TE"):
-        scored = []
-        for pid, st in stats.items():
-            pl = sleeper.get(pid)
-            if pl and pl.get("position")==pos and st.get("pts_ppr"):
-                scored.append((pid, st["pts_ppr"]))
-        scored.sort(key=lambda x: -x[1])
-        for i, (pid, _) in enumerate(scored): finish[pid] = i+1
+    # positional finish ranks per season
+    finish_by = {}
+    for y, sts in stats_by.items():
+        f2 = {}
+        for pos in ("QB","RB","WR","TE"):
+            scored = []
+            for pid, st in sts.items():
+                pl = sleeper.get(pid)
+                if pl and pl.get("position")==pos and st.get("pts_ppr"):
+                    scored.append((pid, st["pts_ppr"]))
+            scored.sort(key=lambda x: -x[1])
+            for i, (pid, _) in enumerate(scored): f2[pid] = i+1
+        finish_by[y] = f2
+    finish = finish_by[str(args.season)]
 
-    heads, meta, last = {}, {}, {}
+    heads, meta, last, last3 = {}, {}, {}, {}
     for p in players:
         if p["pos"] == "DEF": continue
         k = norm(p["name"])
@@ -209,10 +215,20 @@ def main():
         hi = v.get("height") or ""
         try: hgt = f"{int(hi)//12}'{int(hi)%12}\""
         except (ValueError, TypeError): hgt = str(hi)
-        meta[k] = [v.get("age") or 0, v.get("years_exp") if v.get("years_exp") is not None else -1,
+        yexp = v.get("years_exp") if v.get("years_exp") is not None else -1
+        rookie_yr = (int(args.season)+1 - yexp) if yexp >= 0 else 0
+        meta[k] = [v.get("age") or 0, yexp,
                    v.get("college") or "", hgt, v.get("weight") or "", v.get("number") or 0,
                    v.get("injury_status") or "", v.get("depth_chart_order") or 0, v.get("depth_chart_position") or "",
-                   v.get("injury_body_part") or "", (v.get("injury_notes") or "")[:160]]
+                   v.get("injury_body_part") or "", (v.get("injury_notes") or "")[:160],
+                   v.get("high_school") or "", rookie_yr, v.get("birth_date") or ""]
+        hist = []
+        for y in seasons:
+            sy = stats_by[y].get(pid)
+            if sy and sy.get("gp"):
+                hist.append([int(y), round(sy.get("gp",0)), round(sy.get("pts_ppr",0),1), finish_by[y].get(pid,0),
+                             round(sy.get("rec_tgt",0)), round(sy.get("pass_yd",0)), round(sy.get("rush_yd",0))])
+        if hist: last3[k] = hist
         s = stats.get(pid)
         if s and s.get("gp"):
             last[k] = [round(s.get("gp",0)), round(s.get("pass_yd",0)), round(s.get("pass_td",0),1),
@@ -265,12 +281,37 @@ def main():
     out.append("const PLAYERMETA = " + json.dumps(meta, ensure_ascii=False, separators=(',',':')) + ";")
     out.append("const LASTSZN = " + json.dumps(last, separators=(',',':')) + ";")
     out.append("const PROJ26 = " + json.dumps(proj26, separators=(',',':')) + ";")
+    out.append("const LAST3 = " + json.dumps(last3, separators=(',',':')) + ";")
+    COLLEGES = {
+      "Ohio State":["Big Ten","#BB0000"], "Michigan":["Big Ten","#00274C"], "Penn State":["Big Ten","#041E42"],
+      "Alabama":["SEC","#9E1B32"], "Georgia":["SEC","#BA0C2F"], "LSU":["SEC","#461D7C"], "Texas":["SEC","#BF5700"],
+      "Texas A&M":["SEC","#500000"], "Florida":["SEC","#0021A5"], "Tennessee":["SEC","#FF8200"],
+      "Ole Miss":["SEC","#CE1126"], "Kentucky":["SEC","#0033A0"], "South Carolina":["SEC","#73000A"],
+      "Auburn":["SEC","#0C2340"], "Missouri":["SEC","#F1B82D"], "Arkansas":["SEC","#9D2235"],
+      "Oklahoma":["SEC","#841617"], "Clemson":["ACC","#F56600"], "Florida State":["ACC","#782F40"],
+      "Miami":["ACC","#F47321"], "North Carolina":["ACC","#7BAFD4"], "Louisville":["ACC","#AD0000"],
+      "Pittsburgh":["ACC","#003594"], "Boston College":["ACC","#8C2232"], "Notre Dame":["Ind","#0C2340"],
+      "USC":["Big Ten","#990000"], "UCLA":["Big Ten","#2D68C4"], "Oregon":["Big Ten","#154733"],
+      "Washington":["Big Ten","#4B2E83"], "Wisconsin":["Big Ten","#C5050C"], "Iowa":["Big Ten","#FFCD00"],
+      "Minnesota":["Big Ten","#7A0019"], "Michigan State":["Big Ten","#18453B"], "Purdue":["Big Ten","#CEB888"],
+      "Illinois":["Big Ten","#13294B"], "Nebraska":["Big Ten","#E41C38"], "Maryland":["Big Ten","#E03A3E"],
+      "Rutgers":["Big Ten","#CC0033"], "Indiana":["Big Ten","#990000"], "Northwestern":["Big Ten","#4E2A84"],
+      "Kansas State":["Big 12","#512888"], "TCU":["Big 12","#4D1979"], "Baylor":["Big 12","#154734"],
+      "Texas Tech":["Big 12","#CC0000"], "Oklahoma State":["Big 12","#FF7300"], "Utah":["Big 12","#CC0000"],
+      "Arizona":["Big 12","#AB0520"], "Arizona State":["Big 12","#8C1D40"], "Colorado":["Big 12","#CFB87C"],
+      "West Virginia":["Big 12","#002855"], "Iowa State":["Big 12","#C8102E"], "UCF":["Big 12","#BA9B37"],
+      "Cincinnati":["Big 12","#E00122"], "Houston":["Big 12","#C8102E"], "BYU":["Big 12","#002E5D"],
+      "Wyoming":["MWC","#492F24"], "Boise State":["MWC","#0033A0"], "San Diego State":["MWC","#A6192E"],
+      "Fresno State":["MWC","#DB0032"], "Toledo":["MAC","#003E7E"], "Ohio":["MAC","#00694E"],
+      "North Dakota State":["FCS","#009A44"], "South Dakota State":["FCS","#0033A0"],
+    }
+    out.append("const COLLEGE = " + json.dumps(COLLEGES, ensure_ascii=False, separators=(',',':')) + ";")
     out.append("const TEAMQB = " + json.dumps(teamqb, ensure_ascii=False, separators=(',',':')) + ";")
     out.append("const INJBASE = " + json.dumps(injbase, ensure_ascii=False, separators=(',',':')) + ";")
     out.append('const LAST_SEASON = "' + args.season + '";')
     out.append('const DATA_STAMP = "' + datetime.date.today().isoformat() + '";')
     open(args.out, "w").write("\n".join(out) + "\n")
-    print(f"wrote {args.out}: {len(players)} players, {len(heads)} headshots, {len(meta)} bios, {len(last)} stat lines, {len(intel)} intel, {len(injbase)} baked injuries", file=sys.stderr)
+    print(f"wrote {args.out}: {len(players)} players, {len(heads)} headshots, {len(meta)} bios, {len(last)} stat lines, {len(last3)} 3yr histories, {len(intel)} intel, {len(injbase)} baked injuries", file=sys.stderr)
 
 if __name__ == "__main__":
     main()

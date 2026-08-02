@@ -155,4 +155,28 @@ const up = g("migrate")(JSON.parse(JSON.stringify(fixture)));
 assert.strictEqual(up.v, g("STATE_V"));
 assert.ok(Array.isArray(up.queue) && up.keepers, "fixture upgraded");
 
-console.log("logic.test OK — engine, snake, saturation, mocks, odds, rounds, injuries, utils, fuzz");
+// personalization layer (#201-#225)
+const allen = players.find(p=>p.name==="Josh Allen");
+const h3a = g("hist3For")(allen);
+assert.strictEqual(h3a.length, 3, "Allen 3yr history");
+const hw = g("hometownOf")(allen);
+assert.ok(hw && hw.st==="CA", "Allen hometown state: "+JSON.stringify(hw));
+const ci = g("collegeInfo")(allen);
+assert.strictEqual(ci.name, "Wyoming");
+const story = g("storyOf")(allen);
+assert.ok(story.includes("Wyoming") && /410|385|375/.test(story), "story mentions college+arc: "+story);
+vm.runInContext('S.settings.favState="CA"', ctx);
+assert.ok(g("isFav")(allen), "CA favorite matches Allen");
+vm.runInContext('S.settings.favState=""', ctx);
+// keeper migration v3 (#235)
+const up3 = g("migrate")({v:2, keepers:{p1:5}, mine:[], log:[], taken:{}});
+assert.deepStrictEqual(JSON.parse(JSON.stringify(up3.keepers.p1)), {s:5, r:0});
+// boost affects the engine (#228)
+vm.runInContext("S.log=[];S.taken={};S.mine=[];S.queue=[];_memo={key:null};", ctx);
+const before = g("scoreBoard().scored")[0];
+vm.runInContext(`S.boost["${before.p.id}"]=-1;_memo={key:null};`, ctx);
+const after = g("scoreBoard().scored").find(s=>s.p.id===before.p.id);
+assert.ok(after.score < before.score, "fade lowers score");
+vm.runInContext(`S.boost={};_memo={key:null};`, ctx);
+
+console.log("logic.test OK — engine, snake, saturation, mocks, odds, rounds, injuries, utils, fuzz, story");

@@ -1,5 +1,15 @@
 # Changelog — Draft War Room
 
+## v6.0 (2026-08-02) — The personalization & edge hundred (#201–#300)
+Every player now has a life: hometown (with 💖 favorite-state/college mode),
+college in school colors, high school, rookie class, birthday, an auto-written
+Story paragraph, and three seasons of points/finishes with trend bars. New
+edge layer: boost/fade lists, manual ADP, tier bumps, VONA already + pick
+predictor, ⏩ sim-to-my-pick, per-pick grades, rival watch, snipe alerts,
+handcuff finder, keeper costs & surplus, hindsight score, musical-chairs QB
+alert, draft wall mode, hover scouting cards, and a research-mapped
+BESTPRACTICES.md. Pipeline pulls 2023–2025 seasons.
+
 ## v5.0 (2026-08-02) — Fully-fledged product
 195+ tracked improvements across 13 rounds. Highlights by era:
 

@@ -39,6 +39,12 @@ try {
   // perf budget (#170)
   const t0 = performance.now(); renderPool(); const dt = performance.now()-t0;
   out.push("perf:"+(dt<400?"OK":"BAD("+Math.round(dt)+"ms)"));
+  // story + 3yr history (#296)
+  openCard(allPlayers().find(p=>p.name==="Josh Allen").id);
+  out.push("story:"+(document.querySelector(".cstory")&&document.querySelector(".cstory").textContent.includes("Wyoming")?"OK":"BAD"));
+  window._cardTab="hist"; openCard(allPlayers().find(p=>p.name==="Josh Allen").id);
+  out.push("hist3:"+(document.querySelectorAll("#cardBody .h3row").length>=3?"OK":"BAD"));
+  window._cardTab="ov"; document.getElementById("cardOverlay").classList.remove("show");
 } catch(e){ out.push("ERR:"+e.message); }
 setTimeout(()=>{ document.title="E2E|"+out.join("|"); }, 900);
 }, 100); });

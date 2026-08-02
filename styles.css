@@ -414,3 +414,24 @@ body.spectate header::after{content:"👁 SPECTATING"; font-size:10px; letter-sp
   tbody td, thead th{color:#000; border-bottom:1px solid #ccc}
   .pos{border:1px solid #999; color:#000!important; background:#fff!important}
 }
+/* player card v2 */
+.ctabs{display:flex; gap:6px; padding:0 20px 8px}
+.ctab{background:var(--bg2); border:1px solid var(--line); border-radius:8px 8px 0 0; color:var(--dim); font-family:inherit; font-size:11.5px; font-weight:700; padding:7px 14px; cursor:pointer}
+.ctab.on{color:var(--green); border-bottom-color:var(--panel); background:var(--panel)}
+.ctabbody{border-top:1px solid var(--line); padding-top:10px; min-height:180px}
+.cstory{font-size:12.5px; line-height:1.7; padding:2px 20px 10px; color:var(--text); border-left:3px solid var(--green); margin:0 20px 10px; padding-left:12px; background:rgba(47,212,122,.04); border-radius:0 8px 8px 0}
+.h3row{display:flex; align-items:center; gap:8px; margin:4px 0}
+.h3y{width:38px; font-size:11px; color:var(--dim)}
+.h3bar{flex:1; height:12px; background:var(--bg2); border-radius:6px; overflow:hidden}
+.h3fill{display:block; height:100%; background:linear-gradient(90deg,var(--green-dim),var(--green)); border-radius:6px}
+.h3v{width:48px; text-align:right; font-size:11px}
+.h3x{width:110px; font-size:10px; text-align:right}
+@media (max-width:640px){ #cardOverlay .modal{width:100vw; height:100vh; max-height:100vh; border-radius:0} }
+/* round 15-16: personalization */
+.avatar.ph.posQB{box-shadow:inset 0 0 0 2px var(--qb)} .avatar.ph.posRB{box-shadow:inset 0 0 0 2px var(--rb)}
+.avatar.ph.posWR{box-shadow:inset 0 0 0 2px var(--wr)} .avatar.ph.posTE{box-shadow:inset 0 0 0 2px var(--te)}
+.avatar.ph.posDEF{box-shadow:inset 0 0 0 2px var(--def)}
+#hoverCard{position:fixed; z-index:260; background:var(--panel2); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); padding:12px 14px; max-width:290px; font-size:12px; pointer-events:none; animation:toastIn .15s}
+.sechead.folded::after{content:" ▸"} .sechead:not(.folded)::after{content:" ▾"; opacity:.4}
+body.wall{padding:20px} #wallWrap h1{font-size:22px; margin-bottom:14px}
+body.wall #boardGrid table{font-size:13px!important}
