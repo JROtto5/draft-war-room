@@ -440,3 +440,14 @@ body.wall #boardGrid table{font-size:13px!important}
 :root.terminal body{font-family:'JetBrains Mono',monospace}
 :root.terminal .avatar{filter:grayscale(1) brightness(1.2) sepia(1) hue-rotate(60deg)}
 :root.terminal .pos{background:#0f3d0f!important; color:#33ff33!important; border:1px solid #33ff33}
+/* round 21: a11y + perf */
+:root[data-font="s"]{font-size:14px} :root[data-font="m"]{font-size:16px} :root[data-font="l"]{font-size:18px}
+body{font-size:1rem}
+:root.cb-safe{--qb:#e69f00; --rb:#56b4e9; --wr:#009e73; --te:#f0e442; --def:#cc79a7}
+.panel{contain:content}
+a.visually-hidden:focus{width:auto;height:auto;clip:auto;margin:0;white-space:normal}
+@media (max-width:700px){
+  .pick,.kill,.undo1,.hbtn{min-height:44px; min-width:44px}
+  .act{flex-wrap:wrap}
+}
+th[data-sort]:focus, tbody tr:focus-within, .barow:focus-visible{outline:2px solid var(--green); outline-offset:-2px}

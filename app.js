@@ -112,6 +112,22 @@ function load(){
       const b = JSON.parse(localStorage.getItem(LS_KEY+"-backup"));
       if(b && b.state){ S = Object.assign(defaultState(), b.state); window._recovered = b.when; }
     }catch(e2){ console.warn("backup also unreadable", e2); }
+    // last resort: the IndexedDB mirror (async — applies on arrival)
+    try{
+      const req2 = indexedDB.open("war-room", 1);
+      req2.onsuccess = ()=>{
+        try{
+          const g = req2.result.transaction("kv").objectStore("kv").get("state");
+          g.onsuccess = ()=>{
+            if(g.result && !S.log.length){
+              S = Object.assign(defaultState(), migrate(JSON.parse(g.result)));
+              _memo = {key:null}; render();
+              toast("♻️ Restored from the IndexedDB mirror");
+            }
+          };
+        }catch(e3){}
+      };
+    }catch(e3){}
   }
 }
 let saveTimer=null;
@@ -122,6 +138,7 @@ function save(){
     window._quotaWarned = true;
     toast("⚠️ Board state is "+(payload.length/1048576).toFixed(1)+"MB — close to browser limits. Consider reverting imported data.", {warn:true});
   }
+  idbMirror(payload);
   try{ localStorage.setItem(LS_KEY, payload); }
   catch(e){
     const b = document.getElementById("saveBadge");
@@ -1576,6 +1593,7 @@ function renderPool(){
   }).join("") + (truncated ? '<tr><td colspan="10" style="text-align:center;padding:12px"><button class="undo1" data-showall="1">▾ show all '+fullLen+' players</button></td></tr>' : "") || '<tr><td colspan="10" class="empty">No players match the current filters.<br><br><button class="undo1" data-clearfilters="1">✕ Clear all filters</button></td></tr>';
   if(tw) tw.scrollTop = scrollSave;
   $("#poolCount").textContent = (truncated ? rows.length+" of "+fullLen : rows.length) + " players";
+  $("#poolCount").setAttribute("aria-live","polite");
   window._poolIds = rows.filter(r=>!r.taken && !r.mine).length ? rows.map(r=>r.p.id) : [];
   applyKbSel();
 }
@@ -1683,6 +1701,18 @@ document.addEventListener("contextmenu", e=>{
   document.body.appendChild(m);
 });
 document.addEventListener("click", ()=>{ const m=document.getElementById("ctxMenu"); if(m) m.remove(); }, true);
+
+// #364: extend the render window as you approach the bottom
+document.addEventListener("DOMContentLoaded", ()=>{
+  const tw = document.querySelector(".tablewrap");
+  if(tw) tw.addEventListener("scroll", ()=>{
+    if(window._showAllRows) return;
+    if(tw.scrollTop + tw.clientHeight > tw.scrollHeight - 300){
+      window._showAllRows = true;
+      renderPool();
+    }
+  }, {passive:true});
+});
 
 /* Keyboard drafting: arrows move the highlight, M = my pick, T/X = taken */
 let kbSel = -1;
@@ -2117,6 +2147,12 @@ function render(){
 function renderNow(){
   try{ performance.mark("render-start"); }catch(e){}
   _idx = null;
+  if(!window._firstPaintDone){
+    window._firstPaintDone = true;
+    [renderHeader, renderTabs, renderPool].forEach(fn=>{ try{ fn(); }catch(e){} });
+    requestAnimationFrame(()=>{ [renderBest, renderRoster, renderLog, renderQueue, renderPlan].forEach(fn=>{ try{ fn(); }catch(e){} }); });
+    return;
+  }
   [renderHeader, renderTabs, renderPool, renderBest, renderRoster, renderLog, renderQueue, renderPlan].forEach(fn=>{
     try{ fn(); }catch(e){ console.error(fn.name, e); if(typeof surfaceError==="function") surfaceError(fn.name+": "+e.message); }
   });
@@ -2139,7 +2175,7 @@ function renderHeader(){
 
 /* ---------- Events (delegated) ---------- */
 document.addEventListener("click", e=>{
-  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-card],[data-cardtab],[data-boost],[data-fade],[data-adpedit],[data-tierup],[data-tierdn],[data-onepager],[data-cardpng],[data-unpickpre],[data-cmpfrom],[data-slotname],[data-keeper],[data-queue],[data-qup],[data-qfill],[data-plan],[data-unplan],[data-plantoggle],[data-planqueue],[data-qround],[data-qdn],[data-showall],[data-simto],[data-horn],[data-siren],#tradeGo,#matrixCopy,#logMineBtn,#logCsvBtn,#undo5Btn,th[data-sort]");
+  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-card],[data-cardtab],[data-boost],[data-fade],[data-adpedit],[data-tierup],[data-tierdn],[data-onepager],[data-cardpng],[data-unpickpre],[data-cmpfrom],[data-slotname],[data-keeper],[data-queue],[data-qup],[data-qfill],[data-plan],[data-unplan],[data-plantoggle],[data-planqueue],[data-qround],[data-qdn],[data-showall],[data-simto],[data-horn],[data-siren],#tradeGo,#matrixCopy,#nickGen,#logMineBtn,#logCsvBtn,#undo5Btn,th[data-sort]");
   if(!t){
     const rowEl = e.target.closest("#poolBody tr[data-pid]");
     if(rowEl){
@@ -2165,6 +2201,17 @@ document.addEventListener("click", e=>{
   if(t.id==="tradeGo"){ return tradeEval(); }
   if(t.id==="matrixCopy"){ navigator.clipboard.writeText(window._matrixTxt||"").then(()=>toast("📋 Matrix copied")); return; }
   if(t.dataset.teampage){ return openTeamPage(+t.dataset.teampage); }
+  if(t.id==="nickGen"){
+    const adj = ["Iron","Turbo","Cosmic","Grumpy","Electric","Sneaky","Mighty","Haunted","Golden","Feral","Quantum","Soggy"];
+    const noun = ["Bison","Wizards","Goblins","Freight Train","Spreadsheet","Tailgate","Vandals","Casserole","Monarchs","Stampede","Syndicate","Waffles"];
+    const hash = s => { let x=7; for(const ch of s) x = (x*31 + ch.charCodeAt(0))>>>0; return x; };
+    const out = document.getElementById("randOut");
+    out.innerHTML = Array.from({length:S.settings.teams},(_,i)=>i+1).map(s2=>{
+      const hsh = hash(slotName(s2)+Date.now().toString().slice(-3));
+      return '<div>'+esc(slotName(s2))+' → <b>'+adj[hsh%adj.length]+' '+noun[(hsh>>4)%noun.length]+'</b></div>';
+    }).join("");
+    return;
+  }
   if(t.id==="randOrder"){
     const t2 = S.settings.teams;
     const order = Array.from({length:t2},(_,i)=>i+1).sort(()=>Math.random()-0.5);
@@ -2219,6 +2266,7 @@ document.addEventListener("click", e=>{
   if(t.dataset.qup!=null){ const i=+t.dataset.qup; if(i>0){ [S.queue[i-1],S.queue[i]]=[S.queue[i],S.queue[i-1]]; commit(); } return; }
   if(t.dataset.qdn!=null){ const i=+t.dataset.qdn; if(i<S.queue.length-1){ [S.queue[i+1],S.queue[i]]=[S.queue[i],S.queue[i+1]]; commit(); } return; }
   if(t.dataset.showall){ window._showAllRows = true; renderPool(); return; }
+  // (scroll listener also extends the window)
   if(t.dataset.simto){ return simToMyPick(); }
   if(t.dataset.horn){ return stinger("horn"); }
   if(t.dataset.siren){ return stinger("siren"); }
@@ -2375,7 +2423,11 @@ document.addEventListener("keydown", e=>{
   }
   if(e.key==="Escape"){
     const ov = document.querySelector(".overlay.show");
-    if(ov){ ov.classList.remove("show"); return; }
+    if(ov){
+      ov.classList.remove("show");
+      if(window._modalOpener && window._modalOpener.focus){ window._modalOpener.focus(); window._modalOpener = null; }
+      return;
+    }
     if(typing) document.activeElement.blur();
     else { kbSel=-1; applyKbSel(); }
     return;
@@ -2393,6 +2445,16 @@ document.addEventListener("keydown", e=>{
     if(k==="d"){ e.preventDefault(); S.dnd[id] ? delete S.dnd[id] : S.dnd[id]=true; commit(); }
     if(k==="n"){ e.preventDefault(); editNote(id); }
     if(k==="q"){ e.preventDefault(); toggleQueue(id); return; }
+  }
+  if(e.key.toLowerCase()==="p" && S.ui.live && !e.ctrlKey && !e.metaKey){
+    const h3 = nextPickHorizon();
+    if(h3 && h3.onClock){
+      const {scored} = scoreBoard();
+      pruneQueue();
+      const qTop = S.queue.length ? S.queue[0] : null;
+      const pk2 = qTop || (scored[0] && scored[0].p.id);
+      if(pk2){ e.preventDefault(); pickMine(pk2); return; }
+    }
   }
   if(/^[1-9]$/.test(e.key) && S.ui.live){
     const {scored} = scoreBoard();
@@ -2796,6 +2858,7 @@ function renderBoard(){
   // order randomizer + results copy
   h += '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">'+
     '<button class="hbtn" id="randOrder">🎲 Randomize order</button>'+
+    '<button class="hbtn" id="nickGen">🎭 Nicknames</button>'+
     '<button class="hbtn" id="copyResults">📋 Copy results text</button></div><div class="note" id="randOut" style="margin-top:8px"></div>';
   // trade calculator
   h += '<div class="sechead" style="margin-top:16px">⇄ Pick trade calculator</div>'+
@@ -2930,6 +2993,8 @@ $("#settingsBtn").addEventListener("click", ()=>{
   const cols=S.settings.cols||{};
   $("#colADP").checked=cols.adp!==false; $("#colEdge").checked=cols.edge!==false; $("#colRd").checked=cols.rd!==false;
   $("#setSound").checked=S.settings.sound!==false;
+  $("#setFont").value=S.settings.fontSize||"m";
+  $("#setCbSafe").checked=!!S.settings.cbSafe;
   $("#setSpeak").checked=!!S.settings.speak;
   $("#setDraftDate").value=S.settings.draftDate||"";
   $("#setFlair").value=S.settings.flair||"";
@@ -2989,6 +3054,8 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.notifyInj = wantNotify;
   S.settings.rivalSlot = $("#setRival").value ? +$("#setRival").value : null;
   S.settings.cols = {adp:$("#colADP").checked, edge:$("#colEdge").checked, rd:$("#colRd").checked};
+  S.settings.fontSize = $("#setFont").value;
+  S.settings.cbSafe = $("#setCbSafe").checked;
   S.settings.baCount = Math.min(30, Math.max(5, +$("#setBaCount").value||15));
   S.settings.simN = Math.min(100, Math.max(20, +$("#setSimN").value||30));
   S.settings.risk = $("#setRisk").value;
@@ -3047,6 +3114,7 @@ new MutationObserver(muts=>{
   for(const m of muts){
     const el = m.target;
     if(el.classList.contains("show") && el.classList.contains("overlay")){
+      if(document.activeElement && !el.contains(document.activeElement)) window._modalOpener = document.activeElement;
       const f = el.querySelector("input:not([type=hidden]),select,textarea") || el.querySelector("button");
       if(f && !el.contains(document.activeElement)) setTimeout(()=>f.focus(), 60);
     }
@@ -3323,6 +3391,20 @@ document.getElementById("shareBtn").addEventListener("click", copyShareLink);
 document.getElementById("roShareBtn").addEventListener("click", ()=>{ window._shareRO = true; copyShareLink(); });
 
 /* Auto-backup before destructive actions */
+let _idb = null;
+try{
+  const req = indexedDB.open("war-room", 1);
+  req.onupgradeneeded = ()=>req.result.createObjectStore("kv");
+  req.onsuccess = ()=>{ _idb = req.result; };
+}catch(e){}
+function idbMirror(payload){
+  if(!_idb) return;
+  try{
+    const tx = _idb.transaction("kv","readwrite");
+    tx.objectStore("kv").put(payload, "state");
+    tx.objectStore("kv").put(Date.now(), "when");
+  }catch(e){}
+}
 function backupState(){
   try{ localStorage.setItem(LS_KEY+"-backup", JSON.stringify({when:new Date().toLocaleString(), state:S})); }catch(e){}
 }
@@ -3493,6 +3575,8 @@ function applyTheme(){
   const b = document.getElementById("themeBtn");
   if(b) b.textContent = pref==="auto" ? "🌓" : (pref==="dark" ? "🌙" : "☀️");
   document.documentElement.classList.toggle("terminal", S.settings.accent==="terminal");
+  document.documentElement.dataset.font = S.settings.fontSize || "m";
+  document.documentElement.classList.toggle("cb-safe", !!S.settings.cbSafe);
   const ACCENTS = {green:["#2fd47a","#1d8a50"], blue:["#5aa9ff","#2f6fc0"], gold:["#ffc94d","#b98a1a"], terminal:["#33ff33","#1f9922"]};
   const acc = ACCENTS[S.settings.accent] || null;
   if(acc){ document.documentElement.style.setProperty("--green", acc[0]); document.documentElement.style.setProperty("--green-dim", acc[1]); }
@@ -3524,7 +3608,18 @@ function setLive(on){
   toast(on ? "🔴 Draft Day mode ON — chime + panic button armed" : "Live mode off");
 }
 document.getElementById("liveBtn").addEventListener("click", ()=>setLive(!S.ui.live));
+function srAnnounce(text){
+  let el = document.getElementById("srLive");
+  if(!el){
+    el = document.createElement("div");
+    el.id = "srLive"; el.className = "visually-hidden";
+    el.setAttribute("aria-live","polite");
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+}
 function announce(text){
+  srAnnounce(text);
   if(!S.settings.speak || !S.ui.live || !("speechSynthesis" in window)) return;
   try{
     const u = new SpeechSynthesisUtterance(text);
@@ -3682,6 +3777,10 @@ document.addEventListener("keydown", e=>{
   const el=document.getElementById("buildStamp");
   if(el) el.textContent = "build v"+BUILD+" · projections "+(typeof DATA_STAMP!=="undefined"?DATA_STAMP:"?")+" · press ? for help";
   if(window._recovered) setTimeout(()=>toast("♻️ Save was corrupt — restored backup from "+esc(window._recovered), {warn:true}), 400);
+  if(navigator.connection && navigator.connection.saveData && !S.settings.lowData){
+    S.settings.lowData = true;
+    toast("📶 Data-saver detected — photos off (Settings to re-enable)");
+  }
   applyTheme();
   if(!S.seenTour && (typeof E2E_MODE==="undefined" || !E2E_MODE)){
     S.seenTour = true; save();

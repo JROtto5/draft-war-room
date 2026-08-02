@@ -22,6 +22,7 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<a href="#poolBody" class="visually-hidden" style="position:fixed;top:4px;left:4px;z-index:600;background:var(--panel);padding:8px;border-radius:8px">Skip to player board</a>
 <div id="lockScreen" style="display:none">
   <div class="lockbox">
     <div class="lockicon">🏈</div>
@@ -177,6 +178,8 @@
       <div class="frow"><label>Announce picks out loud (Live mode)</label><input type="checkbox" id="setSpeak" style="width:auto"></div>
       <div class="frow"><label>Draft date (for the countdown)</label><input type="date" id="setDraftDate"></div>
       <div class="frow"><label>Team flair (name / emoji on your roster)</label><input class="wide" type="text" id="setFlair" placeholder="Otto's Bucks 🦌"></div>
+      <div class="frow"><label>Font size</label><select id="setFont"><option value="s">Small</option><option value="m" selected>Medium</option><option value="l">Large</option></select></div>
+      <div class="frow"><label>Colorblind-safe position colors</label><input type="checkbox" id="setCbSafe" style="width:auto"></div>
       <div class="frow"><label>Accent color</label><select id="setAccent"><option value="green">Field green</option><option value="blue">Ice blue</option><option value="gold">Vegas gold</option><option value="terminal">💻 Terminal</option></select></div>
       <div class="sechead">Personal edge</div>
       <div class="frow"><label>💖 Favorite state (2 letters — OH for the full Ohio experience)</label><input type="text" id="setFavState" maxlength="2" placeholder="OH"></div>
