@@ -83,6 +83,9 @@ header{
 .barow .sm{font-size:11px; color:var(--dim)}
 .barow .val{font-size:13px; font-weight:700; color:var(--green)}
 .stackchip{font-size:9.5px; background:rgba(255,201,77,.14); color:var(--gold); border:1px solid rgba(255,201,77,.35); padding:1px 6px; border-radius:999px; margin-left:6px; vertical-align:middle}
+.ib{font-size:11px; margin-left:4px; cursor:help}
+.ib.gold{color:var(--gold)} .ib.bull{color:var(--green)} .ib.bear{color:var(--red)}
+.pickline{font-size:11.5px; color:var(--dim); margin-bottom:10px; padding:7px 10px; background:var(--bg2); border:1px solid var(--line); border-radius:8px}
 
 /* ---------- Pool ---------- */
 .toolbar{padding:12px 14px; display:flex; flex-wrap:wrap; gap:9px; border-bottom:1px solid var(--line); align-items:center}
@@ -189,7 +192,7 @@ footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--fa
 <header>
   <div class="logo">
     <h1>DRAFT <span class="accent">WAR ROOM</span></h1>
-    <span class="sub">2-QB · 6pt Pass TD</span>
+    <span class="sub">Buck Breakers · Superflex · 6pt Pass TD · Slot 12</span>
   </div>
   <div class="spacer"></div>
   <span class="savebadge" id="saveBadge">Autosave on</span>
@@ -230,6 +233,7 @@ footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--fa
               <th data-sort="team" style="width:52px">Team</th>
               <th data-sort="proj" style="width:70px">Proj</th>
               <th data-sort="vorp" style="width:70px">Value</th>
+              <th data-sort="adp" style="width:56px">ADP</th>
               <th style="width:150px"></th>
             </tr>
           </thead>
@@ -256,8 +260,8 @@ footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--fa
 </div>
 
 <footer>
-  Projections are 2026-season estimates with <b>6-pt passing TDs baked into QB totals</b>. Click any projection number to edit it.<br>
-  Everything autosaves to this browser. Use Export before switching devices.
+  Projections from your uploaded 2026 CSV with <b>6-pt passing TDs baked into QB totals</b> (+2 × projected pass TDs). Click any projection to edit it.<br>
+  ⭐ analyst target · ▲/▼ prop-market lean · 🔥 gone before your next pick · ⏳ coin-flip — hover any badge for the why. Everything autosaves to this browser.
 </footer>
 
 <!-- Settings modal -->
@@ -268,13 +272,14 @@ footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--fa
       <div class="sechead">League</div>
       <div class="frow"><label>Teams in league</label><input type="number" id="setTeams" min="4" max="20"></div>
       <div class="frow"><label>Your total roster size (rounds)</label><input type="number" id="setRoster" min="8" max="25"></div>
+      <div class="frow"><label>Your draft slot (snake)</label><input type="number" id="setSlot" min="1" max="20"></div>
+      <div class="frow"><label>Scoring</label><select id="setScoring"><option value="ppr">Full PPR</option><option value="half">Half PPR</option></select></div>
       <div class="sechead">Required starters (minimums)</div>
       <div class="frow"><label>QB (you start 2)</label><input type="number" id="minQB" min="0" max="4"></div>
       <div class="frow"><label>RB</label><input type="number" id="minRB" min="0" max="6"></div>
       <div class="frow"><label>WR</label><input type="number" id="minWR" min="0" max="6"></div>
       <div class="frow"><label>TE</label><input type="number" id="minTE" min="0" max="4"></div>
       <div class="frow"><label>DEF</label><input type="number" id="minDEF" min="0" max="3"></div>
-      <div class="frow"><label>K</label><input type="number" id="minK" min="0" max="2"></div>
       <div class="note">The recommender boosts positions you still owe, and locks onto them when you're running out of picks. Replacement-level value scales with league size (2-QB makes QBs scarce — that's handled).</div>
     </div>
     <div class="foot">
@@ -292,7 +297,7 @@ footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--fa
       <div class="frow"><label>Name</label><input class="wide" type="text" id="addName" placeholder="Player name"></div>
       <div class="frow"><label>Team (abbrev)</label><input type="text" id="addTeam" placeholder="KC" maxlength="3"></div>
       <div class="frow"><label>Position</label>
-        <select id="addPos"><option>QB</option><option>RB</option><option>WR</option><option>TE</option><option>DEF</option><option>K</option></select>
+        <select id="addPos"><option>QB</option><option>RB</option><option>WR</option><option>TE</option><option>DEF</option></select>
       </div>
       <div class="frow"><label>Projected points</label><input type="number" id="addProj" placeholder="180"></div>
     </div>
@@ -312,94 +317,680 @@ footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--fa
    over standard). Edit any number in-app by clicking it.
    ===================================================================== */
 const RAW = [
-// ---- QB (6pt pass TD projections) ----
-["Lamar Jackson","BAL","QB",432],["Josh Allen","BUF","QB",428],["Jayden Daniels","WAS","QB",414],
-["Joe Burrow","CIN","QB",408],["Jalen Hurts","PHI","QB",402],["Baker Mayfield","TB","QB",385],
-["Patrick Mahomes","KC","QB",380],["Justin Herbert","LAC","QB",368],["Bo Nix","DEN","QB",362],
-["Drake Maye","NE","QB",360],["Brock Purdy","SF","QB",354],["Jared Goff","DET","QB",352],
-["Kyler Murray","ARI","QB",348],["Jordan Love","GB","QB",346],["Dak Prescott","DAL","QB",344],
-["C.J. Stroud","HOU","QB",340],["Caleb Williams","CHI","QB",338],["Matthew Stafford","LAR","QB",330],
-["Justin Fields","NYJ","QB",328],["Trevor Lawrence","JAX","QB",326],["Bryce Young","CAR","QB",324],
-["Tua Tagovailoa","MIA","QB",322],["Sam Darnold","SEA","QB",318],["Michael Penix Jr.","ATL","QB",316],
-["J.J. McCarthy","MIN","QB",312],["Cam Ward","TEN","QB",308],["Geno Smith","LV","QB",298],
-["Aaron Rodgers","PIT","QB",288],["Anthony Richardson","IND","QB",278],["Daniel Jones","IND","QB",270],
-["Tyler Shough","NO","QB",255],["Russell Wilson","NYG","QB",248],["Jaxson Dart","NYG","QB",240],
-["Joe Flacco","CLE","QB",225],["Kirk Cousins","ATL","QB",180],
-// ---- RB ----
-["Bijan Robinson","ATL","RB",338],["Jahmyr Gibbs","DET","RB",330],["Saquon Barkley","PHI","RB",318],
-["Christian McCaffrey","SF","RB",305],["De'Von Achane","MIA","RB",292],["Jonathan Taylor","IND","RB",290],
-["Ashton Jeanty","LV","RB",286],["Josh Jacobs","GB","RB",284],["Derrick Henry","BAL","RB",280],
-["Bucky Irving","TB","RB",274],["Kyren Williams","LAR","RB",264],["Chase Brown","CIN","RB",260],
-["James Cook","BUF","RB",258],["Omarion Hampton","LAC","RB",252],["Breece Hall","NYJ","RB",240],
-["Alvin Kamara","NO","RB",238],["James Conner","ARI","RB",236],["Chuba Hubbard","CAR","RB",234],
-["Kenneth Walker III","SEA","RB",232],["TreVeyon Henderson","NE","RB",230],["Quinshon Judkins","CLE","RB",228],
-["Joe Mixon","HOU","RB",218],["D'Andre Swift","CHI","RB",214],["Tony Pollard","TEN","RB",212],
-["RJ Harvey","DEN","RB",210],["Aaron Jones","MIN","RB",208],["David Montgomery","DET","RB",204],
-["Kaleb Johnson","PIT","RB",198],["Isiah Pacheco","KC","RB",194],["Cam Skattebo","NYG","RB",192],
-["Rhamondre Stevenson","NE","RB",188],["Javonte Williams","DAL","RB",186],["Tyrone Tracy Jr.","NYG","RB",184],
-["Jaylen Warren","PIT","RB",182],["Travis Etienne","JAX","RB",180],["Brian Robinson Jr.","SF","RB",178],
-["J.K. Dobbins","DEN","RB",176],["Najee Harris","LAC","RB",172],["Jordan Mason","MIN","RB",170],
-["Rico Dowdle","CAR","RB",168],["Rachaad White","TB","RB",164],["Tank Bigsby","JAX","RB",160],
-["Zach Charbonnet","SEA","RB",158],["Trey Benson","ARI","RB",152],["Nick Chubb","HOU","RB",144],
-["Bhayshul Tuten","JAX","RB",140],["Braelon Allen","NYJ","RB",136],["Austin Ekeler","WAS","RB",132],
-["Dylan Sampson","CLE","RB",130],["Tyjae Spears","TEN","RB",128],["Ray Davis","BUF","RB",126],
-["Jerome Ford","CLE","RB",122],["Blake Corum","LAR","RB",118],["Jaydon Blue","DAL","RB",116],
-["Kimani Vidal","LAC","RB",112],["Will Shipley","PHI","RB",104],["Roschon Johnson","CHI","RB",96],
-// ---- WR ----
-["Ja'Marr Chase","CIN","WR",348],["Justin Jefferson","MIN","WR",330],["CeeDee Lamb","DAL","WR",322],
-["Puka Nacua","LAR","WR",318],["Amon-Ra St. Brown","DET","WR",316],["Malik Nabers","NYG","WR",302],
-["Nico Collins","HOU","WR",296],["Brian Thomas Jr.","JAX","WR",294],["Drake London","ATL","WR",290],
-["Jaxon Smith-Njigba","SEA","WR",286],["A.J. Brown","PHI","WR",280],["Ladd McConkey","LAC","WR",270],
-["Rashee Rice","KC","WR",266],["Tee Higgins","CIN","WR",258],["Garrett Wilson","NYJ","WR",256],
-["Marvin Harrison Jr.","ARI","WR",254],["Tyreek Hill","MIA","WR",250],["Mike Evans","TB","WR",250],
-["Davante Adams","LAR","WR",248],["Terry McLaurin","WAS","WR",244],["DK Metcalf","PIT","WR",240],
-["Xavier Worthy","KC","WR",236],["DJ Moore","CHI","WR",234],["DeVonta Smith","PHI","WR",232],
-["Tetairoa McMillan","CAR","WR",230],["Courtland Sutton","DEN","WR",228],["Zay Flowers","BAL","WR",226],
-["George Pickens","DAL","WR",224],["Jameson Williams","DET","WR",222],["Travis Hunter","JAX","WR",220],
-["Emeka Egbuka","TB","WR",218],["Rome Odunze","CHI","WR",216],["Jaylen Waddle","MIA","WR",214],
-["Jordan Addison","MIN","WR",212],["Chris Olave","NO","WR",208],["Chris Godwin","TB","WR",206],
-["Jerry Jeudy","CLE","WR",204],["Calvin Ridley","TEN","WR",202],["Matthew Golden","GB","WR",198],
-["Ricky Pearsall","SF","WR",194],["Stefon Diggs","NE","WR",192],["Jauan Jennings","SF","WR",190],
-["Khalil Shakir","BUF","WR",188],["Jakobi Meyers","LV","WR",186],["Michael Pittman Jr.","IND","WR",184],
-["Cooper Kupp","SEA","WR",182],["Deebo Samuel","WAS","WR",180],["Brandon Aiyuk","SF","WR",178],
-["Josh Downs","IND","WR",176],["Keon Coleman","BUF","WR",174],["Darnell Mooney","ATL","WR",170],
-["Quentin Johnston","LAC","WR",168],["Jayden Higgins","HOU","WR",166],["Rashid Shaheed","NO","WR",164],
-["Hollywood Brown","KC","WR",162],["Cedric Tillman","CLE","WR",160],["Luther Burden III","CHI","WR",158],
-["Tre Harris","LAC","WR",156],["Wan'Dale Robinson","NYG","WR",154],["Jayden Reed","GB","WR",152],
-["Marvin Mims Jr.","DEN","WR",150],["Romeo Doubs","GB","WR",148],["Adam Thielen","MIN","WR",144],
-["Kyle Williams","NE","WR",140],["DeMario Douglas","NE","WR",132],["Jack Bech","LV","WR",128],
-["Pat Bryant","DEN","WR",120],["Dont'e Thornton Jr.","LV","WR",116],
-// ---- TE ----
-["Brock Bowers","LV","TE",258],["Trey McBride","ARI","TE",244],["George Kittle","SF","TE",218],
-["Sam LaPorta","DET","TE",198],["T.J. Hockenson","MIN","TE",188],["Tucker Kraft","GB","TE",184],
-["Tyler Warren","IND","TE",176],["Travis Kelce","KC","TE",174],["David Njoku","CLE","TE",172],
-["Colston Loveland","CHI","TE",168],["Mark Andrews","BAL","TE",166],["Evan Engram","DEN","TE",162],
-["Dalton Kincaid","BUF","TE",154],["Jake Ferguson","DAL","TE",150],["Dallas Goedert","PHI","TE",146],
-["Kyle Pitts","ATL","TE",144],["Jonnu Smith","PIT","TE",142],["Hunter Henry","NE","TE",138],
-["Zach Ertz","WAS","TE",134],["Isaiah Likely","BAL","TE",130],["Pat Freiermuth","PIT","TE",128],
-["Cade Otton","TB","TE",124],["Brenton Strange","JAX","TE",120],["Mike Gesicki","CIN","TE",114],
-["Dalton Schultz","HOU","TE",112],["Theo Johnson","NYG","TE",110],["Ja'Tavion Sanders","CAR","TE",108],
-["Chig Okonkwo","TEN","TE",104],["Cole Kmet","CHI","TE",102],["Mason Taylor","NYJ","TE",100],
-["Harold Fannin Jr.","CLE","TE",98],["Noah Fant","SEA","TE",92],
-// ---- DEF ----
-["Broncos D/ST","DEN","DEF",135],["Ravens D/ST","BAL","DEF",130],["Texans D/ST","HOU","DEF",128],
-["Steelers D/ST","PIT","DEF",125],["Eagles D/ST","PHI","DEF",124],["Vikings D/ST","MIN","DEF",122],
-["Seahawks D/ST","SEA","DEF",120],["Packers D/ST","GB","DEF",118],["Bills D/ST","BUF","DEF",115],
-["Rams D/ST","LAR","DEF",113],["Chiefs D/ST","KC","DEF",112],["Lions D/ST","DET","DEF",110],
-["Chargers D/ST","LAC","DEF",109],["Cardinals D/ST","ARI","DEF",108],["Patriots D/ST","NE","DEF",107],
-["49ers D/ST","SF","DEF",105],["Jets D/ST","NYJ","DEF",104],["Buccaneers D/ST","TB","DEF",103],
-["Giants D/ST","NYG","DEF",102],["Colts D/ST","IND","DEF",100],["Cowboys D/ST","DAL","DEF",99],
-["Commanders D/ST","WAS","DEF",98],["Bears D/ST","CHI","DEF",97],["Falcons D/ST","ATL","DEF",96],
-// ---- K ----
-["Brandon Aubrey","DAL","K",162],["Chris Boswell","PIT","K",152],["Jake Bates","DET","K",150],
-["Cameron Dicker","LAC","K",148],["Ka'imi Fairbairn","HOU","K",146],["Harrison Butker","KC","K",144],
-["Chase McLaughlin","TB","K",142],["Evan McPherson","CIN","K",136],["Tyler Bass","BUF","K",132],
-["Jake Elliott","PHI","K",130],["Wil Lutz","DEN","K",129],["Younghoe Koo","ATL","K",126],
-["Jason Sanders","MIA","K",124],["Matt Gay","WAS","K",122],
+["Josh Allen", "BUF", "QB", 417.0, 403.2, 36],
+["Joe Burrow", "CIN", "QB", 367.1, 349.6, 68],
+["Lamar Jackson", "BAL", "QB", 361.3, 351.1, 55],
+["Drake Maye", "NEP", "QB", 360.2, 346.9, 65],
+["Justin Herbert", "LAC", "QB", 356.5, 344.9, 81],
+["Trevor Lawrence", "JAC", "QB", 354.8, 340.4, 85],
+["Caleb Williams", "CHI", "QB", 348.0, 333.4, 71],
+["Jahmyr Gibbs", "DET", "RB", 346.9, 296.8, 1],
+["Dak Prescott", "DAL", "QB", 344.4, 328.6, 79],
+["Jayden Daniels", "WAS", "QB", 341.8, 328.5, 67],
+["Bijan Robinson", "ATL", "RB", 339.3, 283.1, 2],
+["Matthew Stafford", "LAR", "QB", 334.8, 320.9, 105],
+["Jared Goff", "DET", "QB", 332.0, 316.8, 111],
+["Ja'Marr Chase", "CIN", "WR", 331.6, 256.0, 3],
+["Bo Nix", "DEN", "QB", 329.4, 319.6, 105],
+["Brock Purdy", "SFO", "QB", 328.9, 314.3, 97],
+["Jordan Love", "GBP", "QB", 324.4, 311.9, 113],
+["Jalen Hurts", "PHI", "QB", 320.6, 313.1, 70],
+["Tyler Shough", "NOS", "QB", 318.2, 307.1, 123],
+["Jaxson Dart", "NYG", "QB", 315.9, 305.3, 101],
+["Baker Mayfield", "TBB", "QB", 311.3, 300.4, 119],
+["Puka Nacua", "LAR", "WR", 307.1, 237.2, 4],
+["Patrick Mahomes", "KCC", "QB", 300.7, 289.8, 92],
+["Jonathan Taylor", "IND", "RB", 294.0, 253.6, 8],
+["Christian McCaffrey", "SFO", "RB", 294.0, 251.3, 6],
+["C.J. Stroud", "HOU", "QB", 293.3, 284.0, 143],
+["Sam Darnold", "SEA", "QB", 290.4, 279.9, 140],
+["Jaxon Smith-Njigba", "SEA", "WR", 288.9, 224.4, 5],
+["Kyler Murray", "MIN", "QB", 287.1, 278.7, 112],
+["Cam Ward", "TEN", "QB", 280.9, 270.2, 138],
+["Malik Willis", "MIA", "QB", 278.1, 269.4, 134],
+["Daniel Jones", "IND", "QB", 276.0, 270.2, 146],
+["Amon-Ra St. Brown", "DET", "WR", 272.6, 210.0, 7],
+["Bryce Young", "CAR", "QB", 270.8, 263.1, 159],
+["James Cook", "BUF", "RB", 269.4, 235.2, 12],
+["Chase Brown", "CIN", "RB", 267.3, 229.6, 16],
+["CeeDee Lamb", "DAL", "WR", 266.8, 206.5, 9],
+["Justin Jefferson", "MIN", "WR", 258.1, 199.8, 10],
+["Ashton Jeanty", "LVR", "RB", 254.9, 215.2, 11],
+["DeVonta Smith", "PHI", "WR", 251.4, 194.8, 26],
+["Brock Bowers", "LVR", "TE", 249.4, 184.8, 21],
+["Saquon Barkley", "PHI", "RB", 248.5, 217.4, 13],
+["Drake London", "ATL", "WR", 248.0, 191.7, 20],
+["Rashee Rice", "KCC", "WR", 247.8, 190.6, 24],
+["Aaron Rodgers", "PIT", "QB", 247.0, 239.1, 176],
+["Omarion Hampton", "LAC", "RB", 241.8, 209.3, 14],
+["Zay Flowers", "BAL", "WR", 240.1, 186.6, 30],
+["Derrick Henry", "BAL", "RB", 239.3, 214.9, 17],
+["Nico Collins", "HOU", "WR", 239.3, 187.3, 22],
+["Ladd McConkey", "LAC", "WR", 237.0, 186.9, 35],
+["A.J. Brown", "NEP", "WR", 236.1, 184.6, 19],
+["Kenneth Walker III", "KCC", "RB", 233.3, 202.2, 15],
+["Devon Achane", "MIA", "RB", 232.1, 197.1, 18],
+["Trey McBride", "ARI", "TE", 228.8, 167.8, 27],
+["Emeka Egbuka", "TBB", "WR", 227.7, 180.0, 33],
+["George Pickens", "DAL", "WR", 225.2, 175.7, 23],
+["Malik Nabers", "NYG", "WR", 223.6, 173.4, 31],
+["Luther Burden", "CHI", "WR", 223.4, 174.3, 45],
+["Chris Olave", "NOS", "WR", 222.8, 174.0, 29],
+["Travis Etienne", "NOS", "RB", 220.3, 193.1, 38],
+["Garrett Wilson", "NYJ", "WR", 218.2, 167.3, 40],
+["Tee Higgins", "CIN", "WR", 217.3, 169.4, 34],
+["Breece Hall", "NYJ", "RB", 216.2, 185.0, 27],
+["Terry McLaurin", "WAS", "WR", 215.1, 167.4, 43],
+["Tetairoa McMillan", "CAR", "WR", 215.0, 170.5, 39],
+["Colston Loveland", "CHI", "TE", 214.4, 163.1, 47],
+["Josh Jacobs", "GBP", "RB", 211.1, 187.2, 41],
+["Jaylen Waddle", "DEN", "WR", 210.6, 165.4, 42],
+["Mike Evans", "SFO", "WR", 209.3, 165.5, 46],
+["Javonte Williams", "DAL", "RB", 209.2, 182.0, 37],
+["D.J. Moore", "BUF", "WR", 208.3, 166.8, 57],
+["Jacoby Brissett", "ARI", "QB", 207.2, 202.9, 193],
+["Fernando Mendoza", "LVR", "QB", 205.6, 203.8, 0],
+["Geno Smith", "NYJ", "QB", 204.0, 198.6, 185],
+["Kyren Williams", "LAR", "RB", 202.3, 181.5, 32],
+["Davante Adams", "LAR", "WR", 197.2, 157.2, 49],
+["Bhayshul Tuten", "JAC", "RB", 192.9, 170.9, 53],
+["Tyler Warren", "IND", "TE", 189.8, 142.8, 64],
+["Cam Skattebo", "NYG", "RB", 189.3, 163.1, 44],
+["Jameson Williams", "DET", "WR", 187.9, 149.5, 51],
+["Parker Washington", "JAC", "WR", 185.6, 143.6, 66],
+["Jeremiyah Love", "ARI", "RB", 183.4, 160.0, 25],
+["Christian Watson", "GBP", "WR", 183.4, 147.0, 58],
+["Quinshon Judkins", "CLE", "RB", 182.9, 159.6, 54],
+["D'Andre Swift", "CHI", "RB", 179.4, 157.9, 50],
+["Rome Odunze", "CHI", "WR", 178.8, 144.4, 60],
+["David Montgomery", "HOU", "RB", 177.1, 157.2, 48],
+["Carnell Tate", "TEN", "WR", 176.5, 138.4, 59],
+["Kyle Pitts", "ATL", "TE", 176.3, 133.8, 104],
+["Michael Wilson", "ARI", "WR", 175.1, 135.0, 98],
+["TreVeyon Henderson", "NEP", "RB", 174.9, 152.4, 52],
+["Rhamondre Stevenson", "NEP", "RB", 174.3, 151.3, 0],
+["Jordyn Tyson", "NOS", "WR", 171.2, 133.7, 63],
+["Tony Pollard", "TEN", "RB", 170.8, 150.9, 72],
+["Bucky Irving", "TBB", "RB", 169.8, 148.8, 56],
+["Harold Fannin", "CLE", "TE", 169.6, 128.4, 103],
+["Brian Thomas", "JAC", "WR", 168.5, 137.5, 61],
+["D.K. Metcalf", "PIT", "WR", 168.3, 134.9, 76],
+["Courtland Sutton", "DEN", "WR", 166.7, 134.2, 83],
+["Alec Pierce", "IND", "WR", 166.3, 134.5, 80],
+["Marvin Harrison", "ARI", "WR", 161.6, 128.6, 69],
+["Jaylen Warren", "PIT", "RB", 158.8, 137.1, 73],
+["Josh Downs", "IND", "WR", 158.5, 121.3, 90],
+["Rico Dowdle", "PIT", "RB", 158.5, 136.0, 0],
+["Tucker Kraft", "GBP", "TE", 158.4, 122.0, 82],
+["Michael Pittman", "PIT", "WR", 157.6, 123.4, 100],
+["Tua Tagovailoa", "ATL", "QB", 154.4, 154.1, 208],
+["Broncos D/ST", "DEN", "DEF", 152.9, 152.9, 0],
+["Blake Corum", "LAR", "RB", 152.7, 136.2, 0],
+["RJ Harvey", "DEN", "RB", 152.6, 131.0, 86],
+["Texans D/ST", "HOU", "DEF", 152.5, 152.5, 0],
+["Rams D/ST", "LAR", "DEF", 151.8, 151.8, 0],
+["Packers D/ST", "GBP", "DEF", 151.6, 151.6, 0],
+["Seahawks D/ST", "SEA", "DEF", 151.5, 151.5, 0],
+["Makai Lemon", "PHI", "WR", 151.1, 116.3, 73],
+["Vikings D/ST", "MIN", "DEF", 150.7, 150.7, 0],
+["Jayden Reed", "GBP", "WR", 150.3, 122.0, 84],
+["Lions D/ST", "DET", "DEF", 149.7, 149.7, 0],
+["Wan'Dale Robinson", "TEN", "WR", 149.4, 115.3, 115],
+["Rashid Shaheed", "SEA", "WR", 149.3, 120.2, 130],
+["Matthew Golden", "GBP", "WR", 149.1, 116.9, 110],
+["Steelers D/ST", "PIT", "DEF", 149.0, 149.0, 0],
+["Sam LaPorta", "DET", "TE", 148.7, 115.5, 93],
+["Chuba Hubbard", "CAR", "RB", 148.3, 131.2, 78],
+["Bills D/ST", "BUF", "DEF", 148.3, 148.3, 0],
+["Eagles D/ST", "PHI", "DEF", 147.3, 147.3, 0],
+["Chargers D/ST", "LAC", "DEF", 147.0, 147.0, 0],
+["Chiefs D/ST", "KCC", "DEF", 146.7, 146.7, 0],
+["Dalton Kincaid", "BUF", "TE", 146.6, 114.1, 127],
+["Ravens D/ST", "BAL", "DEF", 146.3, 146.3, 0],
+["Quentin Johnston", "LAC", "WR", 146.2, 121.6, 75],
+["Kenneth Gainwell", "TBB", "RB", 146.2, 120.7, 0],
+["Giants D/ST", "NYG", "DEF", 145.7, 145.7, 0],
+["Kyle Monangai", "CHI", "RB", 145.2, 128.2, 0],
+["49ers D/ST", "SFO", "DEF", 144.2, 144.2, 0],
+["Jordan Addison", "MIN", "WR", 143.9, 113.6, 88],
+["Buccaneers D/ST", "TBB", "DEF", 143.7, 143.7, 0],
+["Chris Godwin", "TBB", "WR", 143.7, 112.1, 89],
+["Saints D/ST", "NOS", "DEF", 143.0, 143.0, 0],
+["Mark Andrews", "BAL", "TE", 142.9, 114.7, 125],
+["Jayden Higgins", "HOU", "WR", 142.8, 114.2, 124],
+["Jake Ferguson", "DAL", "TE", 141.5, 107.5, 131],
+["Cowboys D/ST", "DAL", "DEF", 141.4, 141.4, 0],
+["Falcons D/ST", "ATL", "DEF", 141.3, 141.3, 0],
+["Khalil Shakir", "BUF", "WR", 141.0, 109.3, 126],
+["Bears D/ST", "CHI", "DEF", 141.0, 141.0, 0],
+["Patriots D/ST", "NEP", "DEF", 140.7, 140.7, 0],
+["Jakobi Meyers", "JAC", "WR", 140.3, 111.0, 106],
+["J.K. Dobbins", "DEN", "RB", 140.1, 125.2, 0],
+["Colts D/ST", "IND", "DEF", 140.1, 140.1, 0],
+["Jalen Coker", "CAR", "WR", 139.8, 108.5, 132],
+["Rachaad White", "WAS", "RB", 139.7, 120.0, 109],
+["Jaguars D/ST", "JAC", "DEF", 139.5, 139.5, 0],
+["Jalen McMillan", "TBB", "WR", 139.4, 111.3, 145],
+["Browns D/ST", "CLE", "DEF", 139.3, 139.3, 0],
+["Jets D/ST", "NYJ", "DEF", 139.2, 139.2, 0],
+["Deebo Samuel", "SFO", "WR", 138.6, 109.2, 164],
+["George Kittle", "SFO", "TE", 138.4, 107.9, 116],
+["KC Concepcion", "CLE", "WR", 138.3, 109.8, 118],
+["Jonathon Brooks", "CAR", "RB", 138.0, 119.3, 0],
+["Brenton Strange", "JAC", "TE", 137.7, 106.1, 150],
+["Titans D/ST", "TEN", "DEF", 136.0, 136.0, 0],
+["Bengals D/ST", "CIN", "DEF", 135.9, 135.9, 0],
+["Commanders D/ST", "WAS", "DEF", 135.8, 135.8, 0],
+["Raiders D/ST", "LVR", "DEF", 135.7, 135.7, 0],
+["Chigoziem Okonkwo", "WAS", "TE", 135.6, 102.4, 139],
+["Xavier Worthy", "KCC", "WR", 135.3, 112.3, 95],
+["Dolphins D/ST", "MIA", "DEF", 134.5, 134.5, 0],
+["Panthers D/ST", "CAR", "DEF", 133.8, 133.8, 0],
+["Travis Hunter", "JAC", "WR", 132.0, 105.0, 0],
+["Travis Kelce", "KCC", "TE", 131.9, 101.7, 122],
+["Cardinals D/ST", "ARI", "DEF", 131.7, 131.7, 0],
+["Tre Tucker", "LVR", "WR", 131.1, 107.4, 154],
+["Jadarian Price", "SEA", "RB", 131.1, 121.5, 62],
+["Aaron Jones", "MIN", "RB", 129.9, 114.5, 0],
+["Jordan Mason", "MIN", "RB", 129.3, 115.0, 114],
+["Michael Penix", "ATL", "QB", 128.2, 128.1, 0],
+["Deshaun Watson", "CLE", "QB", 127.5, 127.2, 237],
+["Isaiah Likely", "NYG", "TE", 126.6, 97.4, 129],
+["Dallas Goedert", "PHI", "TE", 125.9, 97.1, 135],
+["Shedeur Sanders", "CLE", "QB", 123.6, 123.3, 0],
+["Jo'quavioius Marks", "HOU", "RB", 121.2, 106.9, 0],
+["Keaton Mitchell", "LAC", "RB", 119.9, 106.6, 0],
+["Tyler Allgeier", "ARI", "RB", 119.7, 106.6, 0],
+["Jauan Jennings", "MIN", "WR", 119.5, 94.2, 153],
+["Jacory Croskey-Merritt", "WAS", "RB", 117.2, 103.8, 0],
+["Ryan Flournoy", "DAL", "WR", 116.9, 92.3, 161],
+["Kenyon Sadiq", "NYJ", "TE", 116.1, 91.5, 160],
+["Hunter Henry", "NEP", "TE", 115.7, 90.3, 151],
+["Isaac TeSlaa", "DET", "WR", 115.4, 94.9, 169],
+["Oronde Gadsden", "LAC", "TE", 110.7, 88.8, 148],
+["Chris Rodriguez", "JAC", "RB", 109.8, 101.9, 0],
+["Adonai Mitchell", "NYJ", "WR", 109.8, 88.9, 171],
+["Juwan Johnson", "NOS", "TE", 109.7, 85.7, 156],
+["Greg Dulcich", "MIA", "TE", 108.2, 83.4, 178],
+["Pat Freiermuth", "PIT", "TE", 107.9, 82.4, 192],
+["Jalen Nailor", "LVR", "WR", 107.5, 86.8, 147],
+["Tre Harris", "LAC", "WR", 105.4, 85.4, 166],
+["AJ Barner", "SEA", "TE", 105.0, 82.5, 174],
+["Tyrone Tracy", "NYG", "RB", 104.8, 91.7, 0],
+["Denzel Boston", "CLE", "WR", 104.4, 82.8, 155],
+["Zach Charbonnet", "SEA", "RB", 104.2, 93.0, 0],
+["Terrance Ferguson", "LAR", "TE", 103.5, 83.0, 183],
+["Omar Cooper", "NYJ", "WR", 103.4, 82.2, 144],
+["Malik Washington", "MIA", "WR", 102.6, 80.7, 182],
+["Jerry Jeudy", "CLE", "WR", 100.8, 81.3, 177],
+["Dalton Schultz", "HOU", "TE", 100.5, 78.4, 168],
+["Gunnar Helm", "TEN", "TE", 99.9, 76.4, 180],
+["Antonio Williams", "WAS", "WR", 96.6, 75.6, 175],
+["T.J. Hockenson", "MIN", "TE", 96.0, 74.2, 170],
+["Cade Otton", "TBB", "TE", 95.8, 75.7, 188],
+["Romeo Doubs", "NEP", "WR", 95.0, 76.2, 117],
+["Tyjae Spears", "TEN", "RB", 94.9, 79.7, 0],
+["Alvin Kamara", "NOS", "RB", 93.2, 77.9, 0],
+["Tank Dell", "HOU", "WR", 90.8, 74.3, 190],
+["Isiah Pacheco", "DET", "RB", 90.7, 81.2, 0],
+["Dylan Sampson", "CLE", "RB", 89.4, 76.4, 0],
+["Zachariah Branch", "ATL", "WR", 88.3, 71.7, 181],
+["Calvin Ridley", "TEN", "WR", 87.9, 71.3, 186],
+["MarShawn Lloyd", "GBP", "RB", 87.3, 78.1, 0],
+["De'Zhaun Stribling", "SFO", "WR", 87.2, 70.3, 0],
+["Cooper Kupp", "SEA", "WR", 84.7, 69.3, 204],
+["Dontayvion Wicks", "PHI", "WR", 83.6, 67.3, 190],
+["Rashod Bateman", "BAL", "WR", 83.3, 68.0, 206],
+["Brian Robinson", "ATL", "RB", 82.8, 76.6, 0],
+["Eli Raridon", "NEP", "TE", 82.8, 64.9, 0],
+["Kayshon Boutte", "NEP", "WR", 80.1, 64.5, 203],
+["Mike Gesicki", "CIN", "TE", 79.0, 63.1, 202],
+["Tyquan Thornton", "KCC", "WR", 77.3, 63.8, 211],
+["David Njoku", "LAC", "TE", 76.8, 61.3, 0],
+["Michael Mayer", "LVR", "TE", 76.1, 58.5, 0],
+["Kirk Cousins", "LVR", "QB", 76.0, 76.0, 233],
+["Kendrick Bourne", "ARI", "WR", 75.4, 59.5, 266],
+["Evan Engram", "DEN", "TE", 74.8, 58.7, 218],
+["James Conner", "ARI", "RB", 72.5, 59.2, 0],
+["Justice Hill", "BAL", "RB", 72.4, 59.2, 0],
+["Colby Parkinson", "LAR", "TE", 72.2, 56.9, 0],
+["Theo Johnson", "NYG", "TE", 72.0, 55.3, 0],
+["Germie Bernard", "PIT", "WR", 71.1, 58.1, 187],
+["Tank Bigsby", "PHI", "RB", 71.0, 65.5, 0],
+["George Holani", "SEA", "RB", 71.0, 62.9, 0],
+["Kaytron Allen", "WAS", "RB", 71.0, 63.9, 0],
+["Tommy Tremble", "CAR", "TE", 70.3, 54.0, 290],
+["Marvin Mims", "DEN", "WR", 70.3, 58.0, 0],
+["Jalen Tolbert", "MIA", "WR", 69.2, 55.5, 250],
+["Nicholas Singleton", "TEN", "RB", 69.0, 61.0, 0],
+["Treylon Burks", "WAS", "WR", 68.8, 56.4, 266],
+["Darnell Mooney", "NYG", "WR", 68.4, 54.6, 197],
+["Jordan James", "SFO", "RB", 68.3, 64.3, 0],
+["Kalif Raymond", "CHI", "WR", 68.0, 54.1, 266],
+["Troy Franklin", "DEN", "WR", 68.0, 55.6, 219],
+["Elijah Arroyo", "SEA", "TE", 68.0, 54.2, 0],
+["Jonah Coleman", "DEN", "RB", 67.9, 60.4, 0],
+["Skyler Bell", "BUF", "WR", 67.5, 54.5, 0],
+["Braelon Allen", "NYJ", "RB", 67.5, 62.1, 0],
+["Mason Taylor", "NYJ", "TE", 67.5, 51.9, 0],
+["Keon Coleman", "BUF", "WR", 67.0, 55.2, 209],
+["Isaiah Davis", "NYJ", "RB", 67.0, 55.9, 0],
+["Ashton Dulin", "IND", "WR", 66.9, 54.7, 290],
+["Ray Davis", "BUF", "RB", 66.8, 58.1, 0],
+["KaVontae Turpin", "DAL", "WR", 66.8, 55.3, 0],
+["Malachi Fields", "NYG", "WR", 66.6, 53.0, 226],
+["Cole Kmet", "CHI", "TE", 66.5, 52.1, 0],
+["Xavier Legette", "CAR", "WR", 66.1, 52.4, 0],
+["Jaylin Noel", "HOU", "WR", 66.0, 51.8, 0],
+["Roman Wilson", "PIT", "WR", 65.2, 51.3, 0],
+["Eli Stowers", "PHI", "TE", 63.5, 49.1, 0],
+["Mike Washington", "LVR", "RB", 62.7, 56.9, 0],
+["Caleb Douglas", "MIA", "WR", 62.7, 50.3, 250],
+["Sean Tucker", "TBB", "RB", 62.1, 56.7, 0],
+["Oscar Delp", "NOS", "TE", 62.0, 49.1, 0],
+["Marlin Klein", "HOU", "TE", 61.9, 48.3, 0],
+["Emmett Johnson", "KCC", "RB", 61.9, 53.3, 0],
+["Chimere Dike", "TEN", "WR", 61.9, 49.1, 0],
+["Ja'Kobi Lane", "BAL", "WR", 61.7, 50.8, 241],
+["Justin Fields", "KCC", "QB", 61.0, 60.6, 0],
+["Devontez Walker", "BAL", "WR", 60.7, 48.6, 0],
+["Noah Gray", "KCC", "TE", 60.7, 47.6, 0],
+["Darnell Washington", "PIT", "TE", 60.7, 47.2, 0],
+["Elijah Sarratt", "BAL", "WR", 58.9, 49.3, 0],
+["Jack Bech", "LVR", "WR", 58.9, 46.9, 244],
+["Ted Hurst", "TBB", "WR", 58.5, 47.6, 0],
+["Demond Claiborne", "MIN", "RB", 57.4, 50.2, 0],
+["Chris Bell", "MIA", "WR", 57.2, 46.3, 0],
+["Christian Kirk", "SFO", "WR", 56.9, 46.0, 0],
+["Kaleb Johnson", "PIT", "RB", 56.4, 50.4, 0],
+["Emari Demercado", "KCC", "RB", 56.1, 49.8, 0],
+["Luke Musgrave", "GBP", "TE", 55.6, 43.0, 0],
+["Jake Tonges", "SFO", "TE", 55.5, 43.2, 0],
+["Cyrus Allen", "KCC", "WR", 55.2, 44.7, 0],
+["Andrei Iosivas", "CIN", "WR", 54.8, 44.8, 241],
+["Pat Bryant", "DEN", "WR", 54.8, 43.8, 0],
+["Samaje Perine", "CIN", "RB", 54.6, 47.2, 0],
+["Dawson Knox", "BUF", "TE", 54.4, 43.7, 0],
+["Darius Slayton", "NYG", "WR", 54.1, 43.0, 0],
+["Emanuel Wilson", "SEA", "RB", 54.1, 44.7, 0],
+["Tutu Atwell", "MIA", "WR", 54.0, 43.7, 0],
+["Carson Beck", "ARI", "QB", 53.6, 53.6, 0],
+["Devin Neal", "NOS", "RB", 53.4, 46.6, 0],
+["Olamide Zaccheaus", "ATL", "WR", 53.3, 42.2, 290],
+["Matthew Hibner", "BAL", "TE", 53.3, 43.2, 0],
+["Devaughn Vele", "NOS", "WR", 52.9, 41.5, 233],
+["Drew Sample", "CIN", "TE", 52.8, 39.1, 0],
+["Josh Oliver", "MIN", "TE", 52.8, 40.8, 0],
+["Isaiah Bond", "CLE", "WR", 52.0, 42.9, 0],
+["Justin Joly", "DEN", "TE", 52.0, 40.8, 0],
+["Erick All", "CIN", "TE", 51.9, 39.1, 0],
+["Tyler Higbee", "LAR", "TE", 51.3, 40.5, 0],
+["Mack Hollins", "NEP", "WR", 51.3, 41.2, 0],
+["Colbie Young", "CIN", "WR", 51.1, 41.8, 0],
+["Zavion Thomas", "CHI", "WR", 50.6, 41.0, 0],
+["Rasheen Ali", "BAL", "RB", 50.2, 46.8, 0],
+["Greg Dortch", "DET", "WR", 49.7, 38.9, 0],
+["Jordan Whittington", "LAR", "WR", 49.5, 39.5, 290],
+["Tahj Brooks", "CIN", "RB", 49.3, 44.4, 0],
+["Ty Johnson", "BUF", "RB", 49.0, 43.3, 0],
+["Tanner Koziol", "JAC", "TE", 48.8, 38.1, 0],
+["Ja'Tavion Sanders", "CAR", "TE", 48.1, 37.3, 0],
+["Cade Klubnik", "NYJ", "QB", 46.8, 46.6, 0],
+["Jaydon Blue", "DAL", "RB", 46.4, 42.6, 0],
+["Jaylen Wright", "MIA", "RB", 46.0, 39.9, 0],
+["Phil Mafah", "DAL", "RB", 45.7, 41.5, 0],
+["Demario Douglas", "NEP", "WR", 45.4, 36.7, 0],
+["Kaelon Black", "SFO", "RB", 45.2, 42.1, 0],
+["DJ Giddens", "IND", "RB", 44.9, 38.6, 0],
+["Elic Ayomanor", "TEN", "WR", 44.8, 36.5, 0],
+["Malik Davis", "DAL", "RB", 43.4, 38.0, 0],
+["LeQuint Allen", "JAC", "RB", 43.4, 33.9, 0],
+["Deion Burks", "IND", "WR", 43.2, 34.5, 0],
+["Jahdae Walker", "CHI", "WR", 43.1, 34.7, 0],
+["Savion Williams", "GBP", "WR", 42.9, 34.5, 0],
+["Kendre Miller", "NOS", "RB", 42.9, 39.0, 0],
+["Ollie Gordon", "MIA", "RB", 42.0, 36.4, 0],
+["Tory Horton", "SEA", "WR", 42.0, 33.8, 0],
+["Dont'e Thornton", "LVR", "WR", 41.0, 34.1, 0],
+["Jarquez Hunter", "LAR", "RB", 40.7, 36.1, 0],
+["Davis Mills", "HOU", "QB", 40.3, 40.1, 0],
+["Brashard Smith", "KCC", "RB", 40.3, 32.3, 0],
+["Daniel Bellinger", "TEN", "TE", 39.8, 30.1, 0],
+["Trey Lance", "LAC", "QB", 39.7, 39.6, 0],
+["Dyami Brown", "WAS", "WR", 39.5, 31.9, 0],
+["Jahan Dotson", "ATL", "WR", 39.3, 32.1, 0],
+["Marquise Brown", "PHI", "WR", 39.0, 31.2, 0],
+["Charlie Kolar", "LAC", "TE", 38.6, 30.2, 0],
+["Jack Endries", "CIN", "TE", 38.3, 29.6, 0],
+["Noah Fant", "NOS", "TE", 38.2, 29.0, 0],
+["Joe Flacco", "CIN", "QB", 38.0, 37.7, 0],
+["Adam Randall", "BAL", "RB", 37.9, 32.8, 0],
+["Josh Whyle", "GBP", "TE", 37.8, 29.0, 0],
+["John Metchie", "CAR", "WR", 37.6, 29.5, 0],
+["J.J. McCarthy", "MIN", "QB", 37.6, 37.5, 0],
+["Bryce Lance", "NOS", "WR", 37.5, 30.0, 0],
+["Spencer Rattler", "NOS", "QB", 37.3, 37.1, 0],
+["Mitchell Evans", "CAR", "TE", 37.2, 28.4, 0],
+["Luke Schoonmaker", "DAL", "TE", 36.9, 28.6, 0],
+["Jaylin Lane", "WAS", "WR", 36.9, 30.4, 0],
+["Kevin Coleman", "MIA", "WR", 36.2, 29.0, 0],
+["Odell Beckham", "NYG", "WR", 36.1, 28.7, 0],
+["Ty Simpson", "LAR", "QB", 36.0, 35.9, 0],
+["Xavier Hutchinson", "HOU", "WR", 35.9, 28.7, 0],
+["Josh Palmer", "BUF", "WR", 35.8, 28.3, 0],
+["Jerome Ford", "WAS", "RB", 35.2, 27.3, 0],
+["Jackson Hawes", "BUF", "TE", 34.7, 28.0, 0],
+["Xavier Smith", "LAR", "WR", 34.5, 28.0, 0],
+["Calvin Austin", "NYG", "WR", 34.4, 27.9, 0],
+["Austin Hooper", "ATL", "TE", 34.2, 26.7, 0],
+["Kimani Vidal", "LAC", "RB", 34.0, 31.5, 0],
+["Konata Mumpfield", "LAR", "WR", 33.8, 27.0, 0],
+["Ben Sinnott", "WAS", "TE", 33.7, 25.1, 0],
+["Adam Trautman", "DEN", "TE", 33.4, 26.3, 0],
+["Mac Jones", "SFO", "QB", 33.4, 33.2, 0],
+["Joe Milton", "DAL", "QB", 33.2, 33.2, 0],
+["Van Jefferson", "WAS", "WR", 33.2, 27.0, 0],
+["John Bates", "WAS", "TE", 33.2, 25.6, 0],
+["Tez Johnson", "TBB", "WR", 33.1, 26.3, 0],
+["Seth McGowan", "IND", "RB", 32.8, 29.5, 0],
+["Travis Homer", "PIT", "RB", 32.7, 26.7, 0],
+["Will Kacmarek", "MIA", "TE", 32.4, 25.2, 0],
+["Brycen Tremayne", "CAR", "WR", 32.2, 25.3, 0],
+["Michael Trigg", "DAL", "TE", 32.2, 25.1, 0],
+["Cade Stover", "HOU", "TE", 32.2, 24.7, 0],
+["Tanner McKee", "PHI", "QB", 32.1, 32.0, 0],
+["Elijah Higgins", "ARI", "TE", 32.0, 24.4, 0],
+["Drew Lock", "SEA", "QB", 31.8, 31.6, 0],
+["KeAndre Lambert-Smith", "LAC", "WR", 31.6, 25.5, 0],
+["Payne Durham", "TBB", "TE", 31.4, 24.2, 0],
+["Trevor Etienne", "CAR", "RB", 31.1, 27.6, 0],
+["Joe Royer", "CLE", "TE", 30.9, 24.1, 0],
+["Malik Benson", "LVR", "WR", 30.9, 24.9, 0],
+["Max Klare", "LAR", "TE", 30.1, 24.0, 0],
 ];
+const INTEL = {
+"josh allen": {
+"t": "Unmatched individual upside - QB1 without weapons, maybe upgraded. (range 24-48)"
+},
+"lamar jackson": {
+"lean": 1,
+"p": "Prop market: over rush yds (3.72% edge)"
+},
+"drake maye": {
+"t": "QB1 potential; unrealized rush upside + AJB in the pass game. (range 54-78)"
+},
+"justin herbert": {
+"t": "Everything in LAC looks bullish; young ascending skill corps. (range 70-94)",
+"lean": -1,
+"p": "Prop market: under rush yds (5.9% edge)"
+},
+"trevor lawrence": {
+"t": "WR room 4-deep; passing game could go wild. (range 73-97)"
+},
+"caleb williams": {
+"t": "Ascending in an elite system, dual-threat for fantasy. (range 59-83)"
+},
+"jahmyr gibbs": {
+"t": "True feature back: explosion, receiving, goal line, snaps. (range 1-6)"
+},
+"jayden daniels": {
+"lean": 0,
+"p": "Prop market: over pass yds (4.49% edge); under rush yds (3.72% edge)"
+},
+"bijan robinson": {
+"t": "Deployed rushing AND receiving - the peak is about to hit. (range 1-6)",
+"lean": 1,
+"p": "Prop market: over rec yds (3.62% edge); over rec TD (2.56% edge)"
+},
+"jamarr chase": {
+"t": "125/1412/8 last year - repeat explosion well in play. (range 1-5)"
+},
+"jalen hurts": {
+"lean": -1,
+"p": "Prop market: under pass yds (3.98% edge)"
+},
+"jaxson dart": {
+"lean": -1,
+"p": "Prop market: under rush yds (7.26% edge)"
+},
+"puka nacua": {
+"t": "Volume monster in a scheme that demands his usage. (range 1-5)"
+},
+"jonathan taylor": {
+"t": "The offense revolves around him; this year isn't forever. (range 2-12)"
+},
+"cj stroud": {
+"lean": -1,
+"p": "Prop market: under pass yds (4.31% edge)"
+},
+"sam darnold": {
+"lean": -1,
+"p": "Prop market: under pass yds (4.84% edge)"
+},
+"kyler murray": {
+"lean": -1,
+"p": "Prop market: under rush yds (6.15% edge)"
+},
+"malik willis": {
+"t": "Cheapest QB with secure job + major rushing upside. (range 122-146)",
+"lean": 1,
+"p": "Prop market: over pass yds (4.87% edge); under rush yds (3.66% edge)"
+},
+"amonra st brown": {
+"lean": -1,
+"p": "Prop market: under rec yds (2.6% edge)"
+},
+"chase brown": {
+"t": "True 3-down workhorse in an offense that will put up numbers. (range 6-28)"
+},
+"devonta smith": {
+"t": "True WR1 target share now; could ascend to alpha status. (range 10-38)",
+"lean": 1,
+"p": "Prop market: over rec TD (2.9% edge)"
+},
+"brock bowers": {
+"t": "Could lead ALL TEs (and most WRs) in targets - miserable LV WR room. (range 8-32)"
+},
+"saquon barkley": {
+"lean": 0,
+"p": "Prop market: over rush yds (3.04% edge); under rec yds (2.92% edge)"
+},
+"drake london": {
+"t": "True WR1 role at a 2nd-round price. Could go nuclear. (range 8-32)"
+},
+"aaron rodgers": {
+"lean": -1,
+"p": "Prop market: under pass yds (2.62% edge)"
+},
+"zay flowers": {
+"t": "(range 19-43)"
+},
+"ladd mcconkey": {
+"lean": 1,
+"p": "Prop market: over rec yds (4% edge)"
+},
+"kenneth walker": {
+"t": "Bigger receiving role in KC; Reid finds work for his ilk. (range 6-27)"
+},
+"devon achane": {
+"lean": 0,
+"p": "Prop market: over rec yds (4.37% edge); under rush yds (4.29% edge)"
+},
+"emeka egbuka": {
+"t": "Year-2 ascent looks promising with Evans gone. (range 21-45)",
+"lean": 1,
+"p": "Prop market: over rec yds (3.91% edge)"
+},
+"luther burden": {
+"t": "2.34 YPRR on <50% routes; full-time now. League-winner. (range 33-57)"
+},
+"travis etienne": {
+"t": "NO paid up for their new stallion; could be uptempo. (range 26-50)",
+"lean": 1,
+"p": "Prop market: over rush yds (3.7% edge)"
+},
+"terry mclaurin": {
+"t": "New offense intends to feature him with high target volume. (range 31-55)"
+},
+"colston loveland": {
+"t": "Ascending talent, offensive focus - weekly wrecker. (range 35-59)"
+},
+"josh jacobs": {
+"t": "Off-field issue suppressed the price; these usually resolve. (range 29-53)"
+},
+"dj moore": {
+"lean": 1,
+"p": "Prop market: over rec yds (2.58% edge)"
+},
+"kyren williams": {
+"lean": -1,
+"p": "Prop market: under rush yds (4.4% edge)"
+},
+"bhayshul tuten": {
+"t": "Door open to outplay Chris Rodriguez and win the lion's share. (range 40-64)",
+"lean": 1,
+"p": "Prop market: over rush yds (3.18% edge)"
+},
+"tyler warren": {
+"t": "One of IND's most targeted in '25; usage should only grow. (range 52-76)"
+},
+"jeremiyah love": {
+"lean": -1,
+"p": "Prop market: under rush yds (2.97% edge)"
+},
+"christian watson": {
+"t": "Injury history keeps price low; career-year vibes at 27. (range 46-70)"
+},
+"brian thomas": {
+"lean": 1,
+"p": "Prop market: over rec TD (2.82% edge)"
+},
+"courtland sutton": {
+"lean": -1,
+"p": "Prop market: under rec yds (2.74% edge)"
+},
+"josh downs": {
+"lean": -1,
+"p": "Prop market: under rec yds (4.96% edge)"
+},
+"blake corum": {
+"t": "Shared workload, but injury-contingent league-winning upside. (range 79-103)"
+},
+"rashid shaheed": {
+"t": "SEA deep threat in a Super Bowl offense; more than go routes. (range 119-143)",
+"lean": 1,
+"p": "Prop market: over rec yds (3.93% edge); over rec TD (3.1% edge)"
+},
+"chris godwin": {
+"lean": -1,
+"p": "Prop market: under rec yds (3.19% edge)"
+},
+"mark andrews": {
+"t": "Likely (the player) left; new OC signals pass-heavy. Bounce-back. (range 113-137)"
+},
+"jayden higgins": {
+"t": "6 TDs in limited '25 looks; role expanding in year two. (range 112-136)"
+},
+"jakobi meyers": {
+"lean": -1,
+"p": "Prop market: under rec yds (2.64% edge)"
+},
+"jalen mcmillan": {
+"t": "TBB's possible WR2 - stands out in every opportunity. (range 133-157)"
+},
+"george kittle": {
+"lean": -1,
+"p": "Prop market: under rec TD (5.11% edge)"
+},
+"jonathon brooks": {
+"t": "Mid-round price that could look 1st-round by Week 14. (range 82-106)"
+},
+"brenton strange": {
+"t": "Career highs despite missing 5 games; PFF's 7th-graded TE. (range 138-162)"
+},
+"chig okonkwo": {
+"t": "Now TE1 in WAS - Daniels leans on the TE. 80-target upside. (range 127-151)"
+},
+"travis hunter": {
+"t": "One WR injury changes it all; extremely cheap for the talent. (range 128-152)"
+},
+"travis kelce": {
+"lean": -1,
+"p": "Prop market: under rec yds (4.1% edge)"
+},
+"tre tucker": {
+"t": "They think he can be featured; lower price, could pay big. (range 144-168)"
+},
+"jadarian price": {
+"lean": -1,
+"p": "Prop market: under rush yds (4.92% edge)"
+},
+"isaiah likely": {
+"lean": -1,
+"p": "Prop market: under rec yds (3.02% edge)"
+},
+"dallas goedert": {
+"lean": -1,
+"p": "Prop market: under rec TD (4.63% edge)"
+},
+"keaton mitchell": {
+"t": "Cheap points late; role could expand. (range 125-149)"
+},
+"isaac teslaa": {
+"t": "Born to make contested end-zone catches; upside for more. (range 157-181)"
+},
+"juwan johnson": {
+"lean": -1,
+"p": "Prop market: under rec yds (5.24% edge)"
+},
+"greg dulcich": {
+"t": "Brutal situation but might be option 1 for targets, dirt cheap. (range 166-190)",
+"lean": 1,
+"p": "Prop market: over rec yds (2.84% edge)"
+},
+"terrance ferguson": {
+"t": "Massive upside if workload consolidates; spike weeks anyway. (range 171-195)"
+},
+"omar cooper": {
+"lean": -1,
+"p": "Prop market: under rec yds (3.38% edge)"
+},
+"jerry jeudy": {
+"lean": -1,
+"p": "Prop market: under rec yds (13.54% edge)"
+},
+"dalton schultz": {
+"lean": -1,
+"p": "Prop market: under rec yds (4.22% edge)"
+},
+"tj hockenson": {
+"lean": -1,
+"p": "Prop market: under rec yds (5.38% edge)"
+},
+"romeo doubs": {
+"lean": -1,
+"p": "Prop market: under rec yds (11.95% edge)"
+},
+"calvin ridley": {
+"lean": -1,
+"p": "Prop market: under rec yds (8.87% edge)"
+},
+"rashod bateman": {
+"lean": -1,
+"p": "Prop market: under rec yds (2.79% edge)"
+},
+"germie bernard": {
+"lean": -1,
+"p": "Prop market: under rec yds (4.93% edge)"
+},
+"ray davis": {
+"t": "Unmatched zero-to-hero injury-contingent upside, dirt cheap. (range 178-202)"
+}
+};
+function normName(n){return n.toLowerCase().replace(/[.'\u2019-]/g,'').replace(/\s+(jr|sr|ii|iii|iv|v)$/,'').replace(/\s+/g,' ').trim();}
 
-const POSITIONS = ["QB","RB","WR","TE","DEF","K"];
-const LS_KEY = "draft-war-room-v1";
+const POSITIONS = ["QB","RB","WR","TE","DEF"];
+const LS_KEY = "draft-war-room-v2";
 
 /* ---------- State ---------- */
 const defaultState = () => ({
@@ -408,7 +999,7 @@ const defaultState = () => ({
   log: [],              // {id, who:'me'|'other'}
   custom: [],           // [name,team,pos,proj,id]
   overrides: {},        // id -> proj
-  settings: { teams:12, roster:16, min:{QB:2,RB:3,WR:3,TE:1,DEF:2,K:0} },
+  settings: { teams:12, roster:16, slot:12, scoring:"ppr", min:{QB:2,RB:3,WR:3,TE:1,DEF:1} },
   ui: { pos:"ALL", showTaken:false, sort:"vorp", dir:-1 }
 });
 let S = defaultState();
@@ -436,18 +1027,37 @@ function save(){
 
 /* ---------- Players ---------- */
 function allPlayers(){
-  const base = RAW.map((r,i)=>({id:"p"+i, name:r[0], team:r[1], pos:r[2], proj:r[3]}));
-  const customs = S.custom.map((r,i)=>({id:r[4]||("c"+i), name:r[0], team:r[1], pos:r[2], proj:r[3], custom:true}));
+  const col = S.settings.scoring==="half" ? 4 : 3;
+  const base = RAW.map((r,i)=>({id:"p"+i, name:r[0], team:r[1], pos:r[2], proj:r[col], adp:r[5]||0}));
+  const customs = S.custom.map((r,i)=>({id:r[4]||("c"+i), name:r[0], team:r[1], pos:r[2], proj:r[3], adp:0, custom:true}));
   const all = base.concat(customs);
-  for(const p of all){ if(S.overrides[p.id]!=null) p.proj = S.overrides[p.id]; }
+  for(const p of all){
+    if(S.overrides[p.id]!=null) p.proj = S.overrides[p.id];
+    p.intel = INTEL[normName(p.name)] || null;
+  }
   return all;
+}
+
+/* Snake draft math — overall pick numbers for my slot */
+function myOverallPicks(){
+  const t=S.settings.teams, slot=Math.min(S.settings.slot,t), out=[];
+  for(let r=1;r<=S.settings.roster;r++) out.push((r-1)*t + (r%2===1 ? slot : t+1-slot));
+  return out;
+}
+function nextPickHorizon(){
+  const cur = S.log.length + 1;               // pick currently on the clock
+  const mine = myOverallPicks().filter(x=>x>=cur);
+  if(!mine.length) return null;
+  const onClock = mine[0]===cur;
+  const next = (onClock && mine.length>1) ? mine[1] : mine[0]; // survival horizon
+  return {cur, onClock, mine0:mine[0], mine1:mine[1]||null, next};
 }
 
 /* Replacement level per position — scales with league size. 2-QB league:
    teams×2 QB starters, so replacement QB is deep and QBs carry huge value. */
 function replacementLevels(players){
   const t = S.settings.teams;
-  const demand = { QB:Math.round(t*2.3), RB:Math.round(t*2.6), WR:Math.round(t*3.2), TE:Math.round(t*1.3), DEF:Math.round(t*1.1), K:Math.round(t*1.05) };
+  const demand = { QB:Math.round(t*2.3), RB:Math.round(t*2.6), WR:Math.round(t*3.2), TE:Math.round(t*1.3), DEF:Math.round(t*1.1) };
   const repl = {};
   for(const pos of POSITIONS){
     const list = players.filter(p=>p.pos===pos).sort((a,b)=>b.proj-a.proj);
@@ -458,7 +1068,7 @@ function replacementLevels(players){
 }
 
 function myCounts(){
-  const map = {QB:0,RB:0,WR:0,TE:0,DEF:0,K:0};
+  const map = {QB:0,RB:0,WR:0,TE:0,DEF:0};
   const byId = idIndex();
   for(const id of S.mine){ const p=byId[id]; if(p) map[p.pos]++; }
   return map;
@@ -496,6 +1106,7 @@ function scoreBoard(){
     if(p.pos==="WR"||p.pos==="TE") myTeamsPC.add(p.team);
   }
   const mustFill = totalNeeded >= picksLeft && picksLeft > 0; // out of slack: only needed positions
+  const horizon = nextPickHorizon();
   const avail = players.filter(p => !S.taken[p.id] && !S.mine.includes(p.id));
 
   const scored = avail.map(p=>{
@@ -515,8 +1126,19 @@ function scoreBoard(){
     if((p.pos==="WR"||p.pos==="TE") && myTeamsQB.has(p.team)){ stack = "stacks with your "+p.team+" QB"; }
     if(p.pos==="QB" && myTeamsPC.has(p.team)){ stack = "stacks with your "+p.team+" pass-catcher"; }
     if(stack){ score *= 1.08; why.push(stack); }
-    if(score !== -9999 && vorp > 0 && p.pos==="QB"){ /* 2QB scarcity already in VORP */ }
-    return {p, vorp, score, why, stack};
+    // Analyst / prop-market intel
+    if(p.intel){
+      if(p.intel.t!=null){ score *= 1.04; why.push("⭐ analyst target: "+(p.intel.t||"flagged as a value pick")); }
+      if(p.intel.lean>0){ score *= 1.03; why.push("▲ prop market leans bullish on his volume"); }
+      if(p.intel.lean<0){ score *= 0.97; why.push("▼ prop market leans bearish on his volume"); }
+    }
+    // Will he survive to my next pick? (snake, slot-aware)
+    let backRisk = null;
+    if(p.adp && horizon){
+      if(p.adp <= horizon.next){ backRisk="gone"; why.push("🔥 won't make it back to your pick #"+horizon.next+" (ADP "+p.adp+")"); }
+      else if(p.adp <= horizon.next+8){ backRisk="risky"; why.push("⏳ coin-flip to survive until pick #"+horizon.next+" (ADP "+p.adp+")"); }
+    }
+    return {p, vorp, score, why, stack, backRisk};
   }).filter(x=>x.score > -9000);
 
   scored.sort((a,b)=>b.score-a.score);
@@ -559,6 +1181,15 @@ function commit(){ save(); render(); }
 const $ = s => document.querySelector(s);
 
 function posBadge(pos){ return '<span class="pos '+pos+'">'+pos+'</span>'; }
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
+function intelBadges(p){
+  if(!p.intel) return "";
+  let h="";
+  if(p.intel.t!=null) h += '<span class="ib gold" title="Analyst target: '+esc(p.intel.t||"flagged as a value pick")+'">⭐</span>';
+  if(p.intel.lean>0) h += '<span class="ib bull" title="'+esc(p.intel.p)+'">▲</span>';
+  if(p.intel.lean<0) h += '<span class="ib bear" title="'+esc(p.intel.p)+'">▼</span>';
+  return h;
+}
 
 function renderTabs(){
   const tabs = ["ALL"].concat(POSITIONS);
@@ -578,7 +1209,8 @@ function renderPool(){
     p, vorp: p.proj-(repl[p.pos]||0),
     taken: !!S.taken[p.id], mine: S.mine.includes(p.id),
     score: vorpMap[p.id] ? vorpMap[p.id].score : -Infinity,
-    stack: vorpMap[p.id] ? vorpMap[p.id].stack : null
+    stack: vorpMap[p.id] ? vorpMap[p.id].stack : null,
+    backRisk: vorpMap[p.id] ? vorpMap[p.id].backRisk : null
   }));
 
   if(S.ui.pos!=="ALL") rows = rows.filter(r=>r.p.pos===S.ui.pos);
@@ -593,6 +1225,7 @@ function renderPool(){
       case "team": av=a.p.team; bv=b.p.team; return dir*av.localeCompare(bv);
       case "pos": av=a.p.pos; bv=b.p.pos; return dir*av.localeCompare(bv) || b.vorp-a.vorp;
       case "proj": return dir*(a.p.proj-b.p.proj);
+      case "adp": return dir*((a.p.adp||999)-(b.p.adp||999));
       case "rank": case "vorp": default: return dir*(a.vorp-b.vorp);
     }
   });
@@ -610,13 +1243,14 @@ function renderPool(){
         : '<button class="pick" data-pick="'+r.p.id+'">✓ MINE</button><button class="kill" data-take="'+r.p.id+'">✕ taken</button>';
     return '<tr class="'+cls+'">'+
       '<td class="mono" style="color:var(--faint)">'+(i+1)+'</td>'+
-      '<td><span class="pname">'+r.p.name+'</span>'+(r.stack?'<span class="stackchip">🔗 stack</span>':'')+'</td>'+
+      '<td><span class="pname">'+r.p.name+'</span>'+intelBadges(r.p)+(r.stack?'<span class="stackchip">🔗 stack</span>':'')+(r.backRisk==="gone"?'<span class="ib" title="Won\'t make it back to your next pick">🔥</span>':r.backRisk==="risky"?'<span class="ib" title="Coin-flip to survive to your next pick">⏳</span>':'')+'</td>'+
       '<td>'+posBadge(r.p.pos)+'</td>'+
       '<td class="mono" style="color:var(--dim)">'+r.p.team+'</td>'+
       '<td><span class="proj mono" data-edit="'+r.p.id+'">'+r.p.proj+'</span></td>'+
       '<td class="mono" style="color:'+(r.vorp>=0?'var(--green)':'var(--faint)')+'">'+(r.vorp>0?"+":"")+Math.round(r.vorp)+'</td>'+
+      '<td class="mono" style="color:var(--dim)">'+(r.p.adp||"—")+'</td>'+
       '<td><div class="act">'+act+'</div></td></tr>';
-  }).join("") || '<tr><td colspan="7" class="empty">No players match.</td></tr>';
+  }).join("") || '<tr><td colspan="8" class="empty">No players match.</td></tr>';
 }
 
 function renderBest(){
@@ -626,7 +1260,14 @@ function renderBest(){
   if(!top){ hero.innerHTML = '<div class="empty">Board is empty — nice draft!</div>'; $("#baList").innerHTML=""; return; }
   const p = top.p;
   const why = top.why.length ? "▸ " + top.why.join("<br>▸ ") : "▸ best raw value on the board";
-  hero.innerHTML =
+  const h = nextPickHorizon();
+  let pickline = "";
+  if(h){
+    pickline = '<div class="pickline">Pick <b class="mono">#'+h.cur+'</b> on the clock'+
+      (h.onClock ? ' — <b style="color:var(--green)">THAT\'S YOU</b>' : '') +
+      ' · your next: <b class="mono">#'+h.mine0+'</b>'+(h.mine1?' then <b class="mono">#'+h.mine1+'</b>':'')+'</div>';
+  }
+  hero.innerHTML = pickline +
     '<div class="toppick">'+
       '<div class="tag">⭐ Top Pick Right Now</div>'+
       '<div class="name">'+p.name+'</div>'+
@@ -641,8 +1282,8 @@ function renderBest(){
     '<div class="barow">'+
       '<div class="rk mono">'+(i+2)+'</div>'+
       posBadge(s.p.pos)+
-      '<div class="info"><div class="nm">'+s.p.name+(s.stack?'<span class="stackchip">🔗</span>':'')+'</div>'+
-      '<div class="sm">'+s.p.team+' · '+s.p.proj+' pts</div></div>'+
+      '<div class="info"><div class="nm">'+s.p.name+intelBadges(s.p)+(s.stack?'<span class="stackchip">🔗</span>':'')+(s.backRisk==="gone"?' 🔥':s.backRisk==="risky"?' ⏳':'')+'</div>'+
+      '<div class="sm">'+s.p.team+' · '+s.p.proj+' pts'+(s.p.adp?' · ADP '+s.p.adp:'')+'</div></div>'+
       '<div class="val mono">+'+Math.round(s.vorp)+'</div>'+
       '<button class="pick" data-pick="'+s.p.id+'">✓</button>'+
       '<button class="kill" data-take="'+s.p.id+'">✕</button>'+
@@ -730,7 +1371,7 @@ document.addEventListener("click", e=>{
   if(t.dataset.undoentry!=null) return undoEntry(+t.dataset.undoentry);
   if(t.dataset.pos){ S.ui.pos=t.dataset.pos; save(); renderTabs(); renderPool(); return; }
   if(t.dataset.sort){
-    if(S.ui.sort===t.dataset.sort) S.ui.dir*=-1; else { S.ui.sort=t.dataset.sort; S.ui.dir = (t.dataset.sort==="name"||t.dataset.sort==="team"||t.dataset.sort==="pos")?1:-1; }
+    if(S.ui.sort===t.dataset.sort) S.ui.dir*=-1; else { S.ui.sort=t.dataset.sort; S.ui.dir = (["name","team","pos","adp"].includes(t.dataset.sort))?1:-1; }
     save(); renderPool();
   }
 });
@@ -745,6 +1386,7 @@ document.addEventListener("keydown", e=>{
 /* Settings modal */
 $("#settingsBtn").addEventListener("click", ()=>{
   $("#setTeams").value=S.settings.teams; $("#setRoster").value=S.settings.roster;
+  $("#setSlot").value=S.settings.slot; $("#setScoring").value=S.settings.scoring;
   for(const pos of POSITIONS) $("#min"+pos).value=S.settings.min[pos]||0;
   $("#settingsOverlay").classList.add("show");
 });
@@ -752,6 +1394,8 @@ $("#settingsCancel").addEventListener("click", ()=>$("#settingsOverlay").classLi
 $("#settingsSave").addEventListener("click", ()=>{
   S.settings.teams = Math.max(4, +$("#setTeams").value||12);
   S.settings.roster = Math.max(8, +$("#setRoster").value||16);
+  S.settings.slot = Math.max(1, +$("#setSlot").value||12);
+  S.settings.scoring = $("#setScoring").value==="half" ? "half" : "ppr";
   for(const pos of POSITIONS) S.settings.min[pos] = Math.max(0, +$("#min"+pos).value||0);
   $("#settingsOverlay").classList.remove("show");
   commit();
