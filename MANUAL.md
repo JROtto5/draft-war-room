@@ -11,6 +11,10 @@ cards (`C` compare, `Q` queue, boost/fade from the Intel tab), pin a **Plan**
 target per round, rehearse with 🎲 Mocks and 🧪 Scenarios, export your prep
 file to your phone.
 
+## Drafting on Sleeper?
+Settings → paste the league ID (names import themselves), then hit **🔄 Sync**
+when the room opens — every pick marks itself. See SYNC.md.
+
 ## Draft day
 Flip **🔴 Live**. Mark every pick — `✓ MINE` for yours, `✕ taken` for theirs
 (📋 Paste to catch up; click the pick banner to resync the number). The panic
@@ -32,4 +36,4 @@ Season HQ takes over the hero: 📡 waiver radar, 📰 your players' headlines,
 ## Every summer
 `./tools/refresh.sh new-projections.csv new-board.csv` then push. Done.
 
-Full docs: README · PREP · ENGINE · PERF · DATA · ARCHITECTURE · BESTPRACTICES · PRIVACY · CHANGELOG.
+Any-league setup: LEAGUES.md · Live sync: SYNC.md · In-season: SEASONS.md · Full docs: README · PREP · ENGINE · PERF · DATA · ARCHITECTURE · BESTPRACTICES · PRIVACY · CHANGELOG.

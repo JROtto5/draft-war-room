@@ -3,7 +3,7 @@
 ![player card](assets/player-card.png)
 
 
-The full draft-day cockpit for a **12-team superflex league, 6-pt passing TDs, slot 12**. Static site — pushes to `main` auto-deploy on Vercel. Installable PWA, works offline once loaded.
+The full draft-day cockpit for **any league shape** (built for a 12-team superflex, 6-pt pass TD, slot 12). Live Sleeper draft sync, real 2026 byes and schedules, three seasons of usage-grade stats on every player. Static site — pushes to `main` auto-deploy on Vercel. Installable PWA, works offline once loaded.
 
 **House key to enter:** the classic. 🔑
 

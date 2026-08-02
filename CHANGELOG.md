@@ -1,5 +1,13 @@
 # Changelog — Draft War Room
 
+## v8.0 (2026-08-02) — The fifth hundred (#401–#500)
+🔄 Live Sleeper draft sync (picks mark themselves) · real 2026 byes + season
+SOS from ESPN schedules · red-zone/snap/playoff/spike-week usage layer ·
+any-league roster shapes with auction values · traded-pick ownership, board
+editing and replay · voice notes, rebindable keys · modular architecture
+(core/views/wire/boot) with per-module budgets, goldens, coverage and a
+19-check E2E · Season HQ: title odds, FAAB hints, digests, calendars.
+
 ## v7.0 (2026-08-02) — The fourth hundred (#301–#400)
 Engine: pure kernel (engine.js), adaptive bots that learn each team's reach
 tendency, run contagion, risk dial, sim-count setting, offense environment,
