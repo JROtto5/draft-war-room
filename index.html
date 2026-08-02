@@ -102,6 +102,12 @@ header{
 .ptab.on{background:var(--green); border-color:var(--green); color:#08120c}
 .toggle{display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--dim); cursor:pointer; user-select:none}
 .toggle input{accent-color:var(--green)}
+.toolbar{border-bottom:none}
+.toolbar2{padding-top:0; border-bottom:1px solid var(--line)}
+.fsel{background:var(--bg2); border:1px solid var(--line); border-radius:8px; color:var(--text); padding:7px 10px; font-family:inherit; font-size:12px; outline:none; cursor:pointer}
+.fsel:focus{border-color:var(--green)}
+.rd{display:inline-block; font-size:10px; font-weight:700; color:var(--dim); background:var(--bg2); border:1px solid var(--line); border-radius:5px; padding:1px 5px; white-space:nowrap}
+.rd.now{color:var(--gold); border-color:rgba(255,201,77,.4)}
 table{width:100%; border-collapse:collapse}
 .tablewrap{max-height:calc(100vh - 210px); overflow-y:auto}
 thead th{
@@ -223,6 +229,19 @@ footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--fa
         <div class="postabs" id="posTabs"></div>
         <label class="toggle"><input type="checkbox" id="showTaken"> show taken</label>
       </div>
+      <div class="toolbar toolbar2">
+        <select class="fsel" id="roundFilter">
+          <option value="ALL">All rounds</option>
+          <option value="NEXT">🎯 My next 2 rounds</option>
+          <option value="1-2">Rd 1–2</option><option value="3-4">Rd 3–4</option>
+          <option value="5-6">Rd 5–6</option><option value="7-8">Rd 7–8</option>
+          <option value="9-10">Rd 9–10</option><option value="11-12">Rd 11–12</option>
+          <option value="13-14">Rd 13–14</option><option value="15-16">Rd 15–16</option>
+        </select>
+        <label class="toggle"><input type="checkbox" id="fTargets"> ⭐ targets only</label>
+        <label class="toggle"><input type="checkbox" id="fStacks"> 🔗 stack fits</label>
+        <label class="toggle"><input type="checkbox" id="fSurvive"> ⏳ lasts to my pick</label>
+      </div>
       <div class="tablewrap">
         <table>
           <thead>
@@ -234,6 +253,7 @@ footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--fa
               <th data-sort="proj" style="width:70px">Proj</th>
               <th data-sort="vorp" style="width:70px">Value</th>
               <th data-sort="adp" style="width:56px">ADP</th>
+              <th data-sort="rd" style="width:64px">Rd</th>
               <th style="width:150px"></th>
             </tr>
           </thead>
@@ -1000,7 +1020,7 @@ const defaultState = () => ({
   custom: [],           // [name,team,pos,proj,id]
   overrides: {},        // id -> proj
   settings: { teams:12, roster:16, slot:12, scoring:"ppr", min:{QB:2,RB:3,WR:3,TE:1,DEF:1} },
-  ui: { pos:"ALL", showTaken:false, sort:"vorp", dir:-1 }
+  ui: { pos:"ALL", showTaken:false, sort:"vorp", dir:-1, round:"ALL", targetsOnly:false, stacksOnly:false, survivors:false }
 });
 let S = defaultState();
 
@@ -1044,6 +1064,23 @@ function myOverallPicks(){
   for(let r=1;r<=S.settings.roster;r++) out.push((r-1)*t + (r%2===1 ? slot : t+1-slot));
   return out;
 }
+/* Expected draft round per player: from ADP, or estimated (~) from projection
+   rank when the market board doesn't list him. Window spans 1–2 rounds. */
+function roundInfo(players){
+  const t = S.settings.teams, cap = t*S.settings.roster, R = S.settings.roster;
+  const sorted = players.slice().sort((a,b)=>b.proj-a.proj);
+  const rank = {}; sorted.forEach((p,i)=>rank[p.id]=i+1);
+  const m = {};
+  for(const p of players){
+    const a = p.adp || rank[p.id];
+    const est = !p.adp;
+    if(a > cap){ m[p.id] = {rd:99, ud:true, est, label:"UD"}; continue; }
+    const rd = Math.ceil(a/t), rd2 = Math.min(rd+1, R);
+    m[p.id] = {rd, ud:false, est, label:(est?"~":"")+"R"+rd+(rd2>rd?"–"+rd2:"")};
+  }
+  return m;
+}
+
 function nextPickHorizon(){
   const cur = S.log.length + 1;               // pick currently on the clock
   const mine = myOverallPicks().filter(x=>x>=cur);
@@ -1203,6 +1240,7 @@ function renderPool(){
   for(const s of scored) vorpMap[s.p.id]=s;
   const players = allPlayers();
   const repl = replacementLevels(players);
+  const rinfo = roundInfo(players);
   const q = $("#search").value.trim().toLowerCase();
 
   let rows = players.map(p=>({
@@ -1210,12 +1248,25 @@ function renderPool(){
     taken: !!S.taken[p.id], mine: S.mine.includes(p.id),
     score: vorpMap[p.id] ? vorpMap[p.id].score : -Infinity,
     stack: vorpMap[p.id] ? vorpMap[p.id].stack : null,
-    backRisk: vorpMap[p.id] ? vorpMap[p.id].backRisk : null
+    backRisk: vorpMap[p.id] ? vorpMap[p.id].backRisk : null,
+    rd: rinfo[p.id]
   }));
 
   if(S.ui.pos!=="ALL") rows = rows.filter(r=>r.p.pos===S.ui.pos);
   if(q) rows = rows.filter(r=> r.p.name.toLowerCase().includes(q) || r.p.team.toLowerCase().includes(q));
   if(!S.ui.showTaken) rows = rows.filter(r=>!r.taken);
+  if(S.ui.round!=="ALL"){
+    let lo, hi;
+    if(S.ui.round==="NEXT"){
+      const h = nextPickHorizon();
+      const t = S.settings.teams;
+      lo = h ? Math.ceil(h.mine0/t) : 1; hi = Math.min(lo+1, S.settings.roster);
+    } else { [lo,hi] = S.ui.round.split("-").map(Number); }
+    rows = rows.filter(r=> !r.rd.ud && r.rd.rd>=lo && r.rd.rd<=hi);
+  }
+  if(S.ui.targetsOnly) rows = rows.filter(r=> r.p.intel && r.p.intel.t!=null);
+  if(S.ui.stacksOnly) rows = rows.filter(r=> r.stack);
+  if(S.ui.survivors) rows = rows.filter(r=> r.backRisk!=="gone" && !r.taken && !r.mine);
 
   const dir = S.ui.dir, key = S.ui.sort;
   rows.sort((a,b)=>{
@@ -1226,6 +1277,7 @@ function renderPool(){
       case "pos": av=a.p.pos; bv=b.p.pos; return dir*av.localeCompare(bv) || b.vorp-a.vorp;
       case "proj": return dir*(a.p.proj-b.p.proj);
       case "adp": return dir*((a.p.adp||999)-(b.p.adp||999));
+      case "rd": return dir*(a.rd.rd-b.rd.rd) || (a.p.adp||999)-(b.p.adp||999);
       case "rank": case "vorp": default: return dir*(a.vorp-b.vorp);
     }
   });
@@ -1233,6 +1285,8 @@ function renderPool(){
   document.querySelectorAll("thead th").forEach(th=>{
     th.classList.toggle("sorton", th.dataset.sort===key);
   });
+
+  const curRd = Math.min(Math.ceil((S.log.length+1)/S.settings.teams), S.settings.roster);
 
   $("#poolBody").innerHTML = rows.map((r,i)=>{
     const cls = r.mine ? "mine-row" : (r.taken ? "taken" : "");
@@ -1249,12 +1303,14 @@ function renderPool(){
       '<td><span class="proj mono" data-edit="'+r.p.id+'">'+r.p.proj+'</span></td>'+
       '<td class="mono" style="color:'+(r.vorp>=0?'var(--green)':'var(--faint)')+'">'+(r.vorp>0?"+":"")+Math.round(r.vorp)+'</td>'+
       '<td class="mono" style="color:var(--dim)">'+(r.p.adp||"—")+'</td>'+
+      '<td><span class="rd'+(curRd && !r.rd.ud && r.rd.rd<=curRd?" now":"")+'" title="'+(r.rd.est?"Estimated from projection rank (no market ADP)":"Expected round window from ADP")+'">'+r.rd.label+'</span></td>'+
       '<td><div class="act">'+act+'</div></td></tr>';
-  }).join("") || '<tr><td colspan="8" class="empty">No players match.</td></tr>';
+  }).join("") || '<tr><td colspan="9" class="empty">No players match.</td></tr>';
 }
 
 function renderBest(){
   const {scored} = scoreBoard();
+  const rinfo = roundInfo(allPlayers());
   const top = scored[0];
   const hero = $("#hero");
   if(!top){ hero.innerHTML = '<div class="empty">Board is empty — nice draft!</div>'; $("#baList").innerHTML=""; return; }
@@ -1271,7 +1327,7 @@ function renderBest(){
     '<div class="toppick">'+
       '<div class="tag">⭐ Top Pick Right Now</div>'+
       '<div class="name">'+p.name+'</div>'+
-      '<div class="meta">'+posBadge(p.pos)+' &nbsp;'+p.team+' &nbsp;·&nbsp; <span class="mono">'+p.proj+' proj</span> &nbsp;·&nbsp; <span class="mono" style="color:var(--green)">+'+Math.round(top.vorp)+' vs replacement</span></div>'+
+      '<div class="meta">'+posBadge(p.pos)+' &nbsp;'+p.team+' &nbsp;·&nbsp; <span class="mono">'+p.proj+' proj</span> &nbsp;·&nbsp; <span class="mono" style="color:var(--green)">+'+Math.round(top.vorp)+' vs replacement</span>'+(rinfo[p.id]&&!rinfo[p.id].ud?' &nbsp;·&nbsp; <span class="rd">'+rinfo[p.id].label+'</span>':'')+'</div>'+
       '<div class="why">'+why+'</div>'+
       '<div class="actions">'+
         '<button class="pick" data-pick="'+p.id+'">✓ DRAFT HIM</button>'+
@@ -1283,7 +1339,7 @@ function renderBest(){
       '<div class="rk mono">'+(i+2)+'</div>'+
       posBadge(s.p.pos)+
       '<div class="info"><div class="nm">'+s.p.name+intelBadges(s.p)+(s.stack?'<span class="stackchip">🔗</span>':'')+(s.backRisk==="gone"?' 🔥':s.backRisk==="risky"?' ⏳':'')+'</div>'+
-      '<div class="sm">'+s.p.team+' · '+s.p.proj+' pts'+(s.p.adp?' · ADP '+s.p.adp:'')+'</div></div>'+
+      '<div class="sm">'+s.p.team+' · '+s.p.proj+' pts'+(s.p.adp?' · ADP '+s.p.adp:'')+(rinfo[s.p.id]&&!rinfo[s.p.id].ud?' · '+rinfo[s.p.id].label:'')+'</div></div>'+
       '<div class="val mono">+'+Math.round(s.vorp)+'</div>'+
       '<button class="pick" data-pick="'+s.p.id+'">✓</button>'+
       '<button class="kill" data-take="'+s.p.id+'">✕</button>'+
@@ -1377,6 +1433,10 @@ document.addEventListener("click", e=>{
 });
 $("#search").addEventListener("input", renderPool);
 $("#showTaken").addEventListener("change", e=>{ S.ui.showTaken=e.target.checked; save(); renderPool(); });
+$("#roundFilter").addEventListener("change", e=>{ S.ui.round=e.target.value; save(); renderPool(); });
+$("#fTargets").addEventListener("change", e=>{ S.ui.targetsOnly=e.target.checked; save(); renderPool(); });
+$("#fStacks").addEventListener("change", e=>{ S.ui.stacksOnly=e.target.checked; save(); renderPool(); });
+$("#fSurvive").addEventListener("change", e=>{ S.ui.survivors=e.target.checked; save(); renderPool(); });
 $("#undoBtn").addEventListener("click", undoLast);
 document.addEventListener("keydown", e=>{
   if((e.ctrlKey||e.metaKey) && e.key==="z"){ e.preventDefault(); undoLast(); }
@@ -1441,6 +1501,11 @@ $("#resetBtn").addEventListener("click", ()=>{
 
 /* ---------- Boot ---------- */
 load();
+$("#showTaken").checked = S.ui.showTaken;
+$("#roundFilter").value = S.ui.round || "ALL";
+$("#fTargets").checked = !!S.ui.targetsOnly;
+$("#fStacks").checked = !!S.ui.stacksOnly;
+$("#fSurvive").checked = !!S.ui.survivors;
 render();
 </script>
 </body>
