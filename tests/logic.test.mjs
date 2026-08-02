@@ -36,7 +36,8 @@ ctx.removeEventListener = () => {};
 vm.createContext(ctx);
 vm.runInContext(readFileSync(new URL("../data.js", import.meta.url), "utf8"), ctx);
 vm.runInContext(readFileSync(new URL("../engine.js", import.meta.url), "utf8"), ctx);
-vm.runInContext(readFileSync(new URL("../app.js", import.meta.url), "utf8"), ctx);
+for(const mod of ["core.js","views.js","wire.js","boot.js"])
+  vm.runInContext(readFileSync(new URL("../"+mod, import.meta.url), "utf8"), ctx);
 const g = name => vm.runInContext(name, ctx);
 
 // fuzzy search

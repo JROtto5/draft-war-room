@@ -8,7 +8,7 @@ function anyProxy(){const fn=function(){};return new Proxy(fn,{get(t,k){if(k===S
 const ctx = {console,JSON,Math,Array,Object,String,Number,parseFloat,parseInt,isNaN,setTimeout:()=>0,clearTimeout:()=>{},document:anyProxy(),localStorage:anyProxy(),navigator:anyProxy(),location:{protocol:"file:",search:"",hash:""},window:{},alert:()=>{},confirm:()=>false,prompt:()=>null,requestAnimationFrame:()=>0,MutationObserver:anyProxy(),matchMedia:()=>({matches:false,addEventListener:()=>{}}),Date,fetch:()=>Promise.reject(new Error("x")),Blob:anyProxy(),URL:anyProxy(),FileReader:anyProxy(),indexedDB:{open:()=>({})}};
 ctx.window=ctx; ctx.addEventListener=()=>{}; ctx.removeEventListener=()=>{};
 vm.createContext(ctx);
-for(const f of ["data.js","engine.js","app.js"]) vm.runInContext(readFileSync(new URL("../"+f, import.meta.url),"utf8"), ctx);
+for(const f of ["data.js","engine.js","core.js","views.js","wire.js","boot.js"]) vm.runInContext(readFileSync(new URL("../"+f, import.meta.url),"utf8"), ctx);
 const g = s => vm.runInContext(s, ctx);
 
 const SUBJECTS = ["Josh Allen","Joe Burrow","Bijan Robinson","Brock Bowers","Jahmyr Gibbs"];

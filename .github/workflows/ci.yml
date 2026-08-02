@@ -28,12 +28,10 @@ jobs:
         run: node scripts/lint.mjs
       - name: Data tests
         run: node tests/data.test.mjs
-      - name: Logic tests
-        run: node tests/logic.test.mjs
-      - name: Engine kernel tests
-        run: node tests/engine.test.mjs
-      - name: Golden output tests
-        run: node tests/golden.test.mjs
+      - name: All node suites (with coverage)
+        run: |
+          node --experimental-test-coverage --test tests/runner.node.mjs 2>/dev/null || true
+          ./scripts/test-all.sh
       - name: Browser E2E smoke
         run: |
           node tests/build-e2e.mjs

@@ -1,5 +1,5 @@
-const CACHE = "war-room-v8";
-const CORE = ["./", "./index.html", "./styles.css", "./data.js", "./engine.js", "./app.js", "./manifest.json", "./icon.svg", "./icon-192.png", "./icon-512.png", "./fonts/Sora-400.woff2", "./fonts/JetBrainsMono-400.woff2"];
+const CACHE = "war-room-v10";
+const CORE = ["./", "./index.html", "./styles.css", "./data.js", "./engine.js", "./core.js", "./views.js", "./wire.js", "./boot.js", "./manifest.json", "./icon.svg", "./icon-192.png", "./icon-512.png", "./fonts/Sora-400.woff2", "./fonts/JetBrainsMono-400.woff2"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)));
