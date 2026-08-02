@@ -1,0 +1,27 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax checks
+        run: |
+          node --check app.js
+          node --check data.js
+          node --check sw.js
+      - name: HTML sanity
+        run: |
+          test "$(grep -c '<script src=' index.html)" = "2"
+          ! grep -q '<style>' index.html
+      - name: Data tests
+        run: node tests/data.test.mjs
+      - name: Logic tests
+        run: node tests/logic.test.mjs
