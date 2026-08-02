@@ -131,6 +131,7 @@ thead th.sorton{color:var(--green)}
 tbody td{padding:8px 10px; border-bottom:1px solid rgba(36,50,71,.5); font-size:13.5px}
 tbody tr{transition:.1s}
 tbody tr:hover{background:var(--panel2)}
+tr.kbsel{outline:2px solid var(--green); outline-offset:-2px}
 tr.taken{opacity:.32}
 tr.taken .pname{text-decoration:line-through}
 tr.mine-row{background:rgba(47,212,122,.07)}
@@ -230,6 +231,7 @@ footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--fa
   <span class="savebadge" id="saveBadge">Autosave on</span>
   <button class="hbtn" id="undoBtn" title="Undo last board action">↩ Undo</button>
   <button class="hbtn" id="mocksBtn">🎲 Mocks</button>
+  <button class="hbtn" id="pasteBtn">📋 Paste</button>
   <button class="hbtn" id="addBtn">+ Player</button>
   <button class="hbtn" id="settingsBtn">⚙ Settings</button>
   <button class="hbtn" id="exportBtn">⇩ Export</button>
@@ -268,6 +270,7 @@ footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--fa
         <label class="toggle"><input type="checkbox" id="fTargets"> ⭐ targets only</label>
         <label class="toggle"><input type="checkbox" id="fStacks"> 🔗 stack fits</label>
         <label class="toggle"><input type="checkbox" id="fSurvive"> ⏳ lasts to my pick</label>
+        <span class="mono" id="poolCount" style="margin-left:auto; font-size:11px; color:var(--faint)"></span>
       </div>
       <div class="tablewrap">
         <table>
@@ -352,6 +355,22 @@ footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--fa
     <div class="foot">
       <button class="hbtn" id="addCancel">Cancel</button>
       <button class="hbtn" id="addSave" style="border-color:var(--green);color:var(--green)">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Paste picks modal -->
+<div class="overlay" id="pasteOverlay">
+  <div class="modal">
+    <h3>📋 Paste Drafted Players</h3>
+    <div class="body">
+      <div class="note" style="margin:0 0 10px">One player per line (a copy-paste from your draft platform's pick log works — extra text around names is fine). Everyone matched gets marked <b>taken</b>. Your own picks still go through ✓ MINE.</div>
+      <textarea id="pasteText" rows="10" style="width:100%; background:var(--bg2); border:1px solid var(--line); border-radius:8px; color:var(--text); padding:10px; font-family:'JetBrains Mono',monospace; font-size:12px; outline:none" placeholder="Ja'Marr Chase&#10;Bijan Robinson&#10;RB - Jahmyr Gibbs (DET)"></textarea>
+      <div class="note" id="pasteResult" style="margin-top:10px"></div>
+    </div>
+    <div class="foot">
+      <button class="hbtn" id="pasteCancel">Close</button>
+      <button class="hbtn" id="pasteGo" style="border-color:var(--green);color:var(--green)">Mark as taken</button>
     </div>
   </div>
 </div>
@@ -1774,6 +1793,30 @@ function renderMocks(){
 const $ = s => document.querySelector(s);
 
 function posBadge(pos){ return '<span class="pos '+pos+'">'+pos+'</span>'; }
+
+/* Fuzzy player search: punctuation-insensitive, multi-token AND with
+   word-prefix matching, plus initials/subsequence for shorthand
+   ("jsn" → Jaxon Smith-Njigba, "cmc" → Christian McCaffrey). */
+function nq(s){ return s.toLowerCase().replace(/[.'’\-]/g,"").trim(); }
+function isSubseq(needle, hay){
+  let i=0;
+  for(let j=0; j<hay.length && i<needle.length; j++) if(hay[j]===needle[i]) i++;
+  return i===needle.length;
+}
+function matchesQuery(p, q){
+  const toks = nq(q).split(/\s+/).filter(Boolean);
+  if(!toks.length) return true;
+  const hay = nq(p.name+" "+p.team);
+  const words = nq(p.name).split(/\s+/);
+  const ok = toks.every(tok => hay.includes(tok) || words.some(w=>w.startsWith(tok)));
+  if(ok) return true;
+  if(toks.length===1 && toks[0].length>=2){
+    const tok = toks[0];
+    if(words.map(w=>w[0]).join("").includes(tok)) return true;
+    if(tok.length>=3 && isSubseq(tok, words.join(""))) return true;
+  }
+  return false;
+}
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
 function intelBadges(p){
   if(!p.intel) return "";
@@ -1810,7 +1853,7 @@ function renderPool(){
   }));
 
   if(S.ui.pos!=="ALL") rows = rows.filter(r=>r.p.pos===S.ui.pos);
-  if(q) rows = rows.filter(r=> r.p.name.toLowerCase().includes(q) || r.p.team.toLowerCase().includes(q));
+  if(q) rows = rows.filter(r=> matchesQuery(r.p, q));
   if(!S.ui.showTaken) rows = rows.filter(r=>!r.taken);
   if(S.ui.round!=="ALL"){
     let lo, hi;
@@ -1852,7 +1895,7 @@ function renderPool(){
       : r.taken
         ? '<button class="undo1" data-untake="'+r.p.id+'">↩ restore</button>'
         : '<button class="pick" data-pick="'+r.p.id+'">✓ MINE</button><button class="kill" data-take="'+r.p.id+'">✕ taken</button>';
-    return '<tr class="'+cls+'">'+
+    return '<tr class="'+cls+'" data-pid="'+r.p.id+'">'+
       '<td class="mono" style="color:var(--faint)">'+(i+1)+'</td>'+
       '<td><span class="pname">'+r.p.name+'</span>'+intelBadges(r.p)+(r.stack?'<span class="stackchip">🔗 stack</span>':'')+(!r.taken&&!r.mine&&r.p.adp&&(S.log.length+1-r.p.adp)>=10?'<span class="ib" title="Falling: '+(S.log.length+1-r.p.adp)+' picks past ADP '+r.p.adp+'">💎</span>':'')+(r.backRisk==="gone"?'<span class="ib" title="Won\'t make it back to your next pick">🔥</span>':r.backRisk==="risky"?'<span class="ib" title="Coin-flip to survive to your next pick">⏳</span>':'')+'</td>'+
       '<td>'+posBadge(r.p.pos)+'<span class="tier t'+Math.min(tm[r.p.id],5)+'">T'+tm[r.p.id]+'</span></td>'+
@@ -1863,6 +1906,17 @@ function renderPool(){
       '<td><span class="rd'+(curRd && !r.rd.ud && r.rd.rd<=curRd?" now":"")+'" title="'+(r.rd.est?"Estimated from projection rank (no market ADP)":"Expected round window from ADP")+'">'+r.rd.label+'</span></td>'+
       '<td><div class="act">'+act+'</div></td></tr>';
   }).join("") || '<tr><td colspan="9" class="empty">No players match.</td></tr>';
+  $("#poolCount").textContent = rows.length + " players";
+  window._poolIds = rows.filter(r=>!r.taken && !r.mine).length ? rows.map(r=>r.p.id) : [];
+  applyKbSel();
+}
+
+/* Keyboard drafting: arrows move the highlight, M = my pick, T/X = taken */
+let kbSel = -1;
+function applyKbSel(){
+  const trs = document.querySelectorAll("#poolBody tr");
+  trs.forEach((tr,i)=>tr.classList.toggle("kbsel", i===kbSel));
+  if(kbSel>=0 && trs[kbSel]) trs[kbSel].scrollIntoView({block:"nearest"});
 }
 
 function renderBest(){
@@ -2018,7 +2072,8 @@ document.addEventListener("click", e=>{
     save(); renderPool();
   }
 });
-$("#search").addEventListener("input", renderPool);
+let searchTimer=null;
+$("#search").addEventListener("input", ()=>{ clearTimeout(searchTimer); searchTimer=setTimeout(renderPool, 120); });
 $("#showTaken").addEventListener("change", e=>{ S.ui.showTaken=e.target.checked; save(); renderPool(); });
 $("#roundFilter").addEventListener("change", e=>{ S.ui.round=e.target.value; save(); renderPool(); });
 $("#fTargets").addEventListener("change", e=>{ S.ui.targetsOnly=e.target.checked; save(); renderPool(); });
@@ -2026,8 +2081,50 @@ $("#fStacks").addEventListener("change", e=>{ S.ui.stacksOnly=e.target.checked; 
 $("#fSurvive").addEventListener("change", e=>{ S.ui.survivors=e.target.checked; save(); renderPool(); });
 $("#undoBtn").addEventListener("click", undoLast);
 document.addEventListener("keydown", e=>{
-  if((e.ctrlKey||e.metaKey) && e.key==="z"){ e.preventDefault(); undoLast(); }
-  if(e.key==="/" && document.activeElement!==$("#search")){ e.preventDefault(); $("#search").focus(); }
+  if((e.ctrlKey||e.metaKey) && e.key==="z"){ e.preventDefault(); undoLast(); return; }
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+  if(e.key==="/" && !typing){ e.preventDefault(); $("#search").focus(); return; }
+  if(e.key==="Escape"){
+    if(typing) document.activeElement.blur();
+    else { kbSel=-1; applyKbSel(); }
+    return;
+  }
+  if(typing || document.querySelector(".overlay.show")) return;
+  const trs = document.querySelectorAll("#poolBody tr");
+  if(e.key==="ArrowDown"){ e.preventDefault(); kbSel=Math.min(kbSel+1, trs.length-1); applyKbSel(); return; }
+  if(e.key==="ArrowUp"){ e.preventDefault(); kbSel=Math.max(kbSel-1, 0); applyKbSel(); return; }
+  if(kbSel>=0 && trs[kbSel]){
+    const id = trs[kbSel].dataset.pid;
+    if(!id) return;
+    const k = e.key.toLowerCase();
+    if(k==="m"){ e.preventDefault(); if(!S.mine.includes(id)) pickMine(id); }
+    if(k==="t"||k==="x"){ e.preventDefault(); if(!S.taken[id] && !S.mine.includes(id)) markTaken(id); }
+  }
+});
+
+/* Paste picks modal */
+$("#pasteBtn").addEventListener("click", ()=>{ $("#pasteResult").textContent=""; $("#pasteOverlay").classList.add("show"); $("#pasteText").focus(); });
+$("#pasteCancel").addEventListener("click", ()=>$("#pasteOverlay").classList.remove("show"));
+$("#pasteGo").addEventListener("click", ()=>{
+  const players = allPlayers();
+  const lines = $("#pasteText").value.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+  let marked=0, skipped=0; const missed=[];
+  for(const line of lines){
+    const ln = nq(line);
+    let best=null;
+    for(const p of players){
+      const pn = normName(p.name);
+      if(ln===pn || ln.includes(pn) || (pn.includes(ln) && ln.length>=5)){
+        if(!best || p.name.length>best.name.length) best=p;
+      }
+    }
+    if(!best){ missed.push(line); continue; }
+    if(S.taken[best.id] || S.mine.includes(best.id)){ skipped++; continue; }
+    S.taken[best.id]=true; S.log.push({id:best.id, who:"other"}); marked++;
+  }
+  if(marked) commit();
+  $("#pasteResult").innerHTML = '✅ Marked <b>'+marked+'</b> taken'+(skipped?' · '+skipped+' already off the board':'')+
+    (missed.length ? '<br>⚠️ No match: '+missed.map(esc).join(", ") : '');
 });
 
 /* Mocks modal */
