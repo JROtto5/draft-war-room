@@ -386,3 +386,6 @@ body.offline .savebadge{border-color:var(--gold)}
   .pos, .tier, .chip, .sevchip, .rd, .scpill{forced-color-adjust:none; border:1px solid ButtonText}
   .avatar{border:1px solid ButtonText}
 }
+/* spectator mode */
+body.spectate .pick, body.spectate .kill, body.spectate [data-dnd], body.spectate #panicBar{display:none!important}
+body.spectate header::after{content:"👁 SPECTATING"; font-size:10px; letter-spacing:2px; color:var(--gold); border:1px solid var(--gold); border-radius:999px; padding:3px 10px}

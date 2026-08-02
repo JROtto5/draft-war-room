@@ -37,6 +37,7 @@
     <span class="sub">Buck Breakers · Superflex · 6pt Pass TD · Slot 12</span>
   </div>
   <div class="spacer"></div>
+  <select id="profQuick" class="fsel" style="display:none;max-width:110px;font-size:11px" title="Quick-switch saved boards"></select>
   <span class="savebadge" id="saveBadge" aria-live="polite">Autosave on</span>
   <button class="hbtn" id="undoBtn" title="Undo last board action (Ctrl+Z)">↩ Undo</button>
   <button class="hbtn" id="redoBtn" title="Redo (Ctrl+Y)">↪ Redo</button>
@@ -158,6 +159,9 @@
       <div class="frow"><label>Your draft slot (snake)</label><input type="number" id="setSlot" min="1" max="20"></div>
       <div class="frow"><label>Scoring</label><select id="setScoring"><option value="ppr">Full PPR</option><option value="half">Half PPR</option></select></div>
       <div class="frow"><label>Points per passing TD</label><select id="setPtd"><option value="6">6 (this league)</option><option value="4">4</option></select></div>
+      <div class="frow"><label>Custom points per reception (blank = use scoring above)</label><input type="number" id="setRecPts" step="0.1" min="0" max="2" placeholder="—"></div>
+      <div class="frow"><label>TE premium (extra per TE catch)</label><input type="number" id="setTePrem" step="0.25" min="0" max="1"></div>
+      <div class="frow"><label>Announce picks out loud (Live mode)</label><input type="checkbox" id="setSpeak" style="width:auto"></div>
       <div class="frow"><label>Compact rows (more players on screen)</label><input type="checkbox" id="setCompact" style="width:auto"></div>
       <div class="frow"><label>On-the-clock chime (Live mode)</label><input type="checkbox" id="setSound" style="width:auto"></div>
       <div class="frow"><label>Best Available list length</label><input type="number" id="setBaCount" min="5" max="30"></div>
@@ -176,6 +180,7 @@
       <div class="sechead">Projection data</div>
       <div class="frow"><label>Load a projections CSV (PLAYER, TEAM, POS, PPR — HALF/PATD optional)</label>
         <button class="hbtn" id="projImportBtn">⇧ CSV</button> <button class="hbtn" id="projTemplateBtn" title="Download a sample CSV in the right format">⬇ template</button></div>
+      <div class="frow"><label>Spectator link (read-only board snapshot)</label><button class="hbtn" id="roShareBtn">👁 Copy</button></div>
       <div class="frow"><label>Back to the built-in dataset</label><button class="hbtn" id="projRevertBtn">↩ Revert</button></div>
       <div class="note" id="projStatus"></div>
       <div class="sechead">Board profiles</div>
@@ -223,6 +228,7 @@
     <h3>🩺 Injury Center <span id="injFresh" style="font-weight:400;color:var(--dim);font-size:11.5px"></span></h3>
     <div class="body" id="injBody"></div>
     <div class="foot">
+      <button class="hbtn" id="injDigest" title="Copy a summary for the league chat">📤 Digest</button>
       <button class="hbtn" id="injRefresh" style="border-color:var(--green);color:var(--green)">↻ Refresh now</button>
       <button class="hbtn" id="injClose">Close</button>
     </div>
@@ -235,6 +241,8 @@
     <h3>🎓 Draft Report</h3>
     <div class="body" id="reportBody"></div>
     <div class="foot">
+      <button class="hbtn" id="tauntBtn" title="Copy a data-backed trash-talk line">😈 Taunt</button>
+      <button class="hbtn" id="reportPng" title="Download the report as an image">🖼 PNG</button>
       <button class="hbtn" id="reportShare" style="display:none">📲 Share…</button>
       <button class="hbtn" id="reportCopy" style="border-color:var(--gold);color:var(--gold)">📤 Copy report</button>
       <button class="hbtn" id="reportClose">Close</button>
@@ -264,6 +272,9 @@
       <span class="mono">/</span> search (fuzzy: cmc, jsn) &nbsp; <span class="mono">↑↓</span> highlight row<br>
       <span class="mono">M</span> my pick &nbsp; <span class="mono">T</span>/<span class="mono">X</span> taken &nbsp; <span class="mono">D</span> do-not-draft &nbsp; <span class="mono">N</span> note<br>
       <span class="mono">Ctrl+Z</span> undo &nbsp; <span class="mono">Ctrl+Y</span> redo &nbsp; <span class="mono">Esc</span> clear/blur &nbsp; <span class="mono">?</span> this help
+      <div class="sechead">About</div>
+      <div style="font-size:11.5px;color:var(--dim);line-height:1.7">Draft War Room <span id="aboutVer"></span> · MIT licensed · built for Buck Breakers.<br>
+      Data: your league CSVs · Sleeper public API (players, stats, trends, headshots) · ESPN public API (injuries, news, logos) · everything stays in this browser.</div>
       <div class="sechead">Tips</div>
       Click a projection to edit it · click a player name for a note · click the pick banner to resync the pick number · hover a team code for playoff-week matchups.
     </div>

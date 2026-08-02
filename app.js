@@ -95,6 +95,7 @@ function load(){
 }
 let saveTimer=null;
 function save(){
+  if(window._spectate){ return; }
   const payload = JSON.stringify(S);
   if(payload.length > 3500000 && !window._quotaWarned){
     window._quotaWarned = true;
@@ -116,8 +117,15 @@ function save(){
 function allPlayers(){
   const col = S.settings.scoring==="half" ? 4 : 3;
   const tdAdj = S.settings.ptd===4 ? 2 : 0;   // stored projections use 6pt pass TDs
+  const recPts = S.settings.recPts;           // null = follow the full/half select
+  const tePrem = +S.settings.tePrem || 0;
   const SRC = (S.dataRows && S.dataRows.length) ? S.dataRows : RAW;
-  const base = SRC.map((r,i)=>({id:"p"+i, name:r[0], team:r[1], pos:r[2], proj:Math.round((r[col]-tdAdj*(r[6]||0))*10)/10, adp:r[5]||0}));
+  const base = SRC.map((r,i)=>{
+    const rec = Math.max(0, (r[3]-r[4])*2);   // receptions derived from the 1.0 vs 0.5 PPR gap
+    let proj = recPts==null ? r[col] : r[4] + rec*(recPts-0.5);
+    if(r[2]==="TE" && tePrem) proj += rec*tePrem;
+    return {id:"p"+i, name:r[0], team:r[1], pos:r[2], proj:Math.round((proj-tdAdj*(r[6]||0))*10)/10, adp:r[5]||0};
+  });
   const customs = S.custom.map((r,i)=>({id:r[4]||("c"+i), name:r[0], team:r[1], pos:r[2], proj:r[3], adp:0, custom:true}));
   const all = base.concat(customs);
   for(const p of all){
@@ -419,12 +427,14 @@ function markTaken(id){
   redoStack.length=0; S.taken[id]=true; S.log.push({id, who:"other", t:Date.now()}); commit();
   const p = idIndex()[id];
   if(p) toast("✕ <b>"+esc(p.name)+"</b> off the board", {undo:undoLast});
+  if(p) announce(p.name+", off the board.");
   pruneQueue();
 }
 function pickMine(id){
   redoStack.length=0; S.mine.push(id); S.log.push({id, who:"me", t:Date.now()}); commit();
   const p = idIndex()[id];
   if(p) toast("✓ Drafted <b style='color:var(--green)'>"+esc(p.name)+"</b>", {undo:undoLast});
+  if(p) announce("Pick "+pickNow()+". You drafted "+p.name+".");
 }
 function undoLast(){
   const last = S.log.pop();
@@ -626,6 +636,25 @@ function renderMocks(){
     : "No strong consensus across strategies — your seat has options.";
 }
 
+/* ---------- Team pages ---------- */
+function openTeamPage(slot){
+  const byId = idIndex(), mySlot = Math.min(S.settings.slot, S.settings.teams);
+  const ids = slot===mySlot ? myIds() : teamRosters()[slot];
+  const ps = ids.map(id=>byId[id]).filter(Boolean);
+  const bs = ps.length ? bestStarters(ids, byId) : null;
+  const byPos = {};
+  ps.forEach(p=>{ (byPos[p.pos]=byPos[p.pos]||[]).push(p); });
+  document.getElementById("boardOverlay").classList.remove("show");
+  $("#cardBody").innerHTML =
+    '<div class="chead"><div class="cid"><div class="cname">'+esc(slotName(slot))+(slot===mySlot?' ★':'')+'</div>'+
+    '<div class="csub">slot '+slot+' · '+ps.length+' players'+(bs?' · projected starters <b class="mono">'+Math.round(bs.pts)+'</b>':'')+'</div></div></div>'+
+    (ps.length ? POSITIONS.map(pos=> byPos[pos] ?
+      '<div class="cintel"><b>'+pos+'</b> — '+byPos[pos].sort((a,b)=>b.proj-a.proj).map(p=>esc(p.name)+' <span class="dimtxt mono">'+p.proj+'</span>').join(" · ")+'</div>' : "").join("")
+      : '<div class="empty">No tracked picks yet.</div>')+
+    '<div class="cacts"></div>';
+  $("#cardOverlay").classList.add("show");
+}
+
 /* ---------- Injury Center ---------- */
 function renderInjCenter(){
   const players = allPlayers();
@@ -665,6 +694,15 @@ document.getElementById("injBtn").addEventListener("click", ()=>{
 });
 document.getElementById("injClose").addEventListener("click", ()=>document.getElementById("injOverlay").classList.remove("show"));
 document.getElementById("injRefresh").addEventListener("click", ()=>{ refreshInjuries(false); refreshTrending(); NEWS.at=0; refreshNews().then(renderInjCenter); });
+document.getElementById("injDigest").addEventListener("click", ()=>{
+  const sevRank = {IR:0,O:1,D:2,"?":3,Q:4};
+  const hurt = allPlayers().map(p=>({p, e:injuryOf(p)})).filter(x=>x.e && !S.taken[x.p.id])
+    .map(x=>({p:x.p, e:x.e, sv:injSeverity(x.e.s)}))
+    .sort((a,b)=>sevRank[a.sv.code]-sevRank[b.sv.code]).slice(0,12);
+  const txt = "🩺 Injury digest ("+new Date().toLocaleDateString()+"):\n"+
+    hurt.map(x=>"• "+x.p.name+" ("+x.p.pos+" "+x.p.team+") — "+x.sv.label+(x.e.c?": "+x.e.c.slice(0,80):"")).join("\n");
+  navigator.clipboard.writeText(txt).then(()=>toast("📤 Injury digest copied"));
+});
 
 /* ---------- Player card ---------- */
 
@@ -1419,6 +1457,11 @@ function renderRoster(){
     if(!window._celebrated && S.mine.length >= S.settings.roster){
       window._celebrated = true;
       confetti();
+      try{
+        const all = profAll();
+        const nm = "🏁 "+(S.settings.name||"Draft")+" "+new Date().getFullYear()+" final";
+        if(!all[nm]){ all[nm] = JSON.parse(JSON.stringify(S)); localStorage.setItem(PROF_KEY, JSON.stringify(all)); }
+      }catch(e){}
       setTimeout(buildReport, 900);
     }
   } else if(totalNeeded > picksLeft){
@@ -1553,6 +1596,29 @@ document.addEventListener("click", e=>{
     save(); renderBoard(); return;
   }
   if(t.id==="tradeGo"){ return tradeEval(); }
+  if(t.dataset.teampage){ return openTeamPage(+t.dataset.teampage); }
+  if(t.id==="randOrder"){
+    const t2 = S.settings.teams;
+    const order = Array.from({length:t2},(_,i)=>i+1).sort(()=>Math.random()-0.5);
+    const out = document.getElementById("randOut");
+    out.innerHTML = "";
+    order.forEach((s2,i)=>setTimeout(()=>{
+      out.innerHTML += (i+1)+". <b>"+esc(slotName(s2))+"</b>"+(i<order.length-1?" &nbsp;·&nbsp; ":"");
+    }, i*350));
+    return;
+  }
+  if(t.id==="copyResults"){
+    const byId2 = idIndex(), t2 = S.settings.teams;
+    let txt = "🏈 "+(S.settings.name||"Draft")+" results\n";
+    S.log.forEach((e,i)=>{
+      const p2 = byId2[e.id]; if(!p2) return;
+      const n = i+1+(S.pickOffset||0), r2 = Math.ceil(n/t2), idx = n-(r2-1)*t2, slot = (r2%2===1)?idx:t2+1-idx;
+      if(idx===1) txt += "\n— Round "+r2+" —\n";
+      txt += r2+"."+String(idx).padStart(2,"0")+" "+slotName(slot)+": "+p2.name+" ("+p2.pos+" "+p2.team+")\n";
+    });
+    navigator.clipboard.writeText(txt).then(()=>toast("📋 Results copied ("+S.log.length+" picks)"));
+    return;
+  }
   if(t.dataset.card){ return openCard(t.dataset.card); }
   if(t.dataset.keeper){
     const id = t.dataset.keeper;
@@ -1803,6 +1869,49 @@ function buildReport(){
   $("#reportBody").innerHTML = h;
   $("#reportOverlay").classList.add("show");
 }
+function quickStandings(){
+  const byId = idIndex(), t = S.settings.teams, mySlot = Math.min(S.settings.slot,t);
+  const ros = teamRosters();
+  const rows = [];
+  for(let s2=1;s2<=t;s2++){
+    const ids = s2===mySlot ? myIds() : ros[s2];
+    rows.push({s:s2, pts: ids.length?bestStarters(ids, byId).pts:0});
+  }
+  rows.sort((a,b)=>b.pts-a.pts);
+  return {rows, mySlot};
+}
+$("#tauntBtn").addEventListener("click", ()=>{
+  const {rows, mySlot} = quickStandings();
+  const my = rows.findIndex(r=>r.s===mySlot)+1;
+  const last = rows[rows.length-1], top = rows[0];
+  const lines = [
+    "Projections have me "+ordinal(my)+" of "+rows.length+". "+(my===1?"Start engraving the trophy. 🏆":"And I drafted half-asleep."),
+    esc(slotName(last.s))+" projects dead last at "+Math.round(last.pts)+" pts. Thoughts and prayers. 🙏",
+    my===1 ? "Otto "+Math.round(rows[0].pts)+" — the field: cope." : esc(slotName(top.s))+" leads at "+Math.round(top.pts)+" — enjoy it while the injuries settle. 😈",
+    "My optimal starters project "+Math.round(rows[my-1].pts)+". The math is not on your side, "+esc(slotName(last.s))+".",
+  ];
+  const line = lines[Math.floor(Math.random()*lines.length)];
+  navigator.clipboard.writeText(line.replace(/<[^>]+>/g,"")).then(()=>toast("😈 Taunt copied: "+line));
+});
+function ordinal(n){ return n+(n%10===1&&n%100!==11?"st":n%10===2&&n%100!==12?"nd":n%10===3&&n%100!==13?"rd":"th"); }
+$("#reportPng").addEventListener("click", ()=>{
+  const c = document.createElement("canvas");
+  const lines = _reportText.split("\n");
+  c.width = 820; c.height = 120 + lines.length*30;
+  const x = c.getContext("2d");
+  x.fillStyle = "#0b0f14"; x.fillRect(0,0,c.width,c.height);
+  x.fillStyle = "#2fd47a"; x.font = "bold 30px sans-serif";
+  x.fillText("DRAFT WAR ROOM", 30, 52);
+  x.fillStyle = "#8ba0bc"; x.font = "14px sans-serif";
+  x.fillText(new Date().toLocaleDateString(), 30, 78);
+  x.fillStyle = "#e8eef7"; x.font = "16px monospace";
+  lines.forEach((ln,i)=>x.fillText(ln.slice(0,80), 30, 116+i*30));
+  c.toBlob(b=>{
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(b);
+    a.download = "draft-report.png"; a.click(); URL.revokeObjectURL(a.href);
+  });
+});
 $("#gradeBtn").addEventListener("click", buildReport);
 $("#reportClose").addEventListener("click", ()=>$("#reportOverlay").classList.remove("show"));
 $("#reportCopy").addEventListener("click", ()=>{
@@ -1873,6 +1982,25 @@ function renderBoard(){
   } else {
     h += '<div class="dimtxt" style="margin-top:12px">Standings appear after round 1 is fully logged.</div>';
   }
+  // needs matrix: positions × teams
+  {
+    const need = (ids, pos, lim) => { let c=0; ids.forEach(id2=>{const p2=byId[id2]; if(p2&&p2.pos===pos)c++;}); return Math.max(0, lim-c); };
+    const lims = {QB:2,RB:2,WR:2,TE:1,DEF:1};
+    h += '<div class="sechead" style="margin-top:16px">🗺 Needs matrix (starters still owed)</div><table class="stattbl" style="max-width:560px"><tr><th style="text-align:left">Team</th>'+
+      ["QB","RB","WR","TE","DEF"].map(p2=>'<th>'+p2+'</th>').join("")+'</tr>'+
+      Array.from({length:t},(_,i)=>i+1).map(s2=>{
+        const ids = s2===mySlot ? myIds() : ros[s2];
+        return '<tr'+(s2===mySlot?' style="color:var(--green)"':'')+'><td style="text-align:left;cursor:pointer" data-teampage="'+s2+'" title="Open team page">'+esc(slotName(s2))+'</td>'+
+          ["QB","RB","WR","TE","DEF"].map(p2=>{
+            const n2 = need(ids, p2, lims[p2]);
+            return '<td style="color:'+(n2>=2?'var(--red)':n2===1?'var(--gold)':'var(--faint)')+'">'+(n2||"·")+'</td>';
+          }).join("")+'</tr>';
+      }).join("")+'</table>';
+  }
+  // order randomizer + results copy
+  h += '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">'+
+    '<button class="hbtn" id="randOrder">🎲 Randomize order</button>'+
+    '<button class="hbtn" id="copyResults">📋 Copy results text</button></div><div class="note" id="randOut" style="margin-top:8px"></div>';
   // trade calculator
   h += '<div class="sechead" style="margin-top:16px">⇄ Pick trade calculator</div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
@@ -1976,9 +2104,12 @@ $("#settingsBtn").addEventListener("click", ()=>{
   const cols=S.settings.cols||{};
   $("#colADP").checked=cols.adp!==false; $("#colEdge").checked=cols.edge!==false; $("#colRd").checked=cols.rd!==false;
   $("#setSound").checked=S.settings.sound!==false;
+  $("#setSpeak").checked=!!S.settings.speak;
   $("#setBaCount").value=S.settings.baCount||15;
   refreshProfiles(); refreshProjStatus();
   $("#setPtd").value=String(S.settings.ptd||6);
+  $("#setRecPts").value = S.settings.recPts==null ? "" : S.settings.recPts;
+  $("#setTePrem").value = S.settings.tePrem||0;
   for(const pos of POSITIONS) $("#min"+pos).value=S.settings.min[pos]||0;
   $("#settingsOverlay").classList.add("show");
 });
@@ -1989,9 +2120,13 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.slot = Math.max(1, +$("#setSlot").value||12);
   S.settings.scoring = $("#setScoring").value==="half" ? "half" : "ppr";
   S.settings.ptd = +$("#setPtd").value===4 ? 4 : 6;
+  const rp = $("#setRecPts").value.trim();
+  S.settings.recPts = rp==="" ? null : Math.min(2, Math.max(0, parseFloat(rp)||0));
+  S.settings.tePrem = Math.min(1, Math.max(0, parseFloat($("#setTePrem").value)||0));
   S.settings.name = $("#setName").value.trim() || "Buck Breakers";
   S.settings.compact = $("#setCompact").checked;
   S.settings.sound = $("#setSound").checked;
+  S.settings.speak = $("#setSpeak").checked;
   S.settings.cols = {adp:$("#colADP").checked, edge:$("#colEdge").checked, rd:$("#colRd").checked};
   S.settings.baCount = Math.min(30, Math.max(5, +$("#setBaCount").value||15));
   applyTheme();
@@ -2154,7 +2289,22 @@ function refreshProfiles(){
   const sel=$("#profileSel"); if(!sel) return;
   const names=Object.keys(profAll());
   sel.innerHTML = names.length ? names.map(n=>'<option>'+esc(n)+'</option>').join("") : '<option value="">(none saved)</option>';
+  const q = document.getElementById("profQuick");
+  if(q){
+    q.style.display = names.length ? "" : "none";
+    q.innerHTML = '<option value="">boards…</option>'+names.map(n=>'<option>'+esc(n)+'</option>').join("");
+  }
 }
+document.getElementById("profQuick").addEventListener("change", e=>{
+  const name = e.target.value; if(!name) return;
+  const all = profAll();
+  if(!all[name]) return;
+  if(!confirm("Switch to board '"+name+"'? Current board is backed up.")) { e.target.value=""; return; }
+  backupState();
+  S = Object.assign(defaultState(), migrate(all[name]));
+  e.target.value = "";
+  commit(); toast("Loaded: "+esc(name));
+});
 $("#profSnap").addEventListener("click", ()=>{
   const all = profAll();
   const name = "📸 "+new Date().toLocaleString([], {month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"});
@@ -2193,28 +2343,31 @@ async function copyShareLink(){
     const buf = new Uint8Array(await new Response(cs).arrayBuffer());
     let bin = ""; buf.forEach(b=>bin+=String.fromCharCode(b));
     const b64 = btoa(bin).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
-    const url = location.origin+location.pathname+"#b="+b64;
+    const url = location.origin+location.pathname+"#b="+b64+(window._shareRO?"~ro":"");
     await navigator.clipboard.writeText(url);
-    toast("🔗 Board snapshot link copied ("+(url.length/1024).toFixed(1)+" KB)");
+    toast((window._shareRO?"👁 Spectator":"🔗 Board")+" link copied ("+(url.length/1024).toFixed(1)+" KB)");
+    window._shareRO = false;
   }catch(e){ toast("Share link failed: "+esc(e.message), {warn:true}); }
 }
 async function loadSharedBoard(){
-  const m = location.hash.match(/#b=([A-Za-z0-9_-]+)/);
+  const m = location.hash.match(/#b=([A-Za-z0-9_-]+)(~ro)?/);
   if(!m) return false;
+  if(m[2]){ window._spectate = true; document.body.classList.add("spectate"); }
   try{
     const bin = Uint8Array.from(atob(m[1].replace(/-/g,"+").replace(/_/g,"/")), c=>c.charCodeAt(0));
     const ds = new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"));
     const j = JSON.parse(await new Response(ds).text());
-    backupState();
-    S = Object.assign(defaultState(), j);
+    if(!window._spectate) backupState();
+    S = Object.assign(defaultState(), migrate(j));
     S.slotNames = Object.assign(defaultState().slotNames, j.slotNames||{});
     history.replaceState(null, "", location.pathname);
-    save();
-    toast("📥 Shared board loaded — your previous board is in Settings → Restore backup");
+    if(window._spectate) toast("👁 Spectating a shared board — nothing is saved");
+    else { save(); toast("📥 Shared board loaded — your previous board is in Settings → Restore backup"); }
     return true;
   }catch(e){ toast("Share link unreadable", {warn:true}); return false; }
 }
 document.getElementById("shareBtn").addEventListener("click", copyShareLink);
+document.getElementById("roShareBtn").addEventListener("click", ()=>{ window._shareRO = true; copyShareLink(); });
 
 /* Auto-backup before destructive actions */
 function backupState(){
@@ -2297,6 +2450,16 @@ initLock();
 
 /* ---------- Boot ---------- */
 load();
+setTimeout(()=>{
+  const mo = (location.hash.match(/#open=(\w+)/)||[])[1];
+  if(mo){
+    history.replaceState(null, "", location.pathname);
+    const map = {inj:"injBtn", mocks:"mocksBtn", board:"boardBtn", report:"gradeBtn"};
+    const btn = document.getElementById(map[mo]||"");
+    if(btn) btn.click();
+  }
+  refreshProfiles();
+}, 600);
 if(location.hash.indexOf("#b=")===0){ loadSharedBoard().then(ok=>{ if(ok){ initInjuries(); render(); } }); }
 initInjuries();
 const E2E_MODE = location.search.indexOf("e2e") >= 0;   // deterministic test runs: no network side-effects
@@ -2334,6 +2497,14 @@ function setLive(on){
   toast(on ? "🔴 Draft Day mode ON — chime + panic button armed" : "Live mode off");
 }
 document.getElementById("liveBtn").addEventListener("click", ()=>setLive(!S.ui.live));
+function announce(text){
+  if(!S.settings.speak || !S.ui.live || !("speechSynthesis" in window)) return;
+  try{
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.15; u.volume = 0.85;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
 function chime(){
   if(S.settings.sound===false) return;
   try{
@@ -2395,6 +2566,8 @@ document.getElementById("themeBtn").addEventListener("click", ()=>{
 window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", applyTheme);
 
 (function(){
+  const av=document.getElementById("aboutVer");
+  if(av) av.textContent = "v"+BUILD;
   const el=document.getElementById("buildStamp");
   if(el) el.textContent = "build v"+BUILD+" · projections "+(typeof DATA_STAMP!=="undefined"?DATA_STAMP:"?")+" · press ? for help";
   if(window._recovered) setTimeout(()=>toast("♻️ Save was corrupt — restored backup from "+esc(window._recovered), {warn:true}), 400);
