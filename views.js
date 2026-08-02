@@ -122,6 +122,22 @@ function newsFor(p){
   return NEWS.list.find(n=>n.h.includes(p.name) || (last.length>4 && n.h.includes(last)));
 }
 
+function usageFor(p){ return (typeof USAGE!=="undefined" && USAGE[normName(p.name)]) || null; }
+function spikeRate(p){
+  const u = usageFor(p);
+  return u && u[5] >= 6 ? u[4]/u[5] : 0;
+}
+function usageProfile(p){
+  const u = usageFor(p); if(!u || p.pos==="QB" || p.pos==="DEF") return "";
+  const L2 = lastFor(p);
+  if(!L2 || !L2[0]) return "";
+  const oppG = u[2]/Math.max(1,L2[0]);
+  const tdShare = ((L2[5]||0)+(L2[9]||0))*6 / Math.max(1, L2[10]);
+  if(oppG >= (p.pos==="RB"?18:8) && u[1] >= 70) return "volume hog";
+  if(tdShare > 0.42) return "TD-dependent";
+  if(u[1] >= 55 && oppG < (p.pos==="RB"?13:6.5)) return "efficient on thin usage";
+  return "";
+}
 function hist3For(p){ return (typeof LAST3!=="undefined" && LAST3[normName(p.name)]) || []; }
 function hometownOf(p){
   const m = metaFor(p); if(!m || !m[11]) return null;
@@ -158,6 +174,11 @@ function breakoutTag(p){
   if(!m || !(p.pos==="WR"||p.pos==="TE"||p.pos==="RB")) return false;
   if(m[1]<1 || m[1]>2) return false;
   const h = hist3For(p);
+  const u2 = usageFor(p);
+  if(u2 && u2[1] >= 60 && m[1]<=2 && h.length){
+    const lastH = h[h.length-1], prevH = h.length>1 ? h[h.length-2] : null;
+    if(prevH && prevH[4]>0 && lastH[4]/prevH[4] >= 1.25) return true;
+  }
   if(!h.length) return m[1]>=1;                       // year-2 with thin data still qualifies
   const last = h[h.length-1], prev = h.length>1 ? h[h.length-2] : null;
   const tgtGrowth = prev && prev[4]>0 ? last[4]/prev[4] : 2;
@@ -520,7 +541,8 @@ document.addEventListener("mouseover", e=>{
       '<div><b>'+esc(p.name)+'</b> '+(isFav(p)?"💖":"")+'<br><span class="dimtxt">'+p.pos+' '+p.team+
       (ci?' · '+esc(ci.name):'')+(hw&&hw.st?' · '+hw.st:'')+'</span></div></div>'+
       (h3.length?'<div class="dimtxt" style="margin-top:6px">'+h3.map(x=>x[0]+": <b>"+Math.round(x[2])+"</b>"+(x[3]?" ("+p.pos+x[3]+")":"")).join(" · ")+'</div>':'')+
-      '<div class="dimtxt" style="margin-top:4px">proj <b style="color:var(--green)">'+p.proj+'</b> · ADP '+(p.adp||"—")+'</div>';
+      '<div class="dimtxt" style="margin-top:4px">proj <b style="color:var(--green)">'+p.proj+'</b> · ADP '+(p.adp||"—")+
+      ((()=>{const u5=usageFor(p); return u5&&u5[5]>=6?' · '+u5[4]+'/'+u5[5]+' spike wks':'';})())+'</div>';
     const r2 = cell.getBoundingClientRect();
     el.style.left = Math.min(r2.left, innerWidth-300)+"px";
     el.style.top = (r2.bottom+6)+"px";

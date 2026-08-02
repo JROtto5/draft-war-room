@@ -236,6 +236,36 @@ def main():
                        round(s.get("rec_tgt",0)), round(s.get("rec",0)), round(s.get("rec_yd",0)),
                        round(s.get("rec_td",0),1), round(s.get("pts_ppr",0),1), finish.get(pid, 0)]
 
+    # ---------- usage layer: red zone, snaps, playoffs, weekly spikes (#431-#445 wave 1) ----------
+    post = fetch_json(f"https://api.sleeper.app/v1/stats/nfl/post/{args.season}", f"stats-post-{args.season}.json")
+    weekly = {}
+    for w in range(1, 19):
+        weekly[w] = fetch_json(f"https://api.sleeper.app/v1/stats/nfl/regular/{args.season}/{w}", f"stats-{args.season}-w{w}.json")
+    # weekly top-12 finishes per position
+    spike = {}
+    for w, ws in weekly.items():
+        for pos in ("QB","RB","WR","TE"):
+            ranked = sorted(((pid, st.get("pts_ppr",0)) for pid, st in ws.items()
+                             if sleeper.get(pid,{}).get("position")==pos and st.get("pts_ppr")), key=lambda x:-x[1])[:12]
+            for pid,_ in ranked:
+                e = spike.setdefault(pid, [0,0]); e[0]+=1
+        for pid, st in ws.items():
+            if st.get("gp"): spike.setdefault(pid,[0,0])[1] = spike.setdefault(pid,[0,0])[1]+1
+    usage = {}
+    for p in players:
+        if p["pos"]=="DEF": continue
+        k = norm(p["name"])
+        pid = str(heads.get(k) or "")
+        if not pid: continue
+        s2 = stats.get(pid) or {}
+        rz = round((s2.get("rush_rz_att",0) or 0)+(s2.get("rec_rz_tgt",0) or 0)+((s2.get("pass_rz_att",0) or 0) if p["pos"]=="QB" else 0))
+        snap = round(100*(s2.get("off_snp",0) or 0)/max(1,(s2.get("tm_off_snp",0) or 1)))
+        opp = round((s2.get("rush_att",0) or 0)+(s2.get("rec_tgt",0) or 0)+((s2.get("pass_att",0) or 0) if p["pos"]=="QB" else 0))
+        pp = post.get(pid) or {}
+        sp = spike.get(pid) or [0,0]
+        if any([rz, snap, opp, pp.get("pts_ppr"), sp[0]]):
+            usage[k] = [rz, snap, opp, round(pp.get("pts_ppr",0) or 0,1), sp[0], sp[1]]
+
     # ---------- ESPN injuries snapshot (baked offline baseline) ----------
     injbase = {}
     try:
@@ -330,11 +360,12 @@ def main():
     out.append("const TEAMQB = " + json.dumps(teamqb, ensure_ascii=False, separators=(',',':')) + ";")
     out.append("const INJBASE = " + json.dumps(injbase, ensure_ascii=False, separators=(',',':')) + ";")
     out.append("const BYES = " + json.dumps(byes, separators=(',',':')) + ";")
+    out.append("const USAGE = " + json.dumps(usage, separators=(',',':')) + ";")
     out.append("const SCHED = " + json.dumps(sched, separators=(',',':')) + ";")
     out.append('const LAST_SEASON = "' + args.season + '";')
     out.append('const DATA_STAMP = "' + datetime.date.today().isoformat() + '";')
     open(args.out, "w").write("\n".join(out) + "\n")
-    print(f"wrote {args.out}: {len(players)} players, {len(heads)} headshots, {len(meta)} bios, {len(last)} stat lines, {len(last3)} 3yr histories, {len(intel)} intel, {len(injbase)} baked injuries, {len(byes)} byes", file=sys.stderr)
+    print(f"wrote {args.out}: {len(players)} players, {len(heads)} headshots, {len(meta)} bios, {len(last)} stat lines, {len(last3)} 3yr histories, {len(intel)} intel, {len(injbase)} baked injuries, {len(byes)} byes, {len(usage)} usage lines", file=sys.stderr)
 
 if __name__ == "__main__":
     main()

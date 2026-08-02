@@ -457,7 +457,15 @@ function scoreBoard(){
     }
     // Risk tolerance: weight 3-year floor/ceiling into the score
     if(S.settings.risk && S.settings.risk!=="balanced"){
+      if(S.settings.risk==="ceiling" && spikeRate(p) >= 0.45){
+        score *= 1.05;
+        why.push("🌋 spike machine: top-12 in "+usageFor(p)[4]+" of "+usageFor(p)[5]+" weeks");
+      }
       const cns = consistencyOf(p);
+      if(S.settings.risk==="ceiling" && spikeRate(p) >= 0.45){
+        score *= 1.05;
+        why.push("🌋 spike machine: top-12 in "+usageFor(p)[4]+" of "+usageFor(p)[5]+" weeks");
+      }
       if(cns && cns.mean>0){
         if(S.settings.risk==="ceiling"){
           const up = Math.min(0.12, Math.max(0, (cns.hi/cns.mean-1))*0.5);
@@ -1152,6 +1160,10 @@ function openCard(id){
   const wi = winnerIndex(p);
   if(wi>=3) ovChips.push('<span class="chip" style="color:var(--gold)">🏆 league-winner index '+wi+'/5</span>');
   if(myCollegeMate) ovChips.push('<span class="chip">🎓 '+esc(ci.name)+' with '+esc(myCollegeMate)+'</span>');
+  const u = usageFor(p);
+  if(u && u[3] >= 35) ovChips.push('<span class="chip" style="color:var(--gold)">❄️ January performer ('+u[3]+' playoff pts)</span>');
+  const uprof = usageProfile(p);
+  if(uprof) ovChips.push('<span class="chip">'+esc(uprof)+'</span>');
   const bioLine2 = bio + (m&&m[13]?' · b. '+m[13].slice(0,10):'');
   const overview =
     (ovChips.length?'<div class="chips">'+ovChips.join("")+'</div>':'')+
@@ -1163,6 +1175,9 @@ function openCard(id){
       stat(odds&&odds.at2?"At #"+odds.at2:"Later", odds&&odds.h2&&odds.h2[id]!=null?odds.h2[id]+"%":"—")+
     '</div>'+
     '<div class="cstory">'+esc(storyOf(p))+'</div>'+
+    ((()=>{ const u3 = usageFor(p); if(!u3) return "";
+      return '<div class="cintel dim">🎯 '+LAST_SEASON+' usage: '+fmt(u3[2])+' opportunities · '+u3[0]+' inside the 20 · '+u3[1]+'% snaps'+
+        (u3[5]>=6?' · <b>'+u3[4]+'</b> top-12 weeks of '+u3[5]:'')+'</div>'; })())+
     (sc && sc.why.length ? '<div class="cwhy">▸ '+sc.why.join("<br>▸ ")+'</div>' : '')+
     (qbName?'<div class="cintel dim">🎯 His QB: <b>'+esc(qbName)+'</b>'+(myQBhere?' — <span class="ok">your stack ✓</span>':'')+'</div>':'')+
     (injE?'<div class="cintel" style="color:var(--red)">🩹 <b>'+esc(injE.s)+'</b>'+(m&&m[9]?' ('+esc(m[9])+')':'')+(injE.c?' — '+esc(injE.c):'')+(injE.d?' <span class="dimtxt">('+injE.d+' · '+injE.src+')</span>':'')+'</div>':'');
@@ -1170,6 +1185,9 @@ function openCard(id){
     '<div class="cintel"><b>Season points</b></div><div style="padding:0 20px 8px">'+histBars+'</div>'+
     (trendLine?'<div class="cintel dim">'+trendLine+'</div>':'')+
     (effLine?'<div class="cintel dim">'+effLine+'</div>':'')+
+    ((()=>{ const u4 = usageFor(p), L4 = lastFor(p);
+      if(!u4 || !L4 || !L4[0]) return "";
+      return '<div class="cintel dim">Per game ('+LAST_SEASON+'): '+(u4[2]/L4[0]).toFixed(1)+' opportunities · '+(u4[0]/L4[0]).toFixed(1)+' RZ looks</div>'; })())+
     (careerHigh?'<div class="cintel dim">Career high: <b>'+careerHigh.toFixed(1)+'</b> PPR'+(cons?' · PPG band '+cons.lo.toFixed(1)+'–'+cons.hi.toFixed(1)+' ('+cons.label+')':'')+'</div>':'<div class="cintel dim">'+(m&&m[1]===0?"Rookie — class of "+(m[12]||"2026")+", no NFL seasons yet.":"No recent season data.")+'</div>')+
     (tbl?'<div class="cwiki">'+tbl+'</div>':'');
   const intelTab =
@@ -1261,6 +1279,9 @@ function renderCompare(){
     row("Tier", "T"+a.tier+" "+A.pos, "T"+b.tier+" "+B.pos) +
     row("ADP", A.adp||"—", B.adp||"—") +
     row("Expected round", a.rd, b.rd) +
+    row("Snap share", (usageFor(A)||[])[1]!=null?(usageFor(A)||[])[1]+"%":"—", (usageFor(B)||[])[1]!=null?(usageFor(B)||[])[1]+"%":"—", 1) +
+    row("RZ touches", (usageFor(A)||[])[0]!=null?(usageFor(A)||[])[0]:"—", (usageFor(B)||[])[0]!=null?(usageFor(B)||[])[0]:"—", 1) +
+    row("Top-12 weeks", (usageFor(A)||[])[4]!=null?(usageFor(A)||[])[4]:"—", (usageFor(B)||[])[4]!=null?(usageFor(B)||[])[4]:"—", 1) +
     row("Back at next pick", a.odds, b.odds, 1) +
     row("Health", (()=>{const e=injuryOf(A); return e?injSeverity(e.s).label+(e.c?" — "+e.c.slice(0,40)+"…":""):"healthy ✓";})(), (()=>{const e=injuryOf(B); return e?injSeverity(e.s).label+(e.c?" — "+e.c.slice(0,40)+"…":""):"healthy ✓";})()) +
     row("Bye week", byeOf(A.team)||"—", byeOf(B.team)||"—") +

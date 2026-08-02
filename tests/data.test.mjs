@@ -6,14 +6,14 @@ import assert from "node:assert";
 const src = readFileSync(new URL("../data.js", import.meta.url), "utf8");
 
 // no duplicated top-level blocks (the bug class that broke a build once)
-for (const name of ["const RAW", "const INTEL", "const PSOS", "function normName", "const DATA_STAMP", "const HEADSHOT", "const TEAMLOGO", "const PLAYERMETA", "const LASTSZN", "const PROJ26", "const TEAMQB", "const INJBASE", "const LAST3", "const COLLEGE"]) {
+for (const name of ["const RAW", "const INTEL", "const PSOS", "function normName", "const DATA_STAMP", "const HEADSHOT", "const TEAMLOGO", "const PLAYERMETA", "const LASTSZN", "const PROJ26", "const TEAMQB", "const INJBASE", "const LAST3", "const COLLEGE", "const USAGE", "const BYES", "const SCHED"]) {
   const n = src.split(name).length - 1;
   assert.strictEqual(n, 1, `${name} appears ${n} times, expected 1`);
 }
 
 const ctx = {};
 vm.createContext(ctx);
-vm.runInContext(src + "\nthis.RAW=RAW;this.INTEL=INTEL;this.PSOS=PSOS;this.normName=normName;this.DATA_STAMP=DATA_STAMP;this.HEADSHOT=HEADSHOT;this.TEAMLOGO=TEAMLOGO;this.PLAYERMETA=PLAYERMETA;this.LASTSZN=LASTSZN;this.PROJ26=PROJ26;this.TEAMQB=TEAMQB;this.INJBASE=INJBASE;this.LAST3=LAST3;this.COLLEGE=COLLEGE;", ctx);
+vm.runInContext(src + "\nthis.RAW=RAW;this.INTEL=INTEL;this.PSOS=PSOS;this.normName=normName;this.DATA_STAMP=DATA_STAMP;this.HEADSHOT=HEADSHOT;this.TEAMLOGO=TEAMLOGO;this.PLAYERMETA=PLAYERMETA;this.LASTSZN=LASTSZN;this.PROJ26=PROJ26;this.TEAMQB=TEAMQB;this.INJBASE=INJBASE;this.LAST3=LAST3;this.COLLEGE=COLLEGE;this.USAGE=USAGE;", ctx);
 
 assert.ok(ctx.RAW.length > 300, "RAW too small: " + ctx.RAW.length);
 const POS = new Set(["QB", "RB", "WR", "TE", "DEF"]);
@@ -65,6 +65,12 @@ assert.ok(withHs / Object.keys(ctx.PLAYERMETA).length > 0.8, "hometown coverage 
 const withCol = Object.values(ctx.PLAYERMETA).filter(v => v[2]).length;
 assert.ok(withCol / Object.keys(ctx.PLAYERMETA).length > 0.9, "college coverage");
 assert.ok(Object.keys(ctx.COLLEGE).length >= 40, "college map size");
+assert.ok(Object.keys(ctx.USAGE).length > 250, "usage coverage");
+for (const [k, v] of Object.entries(ctx.USAGE)) {
+  assert.strictEqual(v.length, 6, "USAGE shape " + k);
+  assert.ok(v[1] >= 0 && v[1] <= 100, "snap pct range " + k);
+  assert.ok(v[4] <= v[5] || v[5] === 0, "spikes <= weeks " + k);
+}
 // Allen sanity across seasons
 const allen3 = ctx.LAST3["josh allen"];
 assert.strictEqual(allen3.length, 3);

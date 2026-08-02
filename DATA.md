@@ -14,6 +14,8 @@ Stamped **2026-08-02**, last completed season **2025**.
 | PSOS | 32 | playoff W15–17 opponents + matchup ranks |
 | TEAMQB | 32 | team → starting QB |
 | HEADSHOT | 355 | normName → Sleeper photo id |
+| USAGE | see gen script | [rzTouches, snapPct, opportunities, playoffPts, top12Weeks, weeksPlayed] |
+| BYES / SCHED | 32 | real 2026 bye weeks + week→opponent maps |
 | COLLEGE | 63 | program → [conference, color] |
 
 All keys are `normName(name)` — lowercase, punctuation stripped, suffixes dropped.
