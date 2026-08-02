@@ -2584,7 +2584,7 @@ document.querySelectorAll(".modal").forEach((m,i)=>{
   const h3 = m.querySelector("h3");
   if(h3){ if(!h3.id) h3.id = "dlg"+i; m.setAttribute("aria-labelledby", h3.id); }
 });
-const BUILD = "4.0";
+const BUILD = "5.0";
 /* Theme: auto follows the OS, or force dark/light */
 function applyTheme(){
   const pref = S.settings.theme || "auto";

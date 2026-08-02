@@ -1,4 +1,4 @@
-const CACHE = "war-room-v5";
+const CACHE = "war-room-v6";
 const CORE = ["./", "./index.html", "./styles.css", "./data.js", "./app.js", "./manifest.json", "./icon.svg", "./icon-192.png", "./icon-512.png", "./fonts/Sora-400.woff2", "./fonts/JetBrainsMono-400.woff2"];
 
 self.addEventListener("install", e => {
