@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Draft War Room — 2QB League</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0f14; --bg2:#111823; --panel:#151e2b; --panel2:#1a2536; --line:#243247;
+  --text:#e8eef7; --dim:#8ba0bc; --faint:#5a6d87;
+  --green:#2fd47a; --green-dim:#1d8a50; --gold:#ffc94d; --red:#ff5d5d;
+  --qb:#ff6b6b; --rb:#4dd88a; --wr:#5aa9ff; --te:#ffa94d; --def:#b78cff; --k:#9aa7b5;
+  --shadow:0 10px 30px rgba(0,0,0,.45);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:'Sora',system-ui,sans-serif; background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(47,212,122,.08), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(90,169,255,.07), transparent 60%),
+    var(--bg);
+  color:var(--text); min-height:100vh;
+}
+.mono{font-family:'JetBrains Mono',monospace}
+
+/* ---------- Header ---------- */
+header{
+  position:sticky; top:0; z-index:50; display:flex; align-items:center; gap:14px;
+  padding:12px 20px; background:rgba(11,15,20,.85); backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.logo{display:flex; align-items:baseline; gap:10px; white-space:nowrap}
+.logo h1{font-size:19px; font-weight:800; letter-spacing:.5px}
+.logo h1 .accent{color:var(--green)}
+.logo .sub{font-size:11px; color:var(--dim); letter-spacing:1px; text-transform:uppercase}
+.spacer{flex:1}
+.savebadge{
+  font-size:11px; padding:4px 10px; border-radius:999px; border:1px solid var(--line);
+  color:var(--dim); transition:all .25s; white-space:nowrap;
+}
+.savebadge.flash{border-color:var(--green); color:var(--green); background:rgba(47,212,122,.1)}
+.hbtn{
+  background:var(--panel); border:1px solid var(--line); color:var(--text);
+  padding:7px 13px; border-radius:9px; cursor:pointer; font-family:inherit; font-size:12.5px;
+  font-weight:600; transition:.15s; white-space:nowrap;
+}
+.hbtn:hover{border-color:var(--green); color:var(--green)}
+.hbtn.danger:hover{border-color:var(--red); color:var(--red)}
+
+/* ---------- Layout ---------- */
+.wrap{display:grid; grid-template-columns:340px 1fr 320px; gap:16px; padding:16px 20px; max-width:1800px; margin:0 auto}
+@media (max-width:1250px){ .wrap{grid-template-columns:300px 1fr} .right{grid-column:1 / -1} }
+@media (max-width:900px){ .wrap{grid-template-columns:1fr} }
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow)}
+.panel h2{
+  font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:var(--dim);
+  padding:13px 16px 10px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:8px;
+}
+.panel h2 .dot{width:7px;height:7px;border-radius:50%;background:var(--green); box-shadow:0 0 8px var(--green)}
+
+/* ---------- Best Available ---------- */
+.hero{padding:14px; border-bottom:1px solid var(--line)}
+.hero .toppick{
+  border:1px solid rgba(47,212,122,.4); background:linear-gradient(135deg, rgba(47,212,122,.12), rgba(47,212,122,.03));
+  border-radius:12px; padding:14px; position:relative; overflow:hidden;
+}
+.toppick .tag{font-size:10px; letter-spacing:2px; color:var(--green); text-transform:uppercase; font-weight:700}
+.toppick .name{font-size:21px; font-weight:800; margin:4px 0 2px}
+.toppick .meta{font-size:12.5px; color:var(--dim)}
+.toppick .why{font-size:11.5px; color:var(--gold); margin-top:8px; line-height:1.5}
+.toppick .actions{display:flex; gap:8px; margin-top:12px}
+.balist{padding:6px 8px 10px; max-height:520px; overflow-y:auto}
+.barow{
+  display:flex; align-items:center; gap:10px; padding:8px 8px; border-radius:9px; cursor:default;
+}
+.barow:hover{background:var(--panel2)}
+.barow .rk{width:20px; text-align:right; color:var(--faint); font-size:12px}
+.barow .info{flex:1; min-width:0}
+.barow .nm{font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.barow .sm{font-size:11px; color:var(--dim)}
+.barow .val{font-size:13px; font-weight:700; color:var(--green)}
+.stackchip{font-size:9.5px; background:rgba(255,201,77,.14); color:var(--gold); border:1px solid rgba(255,201,77,.35); padding:1px 6px; border-radius:999px; margin-left:6px; vertical-align:middle}
+
+/* ---------- Pool ---------- */
+.toolbar{padding:12px 14px; display:flex; flex-wrap:wrap; gap:9px; border-bottom:1px solid var(--line); align-items:center}
+.search{
+  flex:1; min-width:170px; background:var(--bg2); border:1px solid var(--line); border-radius:9px;
+  color:var(--text); padding:9px 12px; font-family:inherit; font-size:13.5px; outline:none;
+}
+.search:focus{border-color:var(--green)}
+.postabs{display:flex; gap:5px; flex-wrap:wrap}
+.ptab{
+  padding:6px 11px; border-radius:8px; border:1px solid var(--line); background:transparent;
+  color:var(--dim); cursor:pointer; font-family:inherit; font-size:12px; font-weight:700; transition:.12s;
+}
+.ptab.on{background:var(--green); border-color:var(--green); color:#08120c}
+.toggle{display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--dim); cursor:pointer; user-select:none}
+.toggle input{accent-color:var(--green)}
+table{width:100%; border-collapse:collapse}
+.tablewrap{max-height:calc(100vh - 210px); overflow-y:auto}
+thead th{
+  position:sticky; top:0; background:var(--panel); z-index:5; font-size:10.5px; text-transform:uppercase;
+  letter-spacing:1px; color:var(--faint); text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); cursor:pointer;
+}
+thead th.sorton{color:var(--green)}
+tbody td{padding:8px 10px; border-bottom:1px solid rgba(36,50,71,.5); font-size:13.5px}
+tbody tr{transition:.1s}
+tbody tr:hover{background:var(--panel2)}
+tr.taken{opacity:.32}
+tr.taken .pname{text-decoration:line-through}
+tr.mine-row{background:rgba(47,212,122,.07)}
+.pname{font-weight:600}
+.pos{
+  display:inline-block; width:38px; text-align:center; font-size:10.5px; font-weight:800; letter-spacing:.5px;
+  padding:3px 0; border-radius:6px; color:#0b0f14;
+}
+.pos.QB{background:var(--qb)} .pos.RB{background:var(--rb)} .pos.WR{background:var(--wr)}
+.pos.TE{background:var(--te)} .pos.DEF{background:var(--def)} .pos.K{background:var(--k)}
+.proj{cursor:pointer; border-bottom:1px dashed var(--faint)}
+.proj:hover{color:var(--gold)}
+.act{display:flex; gap:6px; justify-content:flex-end}
+.pick,.kill,.undo1{
+  border:1px solid var(--line); background:var(--bg2); border-radius:7px; padding:5px 10px;
+  cursor:pointer; font-family:inherit; font-size:11.5px; font-weight:700; color:var(--text); transition:.12s; white-space:nowrap;
+}
+.pick:hover{background:var(--green); border-color:var(--green); color:#08120c}
+.kill:hover{background:var(--red); border-color:var(--red); color:#fff}
+.undo1:hover{border-color:var(--gold); color:var(--gold)}
+
+/* ---------- Roster ---------- */
+.right .panel{margin-bottom:16px}
+.reqbar{padding:12px 16px; border-bottom:1px solid var(--line)}
+.reqrow{display:flex; align-items:center; gap:8px; margin:6px 0; font-size:12.5px}
+.reqrow .lbl{width:40px; font-weight:700}
+.pips{display:flex; gap:4px; flex:1}
+.pip{width:16px; height:9px; border-radius:3px; background:var(--bg2); border:1px solid var(--line)}
+.pip.full{background:var(--green); border-color:var(--green)}
+.pip.extra{background:var(--wr); border-color:var(--wr)}
+.reqrow .cnt{font-size:11px; color:var(--dim); width:44px; text-align:right}
+.warn{padding:9px 16px; font-size:11.5px; color:var(--gold); background:rgba(255,201,77,.07); border-bottom:1px solid var(--line); line-height:1.45}
+.warn.crit{color:var(--red); background:rgba(255,93,93,.08)}
+.myros{padding:8px 10px 12px; max-height:380px; overflow-y:auto}
+.myp{display:flex; align-items:center; gap:9px; padding:7px 8px; border-radius:8px}
+.myp:hover{background:var(--panel2)}
+.myp .n{flex:1; font-size:13px; font-weight:600; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.myp .t{font-size:11px; color:var(--dim)}
+.myp .x{cursor:pointer; color:var(--faint); font-size:14px; padding:0 4px}
+.myp .x:hover{color:var(--red)}
+.empty{padding:18px 16px; color:var(--faint); font-size:12.5px; text-align:center; line-height:1.6}
+.stackbox{padding:10px 16px 14px; font-size:12px; color:var(--dim); line-height:1.7}
+.stackbox b{color:var(--gold)}
+.loglist{padding:8px 10px 12px; max-height:300px; overflow-y:auto}
+.logrow{display:flex; align-items:center; gap:8px; padding:5px 8px; font-size:12px; border-radius:7px}
+.logrow:hover{background:var(--panel2)}
+.logrow .who{color:var(--dim); font-size:10.5px; width:52px; flex:none; text-transform:uppercase; letter-spacing:.5px}
+.logrow .who.me{color:var(--green)}
+.logrow .n{flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+
+/* ---------- Modal ---------- */
+.overlay{position:fixed; inset:0; background:rgba(5,8,12,.7); backdrop-filter:blur(4px); z-index:100; display:none; align-items:center; justify-content:center}
+.overlay.show{display:flex}
+.modal{background:var(--panel); border:1px solid var(--line); border-radius:16px; width:min(520px,92vw); max-height:88vh; overflow-y:auto; box-shadow:var(--shadow)}
+.modal h3{padding:16px 20px; border-bottom:1px solid var(--line); font-size:15px}
+.modal .body{padding:16px 20px}
+.frow{display:flex; align-items:center; gap:10px; margin-bottom:12px}
+.frow label{flex:1; font-size:13px; color:var(--dim)}
+.frow input,.frow select{
+  width:110px; background:var(--bg2); border:1px solid var(--line); border-radius:8px;
+  color:var(--text); padding:8px 10px; font-family:'JetBrains Mono',monospace; font-size:13px; outline:none;
+}
+.frow input:focus{border-color:var(--green)}
+.frow input.wide{width:200px; font-family:'Sora',sans-serif}
+.modal .foot{padding:14px 20px; border-top:1px solid var(--line); display:flex; gap:10px; justify-content:flex-end}
+.note{font-size:11.5px; color:var(--faint); line-height:1.55; margin-top:10px}
+.sechead{font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:var(--green); margin:18px 0 10px; font-weight:700}
+.sechead:first-child{margin-top:0}
+
+footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--faint); line-height:1.7}
+::-webkit-scrollbar{width:9px; height:9px}
+::-webkit-scrollbar-thumb{background:var(--line); border-radius:6px}
+::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <h1>DRAFT <span class="accent">WAR ROOM</span></h1>
+    <span class="sub">2-QB · 6pt Pass TD</span>
+  </div>
+  <div class="spacer"></div>
+  <span class="savebadge" id="saveBadge">Autosave on</span>
+  <button class="hbtn" id="undoBtn" title="Undo last board action">↩ Undo</button>
+  <button class="hbtn" id="addBtn">+ Player</button>
+  <button class="hbtn" id="settingsBtn">⚙ Settings</button>
+  <button class="hbtn" id="exportBtn">⇩ Export</button>
+  <button class="hbtn" id="importBtn">⇧ Import</button>
+  <button class="hbtn danger" id="resetBtn">Reset</button>
+</header>
+
+<div class="wrap">
+
+  <!-- LEFT: Best available -->
+  <div class="left">
+    <div class="panel">
+      <h2><span class="dot"></span> Best Available</h2>
+      <div class="hero" id="hero"></div>
+      <div class="balist" id="baList"></div>
+    </div>
+  </div>
+
+  <!-- CENTER: Player pool -->
+  <div class="center">
+    <div class="panel">
+      <div class="toolbar">
+        <input class="search" id="search" type="text" placeholder="Search player or team…">
+        <div class="postabs" id="posTabs"></div>
+        <label class="toggle"><input type="checkbox" id="showTaken"> show taken</label>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th data-sort="rank" style="width:34px">#</th>
+              <th data-sort="name">Player</th>
+              <th data-sort="pos" style="width:56px">Pos</th>
+              <th data-sort="team" style="width:52px">Team</th>
+              <th data-sort="proj" style="width:70px">Proj</th>
+              <th data-sort="vorp" style="width:70px">Value</th>
+              <th style="width:150px"></th>
+            </tr>
+          </thead>
+          <tbody id="poolBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: My roster + log -->
+  <div class="right">
+    <div class="panel">
+      <h2><span class="dot"></span> My Roster <span style="margin-left:auto" class="mono" id="rosCount"></span></h2>
+      <div class="reqbar" id="reqBar"></div>
+      <div id="warnBox"></div>
+      <div class="myros" id="myRoster"></div>
+      <div class="stackbox" id="stackBox"></div>
+    </div>
+    <div class="panel">
+      <h2>Draft Log</h2>
+      <div class="loglist" id="logList"></div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Projections are 2026-season estimates with <b>6-pt passing TDs baked into QB totals</b>. Click any projection number to edit it.<br>
+  Everything autosaves to this browser. Use Export before switching devices.
+</footer>
+
+<!-- Settings modal -->
+<div class="overlay" id="settingsOverlay">
+  <div class="modal">
+    <h3>League Settings</h3>
+    <div class="body">
+      <div class="sechead">League</div>
+      <div class="frow"><label>Teams in league</label><input type="number" id="setTeams" min="4" max="20"></div>
+      <div class="frow"><label>Your total roster size (rounds)</label><input type="number" id="setRoster" min="8" max="25"></div>
+      <div class="sechead">Required starters (minimums)</div>
+      <div class="frow"><label>QB (you start 2)</label><input type="number" id="minQB" min="0" max="4"></div>
+      <div class="frow"><label>RB</label><input type="number" id="minRB" min="0" max="6"></div>
+      <div class="frow"><label>WR</label><input type="number" id="minWR" min="0" max="6"></div>
+      <div class="frow"><label>TE</label><input type="number" id="minTE" min="0" max="4"></div>
+      <div class="frow"><label>DEF</label><input type="number" id="minDEF" min="0" max="3"></div>
+      <div class="frow"><label>K</label><input type="number" id="minK" min="0" max="2"></div>
+      <div class="note">The recommender boosts positions you still owe, and locks onto them when you're running out of picks. Replacement-level value scales with league size (2-QB makes QBs scarce — that's handled).</div>
+    </div>
+    <div class="foot">
+      <button class="hbtn" id="settingsCancel">Cancel</button>
+      <button class="hbtn" id="settingsSave" style="border-color:var(--green);color:var(--green)">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add player modal -->
+<div class="overlay" id="addOverlay">
+  <div class="modal">
+    <h3>Add Custom Player</h3>
+    <div class="body">
+      <div class="frow"><label>Name</label><input class="wide" type="text" id="addName" placeholder="Player name"></div>
+      <div class="frow"><label>Team (abbrev)</label><input type="text" id="addTeam" placeholder="KC" maxlength="3"></div>
+      <div class="frow"><label>Position</label>
+        <select id="addPos"><option>QB</option><option>RB</option><option>WR</option><option>TE</option><option>DEF</option><option>K</option></select>
+      </div>
+      <div class="frow"><label>Projected points</label><input type="number" id="addProj" placeholder="180"></div>
+    </div>
+    <div class="foot">
+      <button class="hbtn" id="addCancel">Cancel</button>
+      <button class="hbtn" id="addSave" style="border-color:var(--green);color:var(--green)">Add</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="importFile" accept=".json" style="display:none">
+
+<script>
+/* =====================================================================
+   PLAYER DATA — 2026 season projections (PPR-flavored).
+   QB totals already reflect 6-POINT PASSING TDS (≈ +2 pts per pass TD
+   over standard). Edit any number in-app by clicking it.
+   ===================================================================== */
+const RAW = [
+// ---- QB (6pt pass TD projections) ----
+["Lamar Jackson","BAL","QB",432],["Josh Allen","BUF","QB",428],["Jayden Daniels","WAS","QB",414],
+["Joe Burrow","CIN","QB",408],["Jalen Hurts","PHI","QB",402],["Baker Mayfield","TB","QB",385],
+["Patrick Mahomes","KC","QB",380],["Justin Herbert","LAC","QB",368],["Bo Nix","DEN","QB",362],
+["Drake Maye","NE","QB",360],["Brock Purdy","SF","QB",354],["Jared Goff","DET","QB",352],
+["Kyler Murray","ARI","QB",348],["Jordan Love","GB","QB",346],["Dak Prescott","DAL","QB",344],
+["C.J. Stroud","HOU","QB",340],["Caleb Williams","CHI","QB",338],["Matthew Stafford","LAR","QB",330],
+["Justin Fields","NYJ","QB",328],["Trevor Lawrence","JAX","QB",326],["Bryce Young","CAR","QB",324],
+["Tua Tagovailoa","MIA","QB",322],["Sam Darnold","SEA","QB",318],["Michael Penix Jr.","ATL","QB",316],
+["J.J. McCarthy","MIN","QB",312],["Cam Ward","TEN","QB",308],["Geno Smith","LV","QB",298],
+["Aaron Rodgers","PIT","QB",288],["Anthony Richardson","IND","QB",278],["Daniel Jones","IND","QB",270],
+["Tyler Shough","NO","QB",255],["Russell Wilson","NYG","QB",248],["Jaxson Dart","NYG","QB",240],
+["Joe Flacco","CLE","QB",225],["Kirk Cousins","ATL","QB",180],
+// ---- RB ----
+["Bijan Robinson","ATL","RB",338],["Jahmyr Gibbs","DET","RB",330],["Saquon Barkley","PHI","RB",318],
+["Christian McCaffrey","SF","RB",305],["De'Von Achane","MIA","RB",292],["Jonathan Taylor","IND","RB",290],
+["Ashton Jeanty","LV","RB",286],["Josh Jacobs","GB","RB",284],["Derrick Henry","BAL","RB",280],
+["Bucky Irving","TB","RB",274],["Kyren Williams","LAR","RB",264],["Chase Brown","CIN","RB",260],
+["James Cook","BUF","RB",258],["Omarion Hampton","LAC","RB",252],["Breece Hall","NYJ","RB",240],
+["Alvin Kamara","NO","RB",238],["James Conner","ARI","RB",236],["Chuba Hubbard","CAR","RB",234],
+["Kenneth Walker III","SEA","RB",232],["TreVeyon Henderson","NE","RB",230],["Quinshon Judkins","CLE","RB",228],
+["Joe Mixon","HOU","RB",218],["D'Andre Swift","CHI","RB",214],["Tony Pollard","TEN","RB",212],
+["RJ Harvey","DEN","RB",210],["Aaron Jones","MIN","RB",208],["David Montgomery","DET","RB",204],
+["Kaleb Johnson","PIT","RB",198],["Isiah Pacheco","KC","RB",194],["Cam Skattebo","NYG","RB",192],
+["Rhamondre Stevenson","NE","RB",188],["Javonte Williams","DAL","RB",186],["Tyrone Tracy Jr.","NYG","RB",184],
+["Jaylen Warren","PIT","RB",182],["Travis Etienne","JAX","RB",180],["Brian Robinson Jr.","SF","RB",178],
+["J.K. Dobbins","DEN","RB",176],["Najee Harris","LAC","RB",172],["Jordan Mason","MIN","RB",170],
+["Rico Dowdle","CAR","RB",168],["Rachaad White","TB","RB",164],["Tank Bigsby","JAX","RB",160],
+["Zach Charbonnet","SEA","RB",158],["Trey Benson","ARI","RB",152],["Nick Chubb","HOU","RB",144],
+["Bhayshul Tuten","JAX","RB",140],["Braelon Allen","NYJ","RB",136],["Austin Ekeler","WAS","RB",132],
+["Dylan Sampson","CLE","RB",130],["Tyjae Spears","TEN","RB",128],["Ray Davis","BUF","RB",126],
+["Jerome Ford","CLE","RB",122],["Blake Corum","LAR","RB",118],["Jaydon Blue","DAL","RB",116],
+["Kimani Vidal","LAC","RB",112],["Will Shipley","PHI","RB",104],["Roschon Johnson","CHI","RB",96],
+// ---- WR ----
+["Ja'Marr Chase","CIN","WR",348],["Justin Jefferson","MIN","WR",330],["CeeDee Lamb","DAL","WR",322],
+["Puka Nacua","LAR","WR",318],["Amon-Ra St. Brown","DET","WR",316],["Malik Nabers","NYG","WR",302],
+["Nico Collins","HOU","WR",296],["Brian Thomas Jr.","JAX","WR",294],["Drake London","ATL","WR",290],
+["Jaxon Smith-Njigba","SEA","WR",286],["A.J. Brown","PHI","WR",280],["Ladd McConkey","LAC","WR",270],
+["Rashee Rice","KC","WR",266],["Tee Higgins","CIN","WR",258],["Garrett Wilson","NYJ","WR",256],
+["Marvin Harrison Jr.","ARI","WR",254],["Tyreek Hill","MIA","WR",250],["Mike Evans","TB","WR",250],
+["Davante Adams","LAR","WR",248],["Terry McLaurin","WAS","WR",244],["DK Metcalf","PIT","WR",240],
+["Xavier Worthy","KC","WR",236],["DJ Moore","CHI","WR",234],["DeVonta Smith","PHI","WR",232],
+["Tetairoa McMillan","CAR","WR",230],["Courtland Sutton","DEN","WR",228],["Zay Flowers","BAL","WR",226],
+["George Pickens","DAL","WR",224],["Jameson Williams","DET","WR",222],["Travis Hunter","JAX","WR",220],
+["Emeka Egbuka","TB","WR",218],["Rome Odunze","CHI","WR",216],["Jaylen Waddle","MIA","WR",214],
+["Jordan Addison","MIN","WR",212],["Chris Olave","NO","WR",208],["Chris Godwin","TB","WR",206],
+["Jerry Jeudy","CLE","WR",204],["Calvin Ridley","TEN","WR",202],["Matthew Golden","GB","WR",198],
+["Ricky Pearsall","SF","WR",194],["Stefon Diggs","NE","WR",192],["Jauan Jennings","SF","WR",190],
+["Khalil Shakir","BUF","WR",188],["Jakobi Meyers","LV","WR",186],["Michael Pittman Jr.","IND","WR",184],
+["Cooper Kupp","SEA","WR",182],["Deebo Samuel","WAS","WR",180],["Brandon Aiyuk","SF","WR",178],
+["Josh Downs","IND","WR",176],["Keon Coleman","BUF","WR",174],["Darnell Mooney","ATL","WR",170],
+["Quentin Johnston","LAC","WR",168],["Jayden Higgins","HOU","WR",166],["Rashid Shaheed","NO","WR",164],
+["Hollywood Brown","KC","WR",162],["Cedric Tillman","CLE","WR",160],["Luther Burden III","CHI","WR",158],
+["Tre Harris","LAC","WR",156],["Wan'Dale Robinson","NYG","WR",154],["Jayden Reed","GB","WR",152],
+["Marvin Mims Jr.","DEN","WR",150],["Romeo Doubs","GB","WR",148],["Adam Thielen","MIN","WR",144],
+["Kyle Williams","NE","WR",140],["DeMario Douglas","NE","WR",132],["Jack Bech","LV","WR",128],
+["Pat Bryant","DEN","WR",120],["Dont'e Thornton Jr.","LV","WR",116],
+// ---- TE ----
+["Brock Bowers","LV","TE",258],["Trey McBride","ARI","TE",244],["George Kittle","SF","TE",218],
+["Sam LaPorta","DET","TE",198],["T.J. Hockenson","MIN","TE",188],["Tucker Kraft","GB","TE",184],
+["Tyler Warren","IND","TE",176],["Travis Kelce","KC","TE",174],["David Njoku","CLE","TE",172],
+["Colston Loveland","CHI","TE",168],["Mark Andrews","BAL","TE",166],["Evan Engram","DEN","TE",162],
+["Dalton Kincaid","BUF","TE",154],["Jake Ferguson","DAL","TE",150],["Dallas Goedert","PHI","TE",146],
+["Kyle Pitts","ATL","TE",144],["Jonnu Smith","PIT","TE",142],["Hunter Henry","NE","TE",138],
+["Zach Ertz","WAS","TE",134],["Isaiah Likely","BAL","TE",130],["Pat Freiermuth","PIT","TE",128],
+["Cade Otton","TB","TE",124],["Brenton Strange","JAX","TE",120],["Mike Gesicki","CIN","TE",114],
+["Dalton Schultz","HOU","TE",112],["Theo Johnson","NYG","TE",110],["Ja'Tavion Sanders","CAR","TE",108],
+["Chig Okonkwo","TEN","TE",104],["Cole Kmet","CHI","TE",102],["Mason Taylor","NYJ","TE",100],
+["Harold Fannin Jr.","CLE","TE",98],["Noah Fant","SEA","TE",92],
+// ---- DEF ----
+["Broncos D/ST","DEN","DEF",135],["Ravens D/ST","BAL","DEF",130],["Texans D/ST","HOU","DEF",128],
+["Steelers D/ST","PIT","DEF",125],["Eagles D/ST","PHI","DEF",124],["Vikings D/ST","MIN","DEF",122],
+["Seahawks D/ST","SEA","DEF",120],["Packers D/ST","GB","DEF",118],["Bills D/ST","BUF","DEF",115],
+["Rams D/ST","LAR","DEF",113],["Chiefs D/ST","KC","DEF",112],["Lions D/ST","DET","DEF",110],
+["Chargers D/ST","LAC","DEF",109],["Cardinals D/ST","ARI","DEF",108],["Patriots D/ST","NE","DEF",107],
+["49ers D/ST","SF","DEF",105],["Jets D/ST","NYJ","DEF",104],["Buccaneers D/ST","TB","DEF",103],
+["Giants D/ST","NYG","DEF",102],["Colts D/ST","IND","DEF",100],["Cowboys D/ST","DAL","DEF",99],
+["Commanders D/ST","WAS","DEF",98],["Bears D/ST","CHI","DEF",97],["Falcons D/ST","ATL","DEF",96],
+// ---- K ----
+["Brandon Aubrey","DAL","K",162],["Chris Boswell","PIT","K",152],["Jake Bates","DET","K",150],
+["Cameron Dicker","LAC","K",148],["Ka'imi Fairbairn","HOU","K",146],["Harrison Butker","KC","K",144],
+["Chase McLaughlin","TB","K",142],["Evan McPherson","CIN","K",136],["Tyler Bass","BUF","K",132],
+["Jake Elliott","PHI","K",130],["Wil Lutz","DEN","K",129],["Younghoe Koo","ATL","K",126],
+["Jason Sanders","MIA","K",124],["Matt Gay","WAS","K",122],
+];
+
+const POSITIONS = ["QB","RB","WR","TE","DEF","K"];
+const LS_KEY = "draft-war-room-v1";
+
+/* ---------- State ---------- */
+const defaultState = () => ({
+  taken: {},            // id -> true (drafted by someone else)
+  mine: [],             // ids in pick order
+  log: [],              // {id, who:'me'|'other'}
+  custom: [],           // [name,team,pos,proj,id]
+  overrides: {},        // id -> proj
+  settings: { teams:12, roster:16, min:{QB:2,RB:3,WR:3,TE:1,DEF:2,K:0} },
+  ui: { pos:"ALL", showTaken:false, sort:"vorp", dir:-1 }
+});
+let S = defaultState();
+
+function load(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw){
+      const p = JSON.parse(raw);
+      S = Object.assign(defaultState(), p);
+      S.settings = Object.assign(defaultState().settings, p.settings||{});
+      S.settings.min = Object.assign(defaultState().settings.min, (p.settings||{}).min||{});
+      S.ui = Object.assign(defaultState().ui, p.ui||{});
+    }
+  }catch(e){ console.warn("load failed", e); }
+}
+let saveTimer=null;
+function save(){
+  localStorage.setItem(LS_KEY, JSON.stringify(S));
+  const b = document.getElementById("saveBadge");
+  b.textContent = "Saved ✓"; b.classList.add("flash");
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{ b.textContent="Autosave on"; b.classList.remove("flash"); }, 1400);
+}
+
+/* ---------- Players ---------- */
+function allPlayers(){
+  const base = RAW.map((r,i)=>({id:"p"+i, name:r[0], team:r[1], pos:r[2], proj:r[3]}));
+  const customs = S.custom.map((r,i)=>({id:r[4]||("c"+i), name:r[0], team:r[1], pos:r[2], proj:r[3], custom:true}));
+  const all = base.concat(customs);
+  for(const p of all){ if(S.overrides[p.id]!=null) p.proj = S.overrides[p.id]; }
+  return all;
+}
+
+/* Replacement level per position — scales with league size. 2-QB league:
+   teams×2 QB starters, so replacement QB is deep and QBs carry huge value. */
+function replacementLevels(players){
+  const t = S.settings.teams;
+  const demand = { QB:Math.round(t*2.3), RB:Math.round(t*2.6), WR:Math.round(t*3.2), TE:Math.round(t*1.3), DEF:Math.round(t*1.1), K:Math.round(t*1.05) };
+  const repl = {};
+  for(const pos of POSITIONS){
+    const list = players.filter(p=>p.pos===pos).sort((a,b)=>b.proj-a.proj);
+    const idx = Math.min(demand[pos], list.length-1);
+    repl[pos] = list.length ? list[Math.max(0,idx)].proj : 0;
+  }
+  return repl;
+}
+
+function myCounts(){
+  const map = {QB:0,RB:0,WR:0,TE:0,DEF:0,K:0};
+  const byId = idIndex();
+  for(const id of S.mine){ const p=byId[id]; if(p) map[p.pos]++; }
+  return map;
+}
+let _idx=null;
+function idIndex(){
+  const m={};
+  for(const p of allPlayers()) m[p.id]=p;
+  return m;
+}
+
+/* ---------- Recommendation engine ---------- */
+function needInfo(){
+  const counts = myCounts();
+  const min = S.settings.min;
+  const needs = {};
+  let totalNeeded = 0;
+  for(const pos of POSITIONS){
+    needs[pos] = Math.max(0, (min[pos]||0) - counts[pos]);
+    totalNeeded += needs[pos];
+  }
+  const picksLeft = Math.max(0, S.settings.roster - S.mine.length);
+  return {counts, needs, totalNeeded, picksLeft};
+}
+
+function scoreBoard(){
+  const players = allPlayers();
+  const repl = replacementLevels(players);
+  const {needs, totalNeeded, picksLeft} = needInfo();
+  const byId = idIndex();
+  const myTeamsQB = new Set(), myTeamsPC = new Set(); // QB teams, pass-catcher teams I own
+  for(const id of S.mine){
+    const p = byId[id]; if(!p) continue;
+    if(p.pos==="QB") myTeamsQB.add(p.team);
+    if(p.pos==="WR"||p.pos==="TE") myTeamsPC.add(p.team);
+  }
+  const mustFill = totalNeeded >= picksLeft && picksLeft > 0; // out of slack: only needed positions
+  const avail = players.filter(p => !S.taken[p.id] && !S.mine.includes(p.id));
+
+  const scored = avail.map(p=>{
+    const vorp = p.proj - (repl[p.pos]||0);
+    let score = vorp;
+    let why = [];
+    // Need pressure
+    if(needs[p.pos] > 0){
+      const urgency = picksLeft>0 ? Math.min(1, totalNeeded/picksLeft) : 1;
+      score *= (1 + 0.35*urgency);
+      why.push("fills required "+p.pos+" slot ("+needs[p.pos]+" still needed)");
+    } else if(mustFill){
+      score = -9999; // hard lock to required positions
+    }
+    // Stacks
+    let stack = null;
+    if((p.pos==="WR"||p.pos==="TE") && myTeamsQB.has(p.team)){ stack = "stacks with your "+p.team+" QB"; }
+    if(p.pos==="QB" && myTeamsPC.has(p.team)){ stack = "stacks with your "+p.team+" pass-catcher"; }
+    if(stack){ score *= 1.08; why.push(stack); }
+    if(score !== -9999 && vorp > 0 && p.pos==="QB"){ /* 2QB scarcity already in VORP */ }
+    return {p, vorp, score, why, stack};
+  }).filter(x=>x.score > -9000);
+
+  scored.sort((a,b)=>b.score-a.score);
+  return {scored, repl};
+}
+
+/* ---------- Actions ---------- */
+function markTaken(id){ S.taken[id]=true; S.log.push({id, who:"other"}); commit(); }
+function pickMine(id){ S.mine.push(id); S.log.push({id, who:"me"}); commit(); }
+function undoLast(){
+  const last = S.log.pop();
+  if(!last) return;
+  if(last.who==="me"){ S.mine = S.mine.filter(x=>x!==last.id); }
+  else { delete S.taken[last.id]; }
+  commit();
+}
+function undoEntry(i){
+  const e = S.log[i];
+  if(!e) return;
+  if(e.who==="me"){ const k=S.mine.lastIndexOf(e.id); if(k>=0) S.mine.splice(k,1); }
+  else delete S.taken[e.id];
+  S.log.splice(i,1);
+  commit();
+}
+function dropMine(id){
+  const k=S.mine.lastIndexOf(id); if(k>=0) S.mine.splice(k,1);
+  for(let i=S.log.length-1;i>=0;i--){ if(S.log[i].id===id && S.log[i].who==="me"){ S.log.splice(i,1); break; } }
+  commit();
+}
+function editProj(id){
+  const p = idIndex()[id]; if(!p) return;
+  const v = prompt("Projected season points for "+p.name+":", p.proj);
+  if(v===null) return;
+  const n = parseFloat(v);
+  if(!isNaN(n) && n>=0){ S.overrides[id]=n; commit(); }
+}
+function commit(){ save(); render(); }
+
+/* ---------- Rendering ---------- */
+const $ = s => document.querySelector(s);
+
+function posBadge(pos){ return '<span class="pos '+pos+'">'+pos+'</span>'; }
+
+function renderTabs(){
+  const tabs = ["ALL"].concat(POSITIONS);
+  $("#posTabs").innerHTML = tabs.map(t=>
+    '<button class="ptab'+(S.ui.pos===t?" on":"")+'" data-pos="'+t+'">'+t+'</button>').join("");
+}
+
+function renderPool(){
+  const {scored} = scoreBoard();
+  const vorpMap = {};
+  for(const s of scored) vorpMap[s.p.id]=s;
+  const players = allPlayers();
+  const repl = replacementLevels(players);
+  const q = $("#search").value.trim().toLowerCase();
+
+  let rows = players.map(p=>({
+    p, vorp: p.proj-(repl[p.pos]||0),
+    taken: !!S.taken[p.id], mine: S.mine.includes(p.id),
+    score: vorpMap[p.id] ? vorpMap[p.id].score : -Infinity,
+    stack: vorpMap[p.id] ? vorpMap[p.id].stack : null
+  }));
+
+  if(S.ui.pos!=="ALL") rows = rows.filter(r=>r.p.pos===S.ui.pos);
+  if(q) rows = rows.filter(r=> r.p.name.toLowerCase().includes(q) || r.p.team.toLowerCase().includes(q));
+  if(!S.ui.showTaken) rows = rows.filter(r=>!r.taken);
+
+  const dir = S.ui.dir, key = S.ui.sort;
+  rows.sort((a,b)=>{
+    let av,bv;
+    switch(key){
+      case "name": av=a.p.name; bv=b.p.name; return dir*av.localeCompare(bv);
+      case "team": av=a.p.team; bv=b.p.team; return dir*av.localeCompare(bv);
+      case "pos": av=a.p.pos; bv=b.p.pos; return dir*av.localeCompare(bv) || b.vorp-a.vorp;
+      case "proj": return dir*(a.p.proj-b.p.proj);
+      case "rank": case "vorp": default: return dir*(a.vorp-b.vorp);
+    }
+  });
+
+  document.querySelectorAll("thead th").forEach(th=>{
+    th.classList.toggle("sorton", th.dataset.sort===key);
+  });
+
+  $("#poolBody").innerHTML = rows.map((r,i)=>{
+    const cls = r.mine ? "mine-row" : (r.taken ? "taken" : "");
+    const act = r.mine
+      ? '<button class="undo1" data-drop="'+r.p.id+'">↩ un-pick</button>'
+      : r.taken
+        ? '<button class="undo1" data-untake="'+r.p.id+'">↩ restore</button>'
+        : '<button class="pick" data-pick="'+r.p.id+'">✓ MINE</button><button class="kill" data-take="'+r.p.id+'">✕ taken</button>';
+    return '<tr class="'+cls+'">'+
+      '<td class="mono" style="color:var(--faint)">'+(i+1)+'</td>'+
+      '<td><span class="pname">'+r.p.name+'</span>'+(r.stack?'<span class="stackchip">🔗 stack</span>':'')+'</td>'+
+      '<td>'+posBadge(r.p.pos)+'</td>'+
+      '<td class="mono" style="color:var(--dim)">'+r.p.team+'</td>'+
+      '<td><span class="proj mono" data-edit="'+r.p.id+'">'+r.p.proj+'</span></td>'+
+      '<td class="mono" style="color:'+(r.vorp>=0?'var(--green)':'var(--faint)')+'">'+(r.vorp>0?"+":"")+Math.round(r.vorp)+'</td>'+
+      '<td><div class="act">'+act+'</div></td></tr>';
+  }).join("") || '<tr><td colspan="7" class="empty">No players match.</td></tr>';
+}
+
+function renderBest(){
+  const {scored} = scoreBoard();
+  const top = scored[0];
+  const hero = $("#hero");
+  if(!top){ hero.innerHTML = '<div class="empty">Board is empty — nice draft!</div>'; $("#baList").innerHTML=""; return; }
+  const p = top.p;
+  const why = top.why.length ? "▸ " + top.why.join("<br>▸ ") : "▸ best raw value on the board";
+  hero.innerHTML =
+    '<div class="toppick">'+
+      '<div class="tag">⭐ Top Pick Right Now</div>'+
+      '<div class="name">'+p.name+'</div>'+
+      '<div class="meta">'+posBadge(p.pos)+' &nbsp;'+p.team+' &nbsp;·&nbsp; <span class="mono">'+p.proj+' proj</span> &nbsp;·&nbsp; <span class="mono" style="color:var(--green)">+'+Math.round(top.vorp)+' vs replacement</span></div>'+
+      '<div class="why">'+why+'</div>'+
+      '<div class="actions">'+
+        '<button class="pick" data-pick="'+p.id+'">✓ DRAFT HIM</button>'+
+        '<button class="kill" data-take="'+p.id+'">✕ someone took him</button>'+
+      '</div>'+
+    '</div>';
+  $("#baList").innerHTML = scored.slice(1,16).map((s,i)=>
+    '<div class="barow">'+
+      '<div class="rk mono">'+(i+2)+'</div>'+
+      posBadge(s.p.pos)+
+      '<div class="info"><div class="nm">'+s.p.name+(s.stack?'<span class="stackchip">🔗</span>':'')+'</div>'+
+      '<div class="sm">'+s.p.team+' · '+s.p.proj+' pts</div></div>'+
+      '<div class="val mono">+'+Math.round(s.vorp)+'</div>'+
+      '<button class="pick" data-pick="'+s.p.id+'">✓</button>'+
+      '<button class="kill" data-take="'+s.p.id+'">✕</button>'+
+    '</div>'
+  ).join("");
+}
+
+function renderRoster(){
+  const {counts, needs, totalNeeded, picksLeft} = needInfo();
+  const min = S.settings.min;
+  const byId = idIndex();
+
+  $("#rosCount").textContent = S.mine.length + " / " + S.settings.roster;
+
+  $("#reqBar").innerHTML = POSITIONS.filter(pos=>min[pos]>0 || counts[pos]>0).map(pos=>{
+    const have=counts[pos], need=min[pos]||0;
+    let pips="";
+    for(let i=0;i<Math.max(need,have);i++){
+      pips += '<span class="pip '+(i<Math.min(have,need)?"full":(i<have?"extra":""))+'"></span>';
+    }
+    return '<div class="reqrow"><span class="lbl" style="color:var(--'+pos.toLowerCase()+')">'+pos+'</span>'+
+      '<div class="pips">'+pips+'</div><span class="cnt mono">'+have+' / '+need+'</span></div>';
+  }).join("");
+
+  const warn = $("#warnBox");
+  if(picksLeft===0){
+    warn.innerHTML = '<div class="warn">Roster full. Good luck this season! 🏆</div>';
+  } else if(totalNeeded > picksLeft){
+    warn.innerHTML = '<div class="warn crit">⚠️ You owe '+totalNeeded+' required starters but only have '+picksLeft+' picks left. Fill requirements NOW.</div>';
+  } else if(totalNeeded === picksLeft && totalNeeded>0){
+    warn.innerHTML = '<div class="warn crit">🔒 Every remaining pick must fill a requirement ('+Object.entries(needs).filter(([,v])=>v>0).map(([k,v])=>v+" "+k).join(", ")+'). Recommendations are locked to those.</div>';
+  } else if(totalNeeded>0){
+    warn.innerHTML = '<div class="warn">Still required: '+Object.entries(needs).filter(([,v])=>v>0).map(([k,v])=>v+" "+k).join(", ")+' · '+picksLeft+' picks left ('+(picksLeft-totalNeeded)+' flex).</div>';
+  } else {
+    warn.innerHTML = '<div class="warn" style="color:var(--green)">✓ All requirements met — draft best value / upside.</div>';
+  }
+
+  $("#myRoster").innerHTML = S.mine.length ? S.mine.map((id,i)=>{
+    const p = byId[id]; if(!p) return "";
+    return '<div class="myp">'+posBadge(p.pos)+
+      '<div class="n">'+p.name+' <span class="t">'+p.team+' · <span class="mono">'+p.proj+'</span></span></div>'+
+      '<span class="t mono">R'+(i+1)+'</span>'+
+      '<span class="x" data-drop="'+id+'" title="Remove from my roster">✕</span></div>';
+  }).join("") : '<div class="empty">No picks yet.<br>Hit <b style="color:var(--green)">✓ MINE</b> on a player when you draft them.</div>';
+
+  // Stacks summary
+  const teams={};
+  for(const id of S.mine){ const p=byId[id]; if(!p) continue; (teams[p.team]=teams[p.team]||[]).push(p); }
+  const stacks = Object.entries(teams).filter(([,ps])=>ps.length>1 && ps.some(x=>x.pos==="QB") && ps.some(x=>x.pos==="WR"||x.pos==="TE"));
+  const multis = Object.entries(teams).filter(([,ps])=>ps.length>1);
+  let html="";
+  if(stacks.length) html += "🔗 <b>Live stacks:</b> " + stacks.map(([t,ps])=>t+" ("+ps.map(x=>x.name.split(" ").pop()).join(" + ")+")").join(" · ");
+  else if(multis.length) html += "Same-team pairs: " + multis.map(([t,ps])=>t+" ×"+ps.length).join(" · ");
+  else if(S.mine.length) html += "No stacks yet — pairing a WR/TE with your QB adds a boost to recommendations.";
+  $("#stackBox").innerHTML = html;
+
+  const total = S.mine.reduce((a,id)=>a+((byId[id]||{}).proj||0),0);
+  if(S.mine.length) $("#stackBox").innerHTML += '<br>Σ projected roster points: <b class="mono">'+Math.round(total)+'</b>';
+}
+
+function renderLog(){
+  const byId = idIndex();
+  $("#logList").innerHTML = S.log.length ? S.log.map((e,i)=>{
+    const p = byId[e.id]; if(!p) return "";
+    return '<div class="logrow"><span class="who '+(e.who==="me"?"me":"")+'">'+(e.who==="me"?"MY PICK":"taken")+'</span>'+
+      '<span class="n">'+p.name+' <span style="color:var(--faint)">'+p.pos+' · '+p.team+'</span></span>'+
+      '<span class="x undo1" data-undoentry="'+i+'" style="font-size:10.5px">undo</span></div>';
+  }).reverse().join("") : '<div class="empty">Nothing yet. Mark players as they come off the board.</div>';
+}
+
+function render(){
+  _idx = null;
+  renderTabs(); renderPool(); renderBest(); renderRoster(); renderLog();
+}
+
+/* ---------- Events (delegated) ---------- */
+document.addEventListener("click", e=>{
+  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],th[data-sort]");
+  if(!t) return;
+  if(t.dataset.pick) return pickMine(t.dataset.pick);
+  if(t.dataset.take) return markTaken(t.dataset.take);
+  if(t.dataset.untake){ delete S.taken[t.dataset.untake]; for(let i=S.log.length-1;i>=0;i--){if(S.log[i].id===t.dataset.untake&&S.log[i].who==="other"){S.log.splice(i,1);break;}} return commit(); }
+  if(t.dataset.drop) return dropMine(t.dataset.drop);
+  if(t.dataset.edit) return editProj(t.dataset.edit);
+  if(t.dataset.undoentry!=null) return undoEntry(+t.dataset.undoentry);
+  if(t.dataset.pos){ S.ui.pos=t.dataset.pos; save(); renderTabs(); renderPool(); return; }
+  if(t.dataset.sort){
+    if(S.ui.sort===t.dataset.sort) S.ui.dir*=-1; else { S.ui.sort=t.dataset.sort; S.ui.dir = (t.dataset.sort==="name"||t.dataset.sort==="team"||t.dataset.sort==="pos")?1:-1; }
+    save(); renderPool();
+  }
+});
+$("#search").addEventListener("input", renderPool);
+$("#showTaken").addEventListener("change", e=>{ S.ui.showTaken=e.target.checked; save(); renderPool(); });
+$("#undoBtn").addEventListener("click", undoLast);
+document.addEventListener("keydown", e=>{
+  if((e.ctrlKey||e.metaKey) && e.key==="z"){ e.preventDefault(); undoLast(); }
+  if(e.key==="/" && document.activeElement!==$("#search")){ e.preventDefault(); $("#search").focus(); }
+});
+
+/* Settings modal */
+$("#settingsBtn").addEventListener("click", ()=>{
+  $("#setTeams").value=S.settings.teams; $("#setRoster").value=S.settings.roster;
+  for(const pos of POSITIONS) $("#min"+pos).value=S.settings.min[pos]||0;
+  $("#settingsOverlay").classList.add("show");
+});
+$("#settingsCancel").addEventListener("click", ()=>$("#settingsOverlay").classList.remove("show"));
+$("#settingsSave").addEventListener("click", ()=>{
+  S.settings.teams = Math.max(4, +$("#setTeams").value||12);
+  S.settings.roster = Math.max(8, +$("#setRoster").value||16);
+  for(const pos of POSITIONS) S.settings.min[pos] = Math.max(0, +$("#min"+pos).value||0);
+  $("#settingsOverlay").classList.remove("show");
+  commit();
+});
+
+/* Add player modal */
+$("#addBtn").addEventListener("click", ()=>{ $("#addName").value=""; $("#addTeam").value=""; $("#addProj").value=""; $("#addOverlay").classList.add("show"); $("#addName").focus(); });
+$("#addCancel").addEventListener("click", ()=>$("#addOverlay").classList.remove("show"));
+$("#addSave").addEventListener("click", ()=>{
+  const name=$("#addName").value.trim(), team=$("#addTeam").value.trim().toUpperCase()||"FA",
+        pos=$("#addPos").value, proj=parseFloat($("#addProj").value)||0;
+  if(!name) return alert("Name required");
+  S.custom.push([name,team,pos,proj,"c"+Date.now()]);
+  $("#addOverlay").classList.remove("show");
+  commit();
+});
+document.querySelectorAll(".overlay").forEach(o=>o.addEventListener("click", e=>{ if(e.target===o) o.classList.remove("show"); }));
+
+/* Export / Import / Reset */
+$("#exportBtn").addEventListener("click", ()=>{
+  const blob = new Blob([JSON.stringify(S,null,2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "draft-war-room-save.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+$("#importBtn").addEventListener("click", ()=>$("#importFile").click());
+$("#importFile").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{ try{ S = Object.assign(defaultState(), JSON.parse(r.result)); commit(); }catch(err){ alert("Invalid save file"); } };
+  r.readAsText(f);
+  e.target.value="";
+});
+$("#resetBtn").addEventListener("click", ()=>{
+  if(confirm("Reset the whole board? This clears your roster, taken players, and log. (Settings & custom players are kept.)")){
+    const keep = {settings:S.settings, custom:S.custom, overrides:S.overrides};
+    S = Object.assign(defaultState(), keep);
+    commit();
+  }
+});
+
+/* ---------- Boot ---------- */
+load();
+render();
+</script>
+</body>
+</html>
