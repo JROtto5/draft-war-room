@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+"""Regenerate data.js for Draft War Room.
+
+Inputs:
+  --proj   projections CSV (PLAYER,TEAM,POS,...,PATD,...,PPR,HALF per-stat columns)
+  --board  team board CSV (TEAM,QUARTERBACK,QBRANGE,W15..17,ADP columns)
+  --season last completed season for actuals (default 2025)
+  --out    output path (default: data.js next to repo root)
+
+Fetches Sleeper's public player DB + season stats (no keys needed) for
+headshots, bios, injury/depth info and last-season stat lines.
+Cache files land in .cache/ so re-runs are offline-friendly.
+"""
+import argparse, csv, json, os, re, sys, datetime, urllib.request
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+
+ALIASES = {
+    "chigoziem okonkwo": "chig okonkwo",
+    "cameron ward": "cam ward",
+    "joshua palmer": "josh palmer",
+    "marquise brown": "hollywood brown",
+    "gabriel davis": "gabe davis",
+}
+def norm(name):
+    n = name.lower().strip()
+    n = re.sub(r"[.'\u2019\-]", "", n)
+    n = re.sub(r"\s+(jr|sr|ii|iii|iv|v)$", "", n)
+    n = re.sub(r"\s+", " ", n).strip()
+    return ALIASES.get(n, n)
+
+def fetch_json(url, cache_name):
+    cache_dir = os.path.join(HERE, ".cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    path = os.path.join(cache_dir, cache_name)
+    if os.path.exists(path):
+        return json.load(open(path))
+    print("fetching", url, file=sys.stderr)
+    with urllib.request.urlopen(url, timeout=90) as r:
+        data = json.load(r)
+    json.dump(data, open(path, "w"))
+    return data
+
+# ---------------- intel (pasted analyst + prop data, 2026 preseason) ----------------
+TARGETS = {
+ "Bhayshul Tuten": ("40-64","Door open to outplay Chris Rodriguez and win the lion's share."),
+ "Bijan Robinson": ("1-6","Deployed rushing AND receiving - the peak is about to hit."),
+ "Blake Corum": ("79-103","Shared workload, but injury-contingent league-winning upside."),
+ "Brenton Strange": ("138-162","Career highs despite missing 5 games; PFF's 7th-graded TE."),
+ "Brock Bowers": ("8-32","Could lead ALL TEs (and most WRs) in targets - miserable LV WR room."),
+ "Caleb Williams": ("59-83","Ascending in an elite system, dual-threat for fantasy."),
+ "Chase Brown": ("6-28","True 3-down workhorse in an offense that will put up numbers."),
+ "Chig Okonkwo": ("127-151","Now TE1 in WAS - Daniels leans on the TE. 80-target upside."),
+ "Christian Watson": ("46-70","Injury history keeps price low; career-year vibes at 27."),
+ "Colston Loveland": ("35-59","Ascending talent, offensive focus - weekly wrecker."),
+ "DeVonta Smith": ("10-38","True WR1 target share now; could ascend to alpha status."),
+ "Drake London": ("8-32","True WR1 role at a 2nd-round price. Could go nuclear."),
+ "Drake Maye": ("54-78","QB1 potential; unrealized rush upside + AJB in the pass game."),
+ "Emeka Egbuka": ("21-45","Year-2 ascent looks promising with Evans gone."),
+ "Greg Dulcich": ("166-190","Brutal situation but might be option 1 for targets, dirt cheap."),
+ "Isaac TeSlaa": ("157-181","Born to make contested end-zone catches; upside for more."),
+ "Ja'Marr Chase": ("1-5","125/1412/8 last year - repeat explosion well in play."),
+ "Jahmyr Gibbs": ("1-6","True feature back: explosion, receiving, goal line, snaps."),
+ "Jalen McMillan": ("133-157","TBB's possible WR2 - stands out in every opportunity."),
+ "Jayden Higgins": ("112-136","6 TDs in limited '25 looks; role expanding in year two."),
+ "Jonathan Taylor": ("2-12","The offense revolves around him; this year isn't forever."),
+ "Jonathon Brooks": ("82-106","Mid-round price that could look 1st-round by Week 14."),
+ "Josh Allen": ("24-48","Unmatched individual upside - QB1 without weapons, maybe upgraded."),
+ "Josh Jacobs": ("29-53","Off-field issue suppressed the price; these usually resolve."),
+ "Justin Herbert": ("70-94","Everything in LAC looks bullish; young ascending skill corps."),
+ "Keaton Mitchell": ("125-149","Cheap points late; role could expand."),
+ "Kenneth Walker III": ("6-27","Bigger receiving role in KC; Reid finds work for his ilk."),
+ "Luther Burden": ("33-57","2.34 YPRR on <50% routes; full-time now. League-winner."),
+ "Malik Willis": ("122-146","Cheapest QB with secure job + major rushing upside."),
+ "Mark Andrews": ("113-137","Likely (the player) left; new OC signals pass-heavy. Bounce-back."),
+ "Puka Nacua": ("1-5","Volume monster in a scheme that demands his usage."),
+ "Rashid Shaheed": ("119-143","SEA deep threat in a Super Bowl offense; more than go routes."),
+ "Ray Davis": ("178-202","Unmatched zero-to-hero injury-contingent upside, dirt cheap."),
+ "Terrance Ferguson": ("171-195","Massive upside if workload consolidates; spike weeks anyway."),
+ "Terry McLaurin": ("31-55","New offense intends to feature him with high target volume."),
+ "Travis Etienne": ("26-50","NO paid up for their new stallion; could be uptempo."),
+ "Travis Hunter": ("128-152","One WR injury changes it all; extremely cheap for the talent."),
+ "Tre Tucker": ("144-168","They think he can be featured; lower price, could pay big."),
+ "Trevor Lawrence": ("73-97","WR room 4-deep; passing game could go wild."),
+ "Tyler Warren": ("52-76","One of IND's most targeted in '25; usage should only grow."),
+ "Woody Marks": ("129-153","Role out of the gate; Montgomery ~90% to miss games."),
+ "Zay Flowers": ("19-43",""),
+}
+PROPS = [
+ ("Jerry Jeudy","rec yds","under",13.54),("Romeo Doubs","rec yds","under",11.95),
+ ("Calvin Ridley","rec yds","under",8.87),("Jaxson Dart","rush yds","under",7.26),
+ ("Kyler Murray","rush yds","under",6.15),("Justin Herbert","rush yds","under",5.9),
+ ("T.J. Hockenson","rec yds","under",5.38),("Juwan Johnson","rec yds","under",5.24),
+ ("George Kittle","rec TD","under",5.11),("Josh Downs","rec yds","under",4.96),
+ ("Germie Bernard","rec yds","under",4.93),("Jadarian Price","rush yds","under",4.92),
+ ("Malik Willis","pass yds","over",4.87),("Sam Darnold","pass yds","under",4.84),
+ ("Dallas Goedert","rec TD","under",4.63),("Jayden Daniels","pass yds","over",4.49),
+ ("Kyren Williams","rush yds","under",4.4),("De'Von Achane","rec yds","over",4.37),
+ ("C.J. Stroud","pass yds","under",4.31),("De'Von Achane","rush yds","under",4.29),
+ ("Dalton Schultz","rec yds","under",4.22),("Travis Kelce","rec yds","under",4.1),
+ ("Ladd McConkey","rec yds","over",4.0),("Jalen Hurts","pass yds","under",3.98),
+ ("Rashid Shaheed","rec yds","over",3.93),("Emeka Egbuka","rec yds","over",3.91),
+ ("Jayden Daniels","rush yds","under",3.72),("Lamar Jackson","rush yds","over",3.72),
+ ("Travis Etienne","rush yds","over",3.7),("Malik Willis","rush yds","under",3.66),
+ ("Bijan Robinson","rec yds","over",3.62),("Omar Cooper","rec yds","under",3.38),
+ ("Chris Godwin","rec yds","under",3.19),("Bhayshul Tuten","rush yds","over",3.18),
+ ("Rashid Shaheed","rec TD","over",3.1),("Saquon Barkley","rush yds","over",3.04),
+ ("Isaiah Likely","rec yds","under",3.02),("Jeremiyah Love","rush yds","under",2.97),
+ ("Saquon Barkley","rec yds","under",2.92),("DeVonta Smith","rec TD","over",2.9),
+ ("Greg Dulcich","rec yds","over",2.84),("Brian Thomas","rec TD","over",2.82),
+ ("Rashod Bateman","rec yds","under",2.79),("Courtland Sutton","rec yds","under",2.74),
+ ("Jakobi Meyers","rec yds","under",2.64),("Aaron Rodgers","pass yds","under",2.62),
+ ("Amon-Ra St. Brown","rec yds","under",2.6),("DJ Moore","rec yds","over",2.58),
+ ("Bijan Robinson","rec TD","over",2.56),
+]
+
+T2SLEEPER = {"SFO":"SF","GBP":"GB","KCC":"KC","NEP":"NE","NOS":"NO","TBB":"TB","LVR":"LV","JAC":"JAX"}
+T2ESPN = {"ARI":"ari","ATL":"atl","BAL":"bal","BUF":"buf","CAR":"car","CHI":"chi","CIN":"cin","CLE":"cle",
+"DAL":"dal","DEN":"den","DET":"det","GBP":"gb","HOU":"hou","IND":"ind","JAC":"jax","KCC":"kc","LAC":"lac",
+"LAR":"lar","LVR":"lv","MIA":"mia","MIN":"min","NEP":"ne","NOS":"no","NYG":"nyg","NYJ":"nyj","PHI":"phi",
+"PIT":"pit","SEA":"sea","SFO":"sf","TBB":"tb","TEN":"ten","WAS":"wsh"}
+POSITIONS = ("QB","RB","WR","TE","DEF")
+
+def f(row, col):
+    try: return float(row.get(col) or 0)
+    except ValueError: return 0.0
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--proj", required=True)
+    ap.add_argument("--board", required=True)
+    ap.add_argument("--season", default="2025")
+    ap.add_argument("--out", default=os.path.join(ROOT, "data.js"))
+    args = ap.parse_args()
+
+    # ---------- projections ----------
+    players, proj26 = [], {}
+    for row in csv.DictReader(open(args.proj)):
+        name = (row.get("PLAYER") or "").strip()
+        if not name: continue
+        team, pos = row["TEAM"].strip(), row["POS"].strip()
+        try: ppr, half = float(row["PPR"]), float(row["HALF"])
+        except (ValueError, KeyError): continue
+        patd = f(row, "PATD")
+        ppr += 2*patd; half += 2*patd            # store as 6pt pass TD
+        if pos == "DST":
+            pos = "DEF"; name = name.split()[-1] + " D/ST"
+        if pos in ("QB","RB","WR","TE") and ppr < 30: continue
+        if pos not in POSITIONS: continue
+        players.append({"name":name,"team":team,"pos":pos,"ppr":round(ppr,1),"half":round(half,1),"patd":round(patd,1)})
+        proj26[norm(name)] = [round(f(row,"G"),1), round(f(row,"PAYDS")), round(patd,1), round(f(row,"INT"),1),
+                              round(f(row,"RUYDS")), round(f(row,"RUTD"),1), round(f(row,"TAR")),
+                              round(f(row,"REC")), round(f(row,"REYDS")), round(f(row,"RETD"),1)]
+    best = {}
+    for p in players:
+        k = (norm(p["name"]), p["pos"])
+        if k not in best or p["ppr"] > best[k]["ppr"]: best[k] = p
+    players = sorted(best.values(), key=lambda p: -p["ppr"])
+
+    # ---------- board: ADP, playoff weeks, team QBs ----------
+    txt = open(args.board).read()
+    adp = {}
+    for m in re.finditer(r"(\d{1,3})-([A-Za-z.'\u2019\- ]+?)(?:<|\"|,|$)", txt):
+        v, nm = int(m.group(1)), norm(m.group(2))
+        if len(nm) >= 4 and (nm not in adp or v < adp[nm]): adp[nm] = v
+    psos, teamqb = {}, {}
+    for row in csv.DictReader(open(args.board)):
+        team = re.sub(r"<[^>]+>", "", row.get("TEAM") or "").strip()
+        if not team or len(team) > 3: continue
+        qb = (row.get("QUARTERBACK") or "").strip()
+        if qb: teamqb[team] = qb
+        m = re.match(r"(\d+)-(\d+)$", (row.get("QBRANGE") or "").strip())
+        if qb and m and norm(qb) not in adp:
+            adp[norm(qb)] = (int(m.group(1)) + int(m.group(2))) // 2
+        try:
+            psos[team] = {"o":[row["W15"].strip(), row["W16"].strip(), row["W17"].strip()],
+                          "r":[int(row["15RK"]), int(row["16RK"]), int(row["17RK"])]}
+        except (KeyError, ValueError, AttributeError): pass
+
+    # ---------- sleeper: ids, bio, injuries, depth; last-season stats ----------
+    sleeper = fetch_json("https://api.sleeper.app/v1/players/nfl", "sleeper-players.json")
+    stats = fetch_json(f"https://api.sleeper.app/v1/stats/nfl/regular/{args.season}", f"stats-{args.season}.json")
+    sidx = {}
+    for pid, v in sleeper.items():
+        if v.get("full_name") and pid.isdigit():
+            sidx.setdefault((norm(v["full_name"]), v.get("position")), []).append((pid, v))
+    # positional finish ranks from actual pts_ppr
+    finish = {}
+    for pos in ("QB","RB","WR","TE"):
+        scored = []
+        for pid, st in stats.items():
+            pl = sleeper.get(pid)
+            if pl and pl.get("position")==pos and st.get("pts_ppr"):
+                scored.append((pid, st["pts_ppr"]))
+        scored.sort(key=lambda x: -x[1])
+        for i, (pid, _) in enumerate(scored): finish[pid] = i+1
+
+    heads, meta, last = {}, {}, {}
+    for p in players:
+        if p["pos"] == "DEF": continue
+        k = norm(p["name"])
+        cands = sidx.get((k, p["pos"])) or [c for kk, lst in sidx.items() if kk[0]==k for c in lst]
+        if not cands: continue
+        st_team = T2SLEEPER.get(p["team"], p["team"])
+        pid, v = next((c for c in cands if c[1].get("team")==st_team), None) \
+              or next((c for c in cands if c[1].get("active")), cands[0])
+        heads[k] = int(pid)
+        hi = v.get("height") or ""
+        try: hgt = f"{int(hi)//12}'{int(hi)%12}\""
+        except (ValueError, TypeError): hgt = str(hi)
+        meta[k] = [v.get("age") or 0, v.get("years_exp") if v.get("years_exp") is not None else -1,
+                   v.get("college") or "", hgt, v.get("weight") or "", v.get("number") or 0,
+                   v.get("injury_status") or "", v.get("depth_chart_order") or 0, v.get("depth_chart_position") or ""]
+        s = stats.get(pid)
+        if s and s.get("gp"):
+            last[k] = [round(s.get("gp",0)), round(s.get("pass_yd",0)), round(s.get("pass_td",0),1),
+                       round(s.get("pass_int",0),1), round(s.get("rush_yd",0)), round(s.get("rush_td",0),1),
+                       round(s.get("rec_tgt",0)), round(s.get("rec",0)), round(s.get("rec_yd",0)),
+                       round(s.get("rec_td",0),1), round(s.get("pts_ppr",0),1), finish.get(pid, 0)]
+
+    # ---------- prop/analyst intel ----------
+    prop_agg = {}
+    for nm, typ, side, edge in PROPS:
+        e = prop_agg.setdefault(norm(nm), {"score":0.0, "notes":[]})
+        e["score"] += (1 if side=="over" else -1)*edge
+        e["notes"].append(f"{side} {typ} ({edge:g}% edge)")
+    intel = {}
+    for p in players:
+        k, entry = norm(p["name"]), {}
+        for tname,(rng,note) in TARGETS.items():
+            if norm(tname)==k: entry["t"] = (note+" (range "+rng+")").strip()
+        if k in prop_agg:
+            s = prop_agg[k]["score"]
+            entry["lean"] = 1 if s>1 else (-1 if s<-1 else 0)
+            entry["p"] = "Prop market: " + "; ".join(prop_agg[k]["notes"])
+        if entry: intel[k] = entry
+
+    # ---------- emit ----------
+    out = ["const RAW = ["]
+    for p in players:
+        out.append(json.dumps([p["name"],p["team"],p["pos"],p["ppr"],p["half"],adp.get(norm(p["name"]),0),p["patd"]], ensure_ascii=False)+",")
+    out.append("];")
+    out.append("const INTEL = " + json.dumps(intel, ensure_ascii=False) + ";")
+    out.append("function normName(n){return n.toLowerCase().replace(/[.'\\u2019-]/g,'').replace(/\\s+(jr|sr|ii|iii|iv|v)$/,'').replace(/\\s+/g,' ').trim();}")
+    out.append("const PSOS = " + json.dumps(psos, ensure_ascii=False) + ";")
+    out.append("const HEADSHOT = " + json.dumps(heads, separators=(',',':')) + ";")
+    out.append("const TEAMLOGO = " + json.dumps(T2ESPN, separators=(',',':')) + ";")
+    out.append("const PLAYERMETA = " + json.dumps(meta, ensure_ascii=False, separators=(',',':')) + ";")
+    out.append(f"const LAST{args.season[2:]} = " + json.dumps(last, separators=(',',':')) + ";")
+    out.append("const PROJ26 = " + json.dumps(proj26, separators=(',',':')) + ";")
+    out.append("const TEAMQB = " + json.dumps(teamqb, ensure_ascii=False, separators=(',',':')) + ";")
+    out.append('const LAST_SEASON = "' + args.season + '";')
+    out.append('const DATA_STAMP = "' + datetime.date.today().isoformat() + '";')
+    open(args.out, "w").write("\n".join(out) + "\n")
+    print(f"wrote {args.out}: {len(players)} players, {len(heads)} headshots, {len(meta)} bios, {len(last)} stat lines, {len(intel)} intel", file=sys.stderr)
+
+if __name__ == "__main__":
+    main()

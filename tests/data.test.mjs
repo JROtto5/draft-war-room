@@ -6,14 +6,14 @@ import assert from "node:assert";
 const src = readFileSync(new URL("../data.js", import.meta.url), "utf8");
 
 // no duplicated top-level blocks (the bug class that broke a build once)
-for (const name of ["const RAW", "const INTEL", "const PSOS", "function normName", "const DATA_STAMP", "const HEADSHOT", "const TEAMLOGO"]) {
+for (const name of ["const RAW", "const INTEL", "const PSOS", "function normName", "const DATA_STAMP", "const HEADSHOT", "const TEAMLOGO", "const PLAYERMETA", "const LAST25", "const PROJ26", "const TEAMQB"]) {
   const n = src.split(name).length - 1;
   assert.strictEqual(n, 1, `${name} appears ${n} times, expected 1`);
 }
 
 const ctx = {};
 vm.createContext(ctx);
-vm.runInContext(src + "\nthis.RAW=RAW;this.INTEL=INTEL;this.PSOS=PSOS;this.normName=normName;this.DATA_STAMP=DATA_STAMP;this.HEADSHOT=HEADSHOT;this.TEAMLOGO=TEAMLOGO;", ctx);
+vm.runInContext(src + "\nthis.RAW=RAW;this.INTEL=INTEL;this.PSOS=PSOS;this.normName=normName;this.DATA_STAMP=DATA_STAMP;this.HEADSHOT=HEADSHOT;this.TEAMLOGO=TEAMLOGO;this.PLAYERMETA=PLAYERMETA;this.LAST25=LAST25;this.PROJ26=PROJ26;this.TEAMQB=TEAMQB;", ctx);
 
 assert.ok(ctx.RAW.length > 300, "RAW too small: " + ctx.RAW.length);
 const POS = new Set(["QB", "RB", "WR", "TE", "DEF"]);
@@ -45,5 +45,13 @@ const nonDef = ctx.RAW.filter(r => r[2] !== "DEF");
 const withHead = nonDef.filter(r => ctx.HEADSHOT[ctx.normName(r[0])]);
 assert.ok(withHead.length / nonDef.length > 0.9, `headshot coverage ${withHead.length}/${nonDef.length}`);
 for (const r of ctx.RAW) assert.ok(ctx.TEAMLOGO[r[1]], "no logo slug for team " + r[1]);
+// enrichment coverage
+assert.ok(Object.keys(ctx.PLAYERMETA).length > 300, "bios");
+assert.ok(Object.keys(ctx.LAST25).length > 250, "last-season lines");
+assert.ok(Object.keys(ctx.PROJ26).length > 300, "projection lines");
+assert.ok(Object.keys(ctx.TEAMQB).length >= 30, "team QBs");
+assert.strictEqual(ctx.LAST25["josh allen"][11], 1, "Allen should be QB1 in 2025");
+for (const [k, v] of Object.entries(ctx.LAST25)) assert.strictEqual(v.length, 12, "LAST25 shape " + k);
+for (const [k, v] of Object.entries(ctx.PROJ26)) assert.strictEqual(v.length, 10, "PROJ26 shape " + k);
 
 console.log(`data.test OK — ${ctx.RAW.length} players, ${Object.keys(ctx.INTEL).length} intel, ${Object.keys(ctx.PSOS).length} teams`);

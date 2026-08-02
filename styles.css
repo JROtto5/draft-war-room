@@ -304,3 +304,14 @@ body.compact .avatar{width:18px!important; height:18px!important}
 }
 .stackrow{background:rgba(255,201,77,.04)}
 th[data-sort]:focus-visible{outline:2px solid var(--green); outline-offset:-2px}
+.cbio{font-size:11.5px; color:var(--dim); margin-top:6px; line-height:1.5}
+.chips{display:flex; flex-wrap:wrap; gap:6px; padding:0 20px 10px}
+.chip{font-size:10px; font-weight:700; border:1px solid var(--line); border-radius:999px; padding:3px 9px; color:var(--dim); background:var(--bg2)}
+.chip.rk{color:var(--gold); border-color:rgba(255,201,77,.45)}
+.chip.inj{color:var(--red); border-color:rgba(255,93,93,.45)}
+.chip.warn{color:var(--red)}
+.stattbl{width:100%; border-collapse:collapse; font-size:12px}
+.stattbl th{text-align:right; font-size:9.5px; letter-spacing:1px; text-transform:uppercase; color:var(--faint); padding:3px 8px; border-bottom:1px solid var(--line)}
+.stattbl th:first-child, .stattbl td:first-child{text-align:left; color:var(--dim)}
+.stattbl td{text-align:right; padding:4px 8px; font-family:'JetBrains Mono',monospace; border-bottom:1px solid rgba(36,50,71,.35)}
+.stattbl tr:last-child td{border-bottom:none}

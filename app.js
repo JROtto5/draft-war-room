@@ -312,6 +312,9 @@ function scoreBoard(){
       score *= 1.05;
       why.push("⚠️ tier cliff — "+(left===1?"LAST one":"only "+left)+" left in "+p.pos+" Tier "+tm[p.id]);
     }
+    // Injury caution
+    const inj = badInjury(p);
+    if(inj){ score *= 0.9; why.push("🩹 injury status: "+inj); }
     // Market steal: sliding well past his ADP
     const fall = p.adp ? pickNow() - p.adp : 0;
     if(fall >= 10) why.push("💎 falling — "+fall+" picks past his ADP ("+p.adp+")");
@@ -547,7 +550,7 @@ function renderMocks(){
 }
 
 /* ---------- Player card ---------- */
-const wikiCache = {};
+
 function openCard(id){
   const p = idIndex()[id]; if(!p) return;
   const players = allPlayers();
@@ -557,13 +560,56 @@ function openCard(id){
   const status = S.mine.includes(id) ? "on your roster" : (S.taken[id] ? "drafted" : (S.dnd[id] ? "do-not-draft" : "available"));
   const ps = psosFor(p.team);
   const stat = (l,v)=>'<div class="cstat"><div class="cl">'+l+'</div><div class="cv">'+v+'</div></div>';
+  const m = metaFor(p), L = lastFor(p), PR = projFor(p);
+  const chips = [];
+  if(m && m[1]===0) chips.push('<span class="chip rk">🎓 ROOKIE</span>');
+  if(m && m[6]) chips.push('<span class="chip inj">🩹 '+esc(m[6])+'</span>');
+  if(L && L[11]) chips.push('<span class="chip">'+p.pos+L[11]+' in '+LAST_SEASON+'</span>');
+  if(L && L[0] && L[0]<=13) chips.push('<span class="chip warn">missed '+(17-L[0])+' games '+LAST_SEASON+'</span>');
+  if(ageCliff(p)) chips.push('<span class="chip warn">age-cliff: '+ageCliff(p)+' yrs</span>');
+  if(m && m[8]) chips.push('<span class="chip">depth '+esc(m[8])+(m[7]||"")+'</span>');
+  if(L){
+    const d = Math.round(p.proj - L[10]);
+    chips.push('<span class="chip" style="color:'+(d>=0?"var(--green)":"var(--red)")+'">'+(d>=0?"+":"")+d+' vs '+LAST_SEASON+'</span>');
+  }
+  let bio = "";
+  if(m){
+    const season = m[1]===0 ? "rookie season" : (m[1]>0 ? (m[1]+1)+ordSuffix(m[1]+1)+" NFL season" : "");
+    bio = [m[0]?("Age "+m[0]):"", season, m[2], (m[3]&&m[4])?(m[3]+" "+m[4]+" lbs"):"", m[5]?("#"+m[5]):""].filter(Boolean).join(" · ");
+  }
+  const qbName = (p.pos==="WR"||p.pos==="TE") && typeof TEAMQB!=="undefined" && TEAMQB[p.team];
+  const myQBhere = qbName && S.mine.some(id=>{ const q=idIndex()[id]; return q && q.pos==="QB" && q.team===p.team; });
+  // aligned 2025 vs 2026 table
+  let tbl = "";
+  if(L || PR){
+    const rows = [];
+    const add = (lab, lv, pv, dec) => {
+      if((lv==null||lv===0) && (pv==null||pv===0)) return;
+      const fmt = x => x==null ? "—" : (dec ? (+x).toFixed(1) : Math.round(x).toLocaleString());
+      rows.push('<tr><td>'+lab+'</td><td>'+fmt(lv)+'</td><td>'+fmt(pv)+'</td></tr>');
+    };
+    add("Games", L&&L[0], PR&&PR[0], true);
+    if(p.pos==="QB"){
+      add("Pass yds", L&&L[1], PR&&PR[1]); add("Pass TD", L&&L[2], PR&&PR[2], true); add("INT", L&&L[3], PR&&PR[3], true);
+      add("Rush yds", L&&L[4], PR&&PR[4]); add("Rush TD", L&&L[5], PR&&PR[5], true);
+    } else {
+      add("Targets", L&&L[6], PR&&PR[6]); add("Rec", L&&L[7], PR&&PR[7]); add("Rec yds", L&&L[8], PR&&PR[8]); add("Rec TD", L&&L[9], PR&&PR[9], true);
+      add("Rush yds", L&&L[4], PR&&PR[4]); add("Rush TD", L&&L[5], PR&&PR[5], true);
+    }
+    add("PPR pts", L&&L[10], p.proj, true);
+    add("PPG", L&&L[0]?L[10]/L[0]:null, PR&&PR[0]?p.proj/PR[0]:null, true);
+    tbl = '<table class="stattbl"><tr><th></th><th>'+LAST_SEASON+'</th><th>\u201926 proj</th></tr>'+rows.join("")+'</table>';
+  }
   $("#cardBody").innerHTML =
     '<div class="chead">'+
       (logoUrl(p.team)?'<img class="clogo" src="'+logoUrl(p.team)+'" alt="">':'')+
       avatarImg(p,84)+
       '<div class="cid"><div class="cname">'+p.name+intelBadges(p)+'</div>'+
-      '<div class="csub">'+posBadge(p.pos)+' &nbsp;'+p.team+' · T'+tm[p.id]+' · '+status+'</div></div>'+
+      '<div class="csub">'+posBadge(p.pos)+' &nbsp;'+p.team+' · T'+tm[p.id]+' · '+status+'</div>'+
+      (bio?'<div class="cbio">'+bio+'</div>':'')+
+      '</div>'+
     '</div>'+
+    (chips.length?'<div class="chips">'+chips.join("")+'</div>':'')+
     '<div class="cstats">'+
       stat("Projected", p.proj)+
       stat("Value", (vorp>0?"+":"")+vorp)+
@@ -572,40 +618,24 @@ function openCard(id){
       stat("At #"+(odds?odds.at1:"?"), odds&&odds.h1[id]!=null?odds.h1[id]+"%":"—")+
       stat(odds&&odds.at2?"At #"+odds.at2:"Later", odds&&odds.h2&&odds.h2[id]!=null?odds.h2[id]+"%":"—")+
     '</div>'+
+    (tbl?'<div class="cwiki">'+tbl+'</div>':'')+
+    (qbName?'<div class="cintel dim">🎯 His QB: <b>'+esc(qbName)+'</b>'+(myQBhere?' — <span class="ok">your stack ✓</span>':'')+'</div>':'')+
     (sc && sc.why.length ? '<div class="cwhy">▸ '+sc.why.join("<br>▸ ")+'</div>' : '')+
     (p.intel&&p.intel.t?'<div class="cintel">⭐ '+esc(p.intel.t)+'</div>':'')+
     (p.intel&&p.intel.p?'<div class="cintel dim">'+esc(p.intel.p)+'</div>':'')+
     (ps?'<div class="cintel dim">🗓 '+ps.short+'</div>':'')+
     '<div class="cnote" id="cardNote">'+(S.notes[id]?'📝 '+esc(S.notes[id]):'')+'</div>'+
-    '<div class="cwiki" id="cardWiki"><span class="dimtxt">Loading bio…</span></div>'+
     '<div class="cacts">'+
       (status==="available"||status==="do-not-draft" ?
         '<button class="pick" data-pick="'+id+'">✓ MINE</button>'+
         '<button class="kill" data-take="'+id+'">✕ taken</button>'+
         '<button class="undo1" data-dnd="'+id+'">'+(S.dnd[id]?"↩ allow":"🚫 never")+'</button>' : '')+
       '<button class="undo1" data-note="'+id+'">📝 note</button>'+
+      '<button class="undo1" data-cmpfrom="'+id+'">⚖ compare…</button>'+
     '</div>';
   $("#cardOverlay").classList.add("show");
-  loadWiki(p);
 }
-function loadWiki(p){
-  const el = $("#cardWiki"); if(!el) return;
-  if(p.pos==="DEF"){ el.innerHTML=""; return; }
-  const key = normName(p.name);
-  if(wikiCache[key]){ el.innerHTML = wikiCache[key]; return; }
-  const tryFetch = title => fetch("https://en.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(title), {headers:{Accept:"application/json"}})
-    .then(r=>{ if(!r.ok) throw 0; return r.json(); });
-  tryFetch(p.name+" (American football)")
-    .catch(()=>tryFetch(p.name))
-    .then(j=>{
-      if(!j.extract || j.type==="disambiguation") throw 0;
-      const htmlOut = '<div class="wikitxt">'+esc(j.extract).slice(0,420)+(j.extract.length>420?"…":"")+'</div>'+
-        '<div class="dimtxt">— Wikipedia'+(j.content_urls?' · <a href="'+j.content_urls.desktop.page+'" target="_blank" rel="noopener">full article ↗</a>':'')+'</div>';
-      wikiCache[key] = htmlOut;
-      if($("#cardOverlay").classList.contains("show")) el.innerHTML = htmlOut;
-    })
-    .catch(()=>{ el.innerHTML = '<span class="dimtxt">No bio available'+(navigator.onLine===false?" (offline)":"")+'.</span>'; });
-}
+function ordSuffix(n){ return n%10===1&&n%100!==11?"st":n%10===2&&n%100!==12?"nd":n%10===3&&n%100!==13?"rd":"th"; }
 document.getElementById("cardClose").addEventListener("click", ()=>document.getElementById("cardOverlay").classList.remove("show"));
 
 /* ---------- Head-to-head compare ---------- */
@@ -700,6 +730,18 @@ function matchesQuery(p, q){
   return false;
 }
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
+function metaFor(p){ return (typeof PLAYERMETA!=="undefined" && PLAYERMETA[normName(p.name)]) || null; }
+function lastFor(p){ return (typeof LAST25!=="undefined" && LAST25[normName(p.name)]) || null; }
+function projFor(p){ return (typeof PROJ26!=="undefined" && PROJ26[normName(p.name)]) || null; }
+function ageCliff(p){
+  const m = metaFor(p); if(!m || !m[0]) return 0;
+  const lim = {RB:28, WR:30, TE:30, QB:37}[p.pos];
+  return lim && m[0] >= lim ? m[0] : 0;
+}
+function badInjury(p){
+  const m = metaFor(p);
+  return m && /^(Out|IR|PUP|Sus|NFI|DNR)/i.test(m[6]||"") ? m[6] : "";
+}
 function headshotUrl(p){
   if(p.pos==="DEF") return logoUrl(p.team);
   const id = typeof HEADSHOT!=="undefined" ? HEADSHOT[normName(p.name)] : null;
@@ -821,7 +863,7 @@ function renderPool(){
     }
     return div + '<tr class="'+cls+'" data-pid="'+r.p.id+'">'+
       '<td class="mono" style="color:var(--faint)">'+(i+1)+'</td>'+
-      '<td><span class="pcell" data-card="'+r.p.id+'" title="Open player card">'+avatarImg(r.p,24)+'<span class="pname">'+r.p.name+'</span></span>'+(S.notes[r.p.id]?'<span class="ib gold" title="'+esc(S.notes[r.p.id])+'">📝</span>':'')+(S.dnd[r.p.id]&&!r.taken&&!r.mine?'<span class="ib bear" title="On your do-not-draft list">🚫</span>':'')+intelBadges(r.p)+(r.stack?'<span class="stackchip">🔗 stack</span>':'')+(!r.taken&&!r.mine&&r.p.adp&&(pickNow()-r.p.adp)>=10?'<span class="ib" title="Falling: '+(pickNow()-r.p.adp)+' picks past ADP '+r.p.adp+'">💎</span>':'')+(r.backRisk==="gone"?'<span class="ib" title="Won\'t make it back to your next pick">🔥</span>':r.backRisk==="risky"?'<span class="ib" title="Coin-flip to survive to your next pick">⏳</span>':'')+'</td>'+
+      '<td><span class="pcell" data-card="'+r.p.id+'" title="Open player card">'+avatarImg(r.p,24)+'<span class="pname">'+r.p.name+'</span></span>'+(S.notes[r.p.id]?'<span class="ib gold" title="'+esc(S.notes[r.p.id])+'">📝</span>':'')+(S.dnd[r.p.id]&&!r.taken&&!r.mine?'<span class="ib bear" title="On your do-not-draft list">🚫</span>':'')+(badInjury(r.p)?'<span class="ib bear" title="Injury status: '+esc(badInjury(r.p))+'">🩹</span>':'')+((metaFor(r.p)||[])[1]===0?'<span class="ib" title="Rookie">🎓</span>':'')+intelBadges(r.p)+(r.stack?'<span class="stackchip">🔗 stack</span>':'')+(!r.taken&&!r.mine&&r.p.adp&&(pickNow()-r.p.adp)>=10?'<span class="ib" title="Falling: '+(pickNow()-r.p.adp)+' picks past ADP '+r.p.adp+'">💎</span>':'')+(r.backRisk==="gone"?'<span class="ib" title="Won\'t make it back to your next pick">🔥</span>':r.backRisk==="risky"?'<span class="ib" title="Coin-flip to survive to your next pick">⏳</span>':'')+'</td>'+
       '<td>'+posBadge(r.p.pos)+'<span class="tier t'+Math.min(tm[r.p.id],5)+'">T'+tm[r.p.id]+'</span></td>'+
       '<td class="mono" style="color:var(--dim)'+(psosFor(r.p.team)?';cursor:help':'')+'"'+(psosFor(r.p.team)?' title="'+esc(psosFor(r.p.team).txt)+'"':'')+'>'+(logoUrl(r.p.team)?'<img class="tlogo" src="'+logoUrl(r.p.team)+'" width="14" height="14" loading="lazy" decoding="async" alt=""> ':'')+r.p.team+'</td>'+
       '<td><span class="proj mono" data-edit="'+r.p.id+'">'+r.p.proj+'</span></td>'+
@@ -1052,7 +1094,7 @@ function renderHeader(){
 
 /* ---------- Events (delegated) ---------- */
 document.addEventListener("click", e=>{
-  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-card],th[data-sort]");
+  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-card],[data-cmpfrom],th[data-sort]");
   if(!t){
     const rowEl = e.target.closest("#poolBody tr[data-pid]");
     if(rowEl){
@@ -1069,6 +1111,15 @@ document.addEventListener("click", e=>{
     return;
   }
   if(t.dataset.card){ return openCard(t.dataset.card); }
+  if(t.dataset.cmpfrom){
+    const p = idIndex()[t.dataset.cmpfrom]; if(!p) return;
+    $("#cardOverlay").classList.remove("show");
+    if(!$("#playersDL").children.length) fillPlayersDL();
+    $("#cmpA").value = p.name; $("#cmpB").value = "";
+    $("#cmpOverlay").classList.add("show");
+    renderCompare(); $("#cmpB").focus();
+    return;
+  }
   if(t.dataset.note){
     editNote(t.dataset.note);
     if($("#cardOverlay").classList.contains("show")) openCard(t.dataset.note);
