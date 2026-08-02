@@ -93,6 +93,12 @@ header{
 .slotlab{width:34px; flex:none; font-size:9px; font-weight:800; letter-spacing:.5px; color:var(--faint)}
 .benchhead{font-size:9.5px; letter-spacing:2px; color:var(--faint); text-transform:uppercase; padding:9px 8px 3px; border-top:1px solid var(--line); margin-top:7px}
 .pickline{font-size:11.5px; color:var(--dim); margin-bottom:10px; padding:7px 10px; background:var(--bg2); border:1px solid var(--line); border-radius:8px}
+.pickline.onclock{border-color:var(--green); animation:clockpulse 1.4s ease-in-out infinite}
+@keyframes clockpulse{0%,100%{box-shadow:0 0 0 0 rgba(47,212,122,.35)}50%{box-shadow:0 0 0 6px rgba(47,212,122,0)}}
+.scarce{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px}
+.scpill{font-size:10px; font-weight:700; color:var(--dim); background:var(--bg2); border:1px solid var(--line); border-radius:999px; padding:3px 9px; cursor:help}
+.scpill b{color:var(--green)}
+.scpill.dry{border-color:rgba(255,93,93,.5)} .scpill.dry b{color:var(--red)}
 
 /* ---------- Pool ---------- */
 .toolbar{padding:12px 14px; display:flex; flex-wrap:wrap; gap:9px; border-bottom:1px solid var(--line); align-items:center}
@@ -172,6 +178,7 @@ tr.mine-row{background:rgba(47,212,122,.07)}
 .logrow{display:flex; align-items:center; gap:8px; padding:5px 8px; font-size:12px; border-radius:7px}
 .logrow:hover{background:var(--panel2)}
 .logrow .who{color:var(--dim); font-size:10.5px; width:52px; flex:none; text-transform:uppercase; letter-spacing:.5px}
+.logrow .pickno{color:var(--faint); font-size:10px; width:34px; flex:none}
 .logrow .who.me{color:var(--green)}
 .logrow .n{flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 
@@ -1600,13 +1607,16 @@ function scoreBoard(){
       score *= 1.05;
       why.push("⚠️ tier cliff — "+(left===1?"LAST one":"only "+left)+" left in "+p.pos+" Tier "+tm[p.id]);
     }
+    // Market steal: sliding well past his ADP
+    const fall = p.adp ? (S.log.length+1) - p.adp : 0;
+    if(fall >= 10) why.push("💎 falling — "+fall+" picks past his ADP ("+p.adp+")");
     // Will he survive to my next pick? (snake, slot-aware)
     let backRisk = null;
     if(p.adp && horizon){
       if(p.adp <= horizon.next){ backRisk="gone"; why.push("🔥 won't make it back to your pick #"+horizon.next+" (ADP "+p.adp+")"); }
       else if(p.adp <= horizon.next+8){ backRisk="risky"; why.push("⏳ coin-flip to survive until pick #"+horizon.next+" (ADP "+p.adp+")"); }
     }
-    return {p, vorp, score, why, stack, backRisk, tier:tm[p.id]};
+    return {p, vorp, score, why, stack, backRisk, tier:tm[p.id], steal:fall>=10?fall:0};
   }).filter(x=>x.score > -9000);
 
   scored.sort((a,b)=>b.score-a.score);
@@ -1844,7 +1854,7 @@ function renderPool(){
         : '<button class="pick" data-pick="'+r.p.id+'">✓ MINE</button><button class="kill" data-take="'+r.p.id+'">✕ taken</button>';
     return '<tr class="'+cls+'">'+
       '<td class="mono" style="color:var(--faint)">'+(i+1)+'</td>'+
-      '<td><span class="pname">'+r.p.name+'</span>'+intelBadges(r.p)+(r.stack?'<span class="stackchip">🔗 stack</span>':'')+(r.backRisk==="gone"?'<span class="ib" title="Won\'t make it back to your next pick">🔥</span>':r.backRisk==="risky"?'<span class="ib" title="Coin-flip to survive to your next pick">⏳</span>':'')+'</td>'+
+      '<td><span class="pname">'+r.p.name+'</span>'+intelBadges(r.p)+(r.stack?'<span class="stackchip">🔗 stack</span>':'')+(!r.taken&&!r.mine&&r.p.adp&&(S.log.length+1-r.p.adp)>=10?'<span class="ib" title="Falling: '+(S.log.length+1-r.p.adp)+' picks past ADP '+r.p.adp+'">💎</span>':'')+(r.backRisk==="gone"?'<span class="ib" title="Won\'t make it back to your next pick">🔥</span>':r.backRisk==="risky"?'<span class="ib" title="Coin-flip to survive to your next pick">⏳</span>':'')+'</td>'+
       '<td>'+posBadge(r.p.pos)+'<span class="tier t'+Math.min(tm[r.p.id],5)+'">T'+tm[r.p.id]+'</span></td>'+
       '<td class="mono" style="color:var(--dim)">'+r.p.team+'</td>'+
       '<td><span class="proj mono" data-edit="'+r.p.id+'">'+r.p.proj+'</span></td>'+
@@ -1868,11 +1878,18 @@ function renderBest(){
   const h = nextPickHorizon();
   let pickline = "";
   if(h){
-    pickline = '<div class="pickline">Pick <b class="mono">#'+h.cur+'</b> on the clock'+
-      (h.onClock ? ' — <b style="color:var(--green)">THAT\'S YOU</b>' : '') +
+    pickline = '<div class="pickline'+(h.onClock?' onclock':'')+'">Pick <b class="mono">#'+h.cur+'</b> on the clock'+
+      (h.onClock ? ' — <b style="color:var(--green)">THAT\'S YOU, DRAFT NOW</b>' : '') +
       ' · your next: <b class="mono">#'+h.mine0+'</b>'+(h.mine1?' then <b class="mono">#'+h.mine1+'</b>':'')+'</div>';
   }
-  hero.innerHTML = pickline +
+  document.title = (h && h.onClock ? "🟢 YOUR PICK — " : "") + "Draft War Room — 2QB";
+  // Startable players (VORP > 0) left per position
+  const scLeft = {}; POSITIONS.forEach(pos=>scLeft[pos]=0);
+  scored.forEach(s=>{ if(s.vorp>0) scLeft[s.p.pos]++; });
+  const scarce = '<div class="scarce">'+POSITIONS.map(pos=>
+    '<span class="scpill'+(scLeft[pos]<=3?' dry':'')+'" title="Available '+pos+'s projecting above replacement">'+pos+' <b>'+scLeft[pos]+'</b></span>'
+  ).join("")+'</div>';
+  hero.innerHTML = pickline + scarce +
     '<div class="toppick">'+
       '<div class="tag">⭐ Top Pick Right Now</div>'+
       '<div class="name">'+p.name+'</div>'+
@@ -1887,7 +1904,7 @@ function renderBest(){
     '<div class="barow">'+
       '<div class="rk mono">'+(i+2)+'</div>'+
       posBadge(s.p.pos)+
-      '<div class="info"><div class="nm">'+s.p.name+intelBadges(s.p)+(s.stack?'<span class="stackchip">🔗</span>':'')+(s.backRisk==="gone"?' 🔥':s.backRisk==="risky"?' ⏳':'')+'</div>'+
+      '<div class="info"><div class="nm">'+s.p.name+intelBadges(s.p)+(s.stack?'<span class="stackchip">🔗</span>':'')+(s.steal?' 💎':'')+(s.backRisk==="gone"?' 🔥':s.backRisk==="risky"?' ⏳':'')+'</div>'+
       '<div class="sm">'+s.p.team+' · '+s.p.proj+' pts'+(s.p.adp?' · ADP '+s.p.adp:'')+(odds&&odds[s.p.id]!=null?' · <b class="'+oddsClass(odds[s.p.id])+'">'+odds[s.p.id]+'% back</b>':'')+'</div></div>'+
       '<div class="val mono">+'+Math.round(s.vorp)+'</div>'+
       '<button class="pick" data-pick="'+s.p.id+'">✓</button>'+
@@ -1969,9 +1986,12 @@ function renderRoster(){
 
 function renderLog(){
   const byId = idIndex();
+  const t = S.settings.teams;
   $("#logList").innerHTML = S.log.length ? S.log.map((e,i)=>{
     const p = byId[e.id]; if(!p) return "";
-    return '<div class="logrow"><span class="who '+(e.who==="me"?"me":"")+'">'+(e.who==="me"?"MY PICK":"taken")+'</span>'+
+    const n = i+1, r = Math.ceil(n/t), ri = n-(r-1)*t;
+    return '<div class="logrow"><span class="pickno mono">'+r+'.'+String(ri).padStart(2,"0")+'</span>'+
+      '<span class="who '+(e.who==="me"?"me":"")+'">'+(e.who==="me"?"MY PICK":"taken")+'</span>'+
       '<span class="n">'+p.name+' <span style="color:var(--faint)">'+p.pos+' · '+p.team+'</span></span>'+
       '<span class="x undo1" data-undoentry="'+i+'" style="font-size:10.5px">undo</span></div>';
   }).reverse().join("") : '<div class="empty">Nothing yet. Mark players as they come off the board.</div>';
