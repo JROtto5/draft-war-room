@@ -132,6 +132,7 @@ def main():
     ap.add_argument("--board", required=True)
     ap.add_argument("--season", default="2025")
     ap.add_argument("--out", default=os.path.join(ROOT, "data.js"))
+    ap.add_argument("--keep-kickers", action="store_true")
     args = ap.parse_args()
 
     # ---------- projections ----------

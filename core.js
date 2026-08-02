@@ -7,10 +7,17 @@ const POSITIONS = ["QB","RB","WR","TE","DEF"];
 const LS_KEY = "draft-war-room-v2";
 
 /* ---------- State ---------- */
-const STATE_V = 3;
+const STATE_V = 4;
 const MIGRATIONS = {
   // 1 -> 2: keepers/queue introduced (defaults suffice); stamp only
   1: s => { s.keepers = s.keepers||{}; s.queue = s.queue||[]; return s; },
+  // 3 -> 4: configurable roster slots + auction prices
+  3: s => {
+    s.settings = s.settings || {};
+    s.settings.slots = s.settings.slots || {QB:1,RB:2,WR:2,TE:1,FLEX:1,SF:1,DEF:1,K:0,BN:7};
+    s.prices = s.prices || {};
+    return s;
+  },
   // 2 -> 3: keepers gain a round cost — old shape was id -> slot number
   2: s => {
     const k = {};
@@ -50,7 +57,9 @@ const defaultState = () => ({
   log: [],              // {id, who:'me'|'other'}
   custom: [],           // [name,team,pos,proj,id]
   overrides: {},        // id -> proj
-  settings: { teams:12, roster:16, slot:12, scoring:"ppr", ptd:6, min:{QB:2,RB:3,WR:3,TE:1,DEF:1} },
+  settings: { teams:12, roster:16, slot:12, scoring:"ppr", ptd:6, min:{QB:2,RB:3,WR:3,TE:1,DEF:1},
+              slots:{QB:1,RB:2,WR:2,TE:1,FLEX:1,SF:1,DEF:1,K:0,BN:7}, budget:200 },
+  prices: {},           // id -> auction price paid (auction mode)
   slotNames: {"1":"adamslanding","2":"NoahSchindler","3":"schinbad91","4":"DNSchindler","5":"DiddyPartay","6":"SPIDEYxSENSEZ","7":"picklerick10","8":"Cards0407","9":"nbachman","10":"JSchindler5","11":"schindler","12":"Otto5"},
   ui: { pos:"ALL", showTaken:false, sort:"vorp", dir:-1, round:"ALL", targetsOnly:false, stacksOnly:false, survivors:false }
 });
@@ -72,6 +81,13 @@ function cached(name, fn){
 }
 function pickNow(){ return S.log.length + 1 + (S.pickOffset||0); }
 function slotName(s){ return (S.slotNames && S.slotNames[s]) || ("T"+s); }
+function slotCfg(){ return (S.settings.slots) || {QB:1,RB:2,WR:2,TE:1,FLEX:1,SF:1,DEF:1,K:0,BN:7}; }
+function startableNow(){
+  const sl = slotCfg();
+  return { QB: sl.QB + sl.SF, RB: sl.RB + sl.FLEX + 2, WR: sl.WR + sl.FLEX + 2,
+           TE: sl.TE + 1, DEF: Math.max(1, sl.DEF), K: sl.K };
+}
+function starterCount(){ const sl = slotCfg(); return sl.QB+sl.RB+sl.WR+sl.TE+sl.FLEX+sl.SF+sl.DEF+sl.K; }
 function myKeeperIds(){
   const mySlot = Math.min(S.settings.slot, S.settings.teams);
   return Object.keys(S.keepers||{}).filter(id=>+(S.keepers[id].s!=null?S.keepers[id].s:S.keepers[id])===mySlot);
@@ -360,7 +376,10 @@ function nextPickHorizon(){
    teams×2 QB starters, so replacement QB is deep and QBs carry huge value. */
 function replacementLevelsRaw(players){
   const t = S.settings.teams;
-  const demand = { QB:Math.round(t*2.3), RB:Math.round(t*2.6), WR:Math.round(t*3.2), TE:Math.round(t*1.3), DEF:Math.round(t*1.1) };
+  const sl = slotCfg();
+  const demand = { QB:Math.round(t*(sl.QB+sl.SF)*1.15), RB:Math.round(t*(sl.RB+0.5*sl.FLEX+0.6)*1.05),
+                   WR:Math.round(t*(sl.WR+0.5*sl.FLEX+0.7)*1.05), TE:Math.round(t*(sl.TE+0.3)),
+                   DEF:Math.round(t*Math.max(1,sl.DEF)*1.1), K:Math.round(t*sl.K*1.05) };
   const repl = {};
   for(const pos of POSITIONS){
     const list = players.filter(p=>p.pos===pos).sort((a,b)=>b.proj-a.proj);
@@ -430,7 +449,7 @@ function scoreBoard(){
     let score = vorp;
     let why = [];
     // Positional saturation: value the slot he'd actually fill on YOUR roster
-    const sat = satAdjust(p.pos, counts[p.pos], score);
+    const sat = satAdjust(p.pos, counts[p.pos], score, startableNow());
     score = sat.score; if(sat.note) why.push(sat.note);
     // Need pressure
     if(needs[p.pos] > 0){
@@ -609,6 +628,10 @@ function markTaken(id){
   pruneQueue();
 }
 function pickMine(id){
+  if(S.settings.auctionMode){
+    const v = prompt("Price paid? ($)", auctionOf(idIndex()[id]));
+    if(v!==null){ const n = parseInt(v,10); if(!isNaN(n) && n>=0) S.prices[id] = n; }
+  }
   let gradeChip = "";
   try{
     const {scored} = scoreBoard();
@@ -746,8 +769,13 @@ function bestStarters(ids, byId){
   const ps = ids.map(id=>byId[id]).filter(Boolean).sort((a,b)=>b.proj-a.proj);
   const used = new Set();
   const take = poss => { for(const p of ps){ if(!used.has(p.id) && poss.includes(p.pos)){ used.add(p.id); return p; } } return null; };
-  const slots = [["QB",["QB"]],["RB1",["RB"]],["RB2",["RB"]],["WR1",["WR"]],["WR2",["WR"]],["TE",["TE"]],["FLEX",["RB","WR","TE"]],["SFLX",["QB","RB","WR","TE"]],["DEF",["DEF"]]];
-  const line = slots.map(([lab,poss])=>({lab, p:take(poss)}));
+  const sl = slotCfg();
+  const defs = [];
+  const add = (n, lab, poss) => { for(let i=1;i<=n;i++) defs.push([n>1?lab+i:lab, poss]); };
+  add(sl.QB, "QB", ["QB"]); add(sl.RB, "RB", ["RB"]); add(sl.WR, "WR", ["WR"]); add(sl.TE, "TE", ["TE"]);
+  add(sl.FLEX, "FLEX", ["RB","WR","TE"]); add(sl.SF, "SFLX", ["QB","RB","WR","TE"]);
+  add(sl.DEF, "DEF", ["DEF"]); add(sl.K, "K", ["K"]);
+  const line = defs.map(([lab,poss])=>({lab, p:take(poss)}));
   return {line, starterIds:new Set([...used]), pts:line.reduce((a,s)=>a+(s.p?s.p.proj:0),0)};
 }
 
@@ -798,7 +826,7 @@ function runMock(strat, seed){
         if(stacks) sc*=1.08;
         if(p.intel){ if(p.intel.t!=null)sc*=1.04; if(p.intel.lean>0)sc*=1.03; if(p.intel.lean<0)sc*=0.97; }
         if(p.pos==="DEF" && r<12 && need>=0 && !mustFill) sc-=40;         // no early DEF
-        sc = satAdjust(p.pos, counts[p.pos], sc).score;                   // don't hoard
+        sc = satAdjust(p.pos, counts[p.pos], sc, startableNow()).score;    // don't hoard
         sc *= strat.mod(p,{counts, round:r, stacks});
         sc *= 0.97+rng()*0.06;
         if(sc>bestScore){bestScore=sc; chosen=p;}
@@ -1169,7 +1197,7 @@ function openCard(id){
     (ovChips.length?'<div class="chips">'+ovChips.join("")+'</div>':'')+
     '<div class="cstats">'+
       stat("Projected", p.proj+((()=>{ if(!cons||!cons.mean) return ""; const band=Math.round(p.proj*Math.min(.3,(cons.hi-cons.lo)/(2*cons.mean))); return band>5?' <span class="dimtxt" style="font-size:10px">±'+band+'</span>':""; })()))+
-      stat("Value", (vorp>0?"+":"")+vorp)+stat("ADP", p.adp||"—")+
+      stat("Value", (vorp>0?"+":"")+vorp)+stat("Auction", "$"+auctionOf(p))+stat("ADP", p.adp||"—")+
       stat("Round", rinfo[p.id]?rinfo[p.id].label:"—")+
       stat("At #"+(odds?odds.at1:"?"), odds&&odds.h1[id]!=null?odds.h1[id]+"%":"—")+
       stat(odds&&odds.at2?"At #"+odds.at2:"Later", odds&&odds.h2&&odds.h2[id]!=null?odds.h2[id]+"%":"—")+

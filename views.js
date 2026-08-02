@@ -852,7 +852,8 @@ function renderRoster(){
   const min = S.settings.min;
   const byId = idIndex();
 
-  $("#rosCount").textContent = S.mine.length + " / " + S.settings.roster;
+  $("#rosCount").textContent = S.mine.length + " / " + S.settings.roster +
+    (S.settings.auctionMode ? " · $"+((S.settings.budget||200) - Object.values(S.prices||{}).reduce((a,b)=>a+b,0))+" left" : "");
 
   $("#reqBar").innerHTML = POSITIONS.filter(pos=>min[pos]>0 || counts[pos]>0).map(pos=>{
     const have=counts[pos], need=min[pos]||0;

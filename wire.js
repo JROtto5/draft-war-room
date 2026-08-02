@@ -701,6 +701,19 @@ function renderBoard(){
   $("#boardGrid").innerHTML = h;
 }
 /* value of an overall pick = VORP of the nth-best player on the full board */
+function auctionOf(p){
+  const pool = cached("aucpool", ()=>{
+    const players = allPlayers(), repl = replacementLevels(players);
+    const pos = players.map(x=>Math.max(0, x.proj-(repl[x.pos]||0)));
+    const sum = pos.reduce((a,b)=>a+b,0);
+    const budget = (S.settings.budget||200)*S.settings.teams;
+    const spendable = budget - S.settings.teams*S.settings.roster;
+    return {sum, spendable};
+  });
+  const repl = replacementLevels(allPlayers());
+  const v = Math.max(0, p.proj-(repl[p.pos]||0));
+  return Math.max(1, Math.round(1 + (pool.sum ? v/pool.sum*pool.spendable : 0)));
+}
 function pickValueCurve(){
   return cached("pvc", ()=>{
     const players = allPlayers(), repl = replacementLevels(players);
@@ -854,10 +867,24 @@ $("#settingsBtn").addEventListener("click", ()=>{
     }).catch(()=>{});
   }
   $("#setPtd").value=String(S.settings.ptd||6);
+  const sl0 = slotCfg();
+  ["QB","RB","WR","TE","FLEX","SF","DEF","K","BN"].forEach(k=>{ const el=$("#sl"+k); if(el) el.value = sl0[k]; });
+  $("#setAuction").checked=!!S.settings.auctionMode;
+  $("#setBudget").value=S.settings.budget||200;
   $("#setRecPts").value = S.settings.recPts==null ? "" : S.settings.recPts;
   $("#setTePrem").value = S.settings.tePrem||0;
   for(const pos of POSITIONS) $("#min"+pos).value=S.settings.min[pos]||0;
   $("#settingsOverlay").classList.add("show");
+});
+$("#setPreset").addEventListener("change", e=>{
+  const p2 = e.target.value;
+  const map = {
+    buck:  {QB:1,RB:2,WR:2,TE:1,FLEX:1,SF:1,DEF:1,K:0,BN:7},
+    espn:  {QB:1,RB:2,WR:2,TE:1,FLEX:1,SF:0,DEF:1,K:1,BN:7},
+    yahoo: {QB:1,RB:2,WR:3,TE:1,FLEX:1,SF:0,DEF:1,K:1,BN:6},
+  };
+  if(map[p2]) ["QB","RB","WR","TE","FLEX","SF","DEF","K","BN"].forEach(k=>{ $("#sl"+k).value = map[p2][k]; });
+  e.target.value = "";
 });
 $("#settingsCancel").addEventListener("click", ()=>$("#settingsOverlay").classList.remove("show"));
 $("#settingsSave").addEventListener("click", ()=>{
@@ -866,6 +893,18 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.slot = Math.max(1, +$("#setSlot").value||12);
   S.settings.scoring = $("#setScoring").value==="half" ? "half" : "ppr";
   S.settings.ptd = +$("#setPtd").value===4 ? 4 : 6;
+  const slN = {};
+  ["QB","RB","WR","TE","FLEX","SF","DEF","K","BN"].forEach(k=>{ slN[k] = Math.max(0, +$("#sl"+k).value||0); });
+  S.settings.slots = slN;
+  S.settings.auctionMode = $("#setAuction").checked;
+  S.settings.budget = Math.max(100, +$("#setBudget").value||200);
+  // guardrails (#455): roster must hold the starters
+  const startersN = slN.QB+slN.RB+slN.WR+slN.TE+slN.FLEX+slN.SF+slN.DEF+slN.K;
+  const rosterN = startersN + slN.BN;
+  if(S.settings.roster !== rosterN){ S.settings.roster = rosterN; toast("Roster size set to "+rosterN+" (starters + bench)"); }
+  S.settings.min = {QB:slN.QB+slN.SF, RB:slN.RB, WR:slN.WR, TE:slN.TE, DEF:slN.DEF, K:slN.K};
+  if(slN.K>0 && !allPlayers().some(p=>p.pos==="K"))
+    toast("⚠️ No kickers in the dataset — add via + Player or refresh with --keep-kickers", {warn:true});
   const rp = $("#setRecPts").value.trim();
   S.settings.recPts = rp==="" ? null : Math.min(2, Math.max(0, parseFloat(rp)||0));
   S.settings.tePrem = Math.min(1, Math.max(0, parseFloat($("#setTePrem").value)||0));

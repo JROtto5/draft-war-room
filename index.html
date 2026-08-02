@@ -207,6 +207,22 @@
         <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="colEdge" style="width:auto">Edge</label>
         <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="colRd" style="width:auto">Rd</label>
       </span></div>
+      <div class="sechead">Roster shape (starting slots)</div>
+      <div class="frow"><label>Preset</label><select id="setPreset">
+        <option value="">— pick one —</option>
+        <option value="buck">Buck Breakers (SF, no K)</option>
+        <option value="espn">ESPN default (1QB + K)</option>
+        <option value="yahoo">Yahoo default (1QB + K)</option>
+      </select></div>
+      <div class="frow"><label>Slots QB/RB/WR/TE</label><span style="display:flex;gap:6px">
+        <input type="number" id="slQB" min="0" max="3" style="width:52px"><input type="number" id="slRB" min="0" max="4" style="width:52px">
+        <input type="number" id="slWR" min="0" max="4" style="width:52px"><input type="number" id="slTE" min="0" max="3" style="width:52px"></span></div>
+      <div class="frow"><label>FLEX / SFLX / DEF / K / Bench</label><span style="display:flex;gap:6px">
+        <input type="number" id="slFLEX" min="0" max="3" style="width:52px"><input type="number" id="slSF" min="0" max="2" style="width:52px">
+        <input type="number" id="slDEF" min="0" max="2" style="width:52px"><input type="number" id="slK" min="0" max="2" style="width:52px">
+        <input type="number" id="slBN" min="0" max="12" style="width:52px"></span></div>
+      <div class="frow"><label>Auction mode (record prices on my picks)</label><span style="display:flex;gap:8px;align-items:center">
+        <input type="checkbox" id="setAuction" style="width:auto"><input type="number" id="setBudget" min="100" max="1000" step="50" style="width:80px" title="Budget"></span></div>
       <div class="sechead">Required starters (minimums)</div>
       <div class="frow"><label>QB (you start 2)</label><input type="number" id="minQB" min="0" max="4"></div>
       <div class="frow"><label>RB</label><input type="number" id="minRB" min="0" max="6"></div>

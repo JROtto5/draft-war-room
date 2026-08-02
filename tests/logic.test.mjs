@@ -221,4 +221,30 @@ const smap = g("sleeperToOurs()");
 assert.ok(Object.keys(smap).length > 350, "sleeper map coverage: "+Object.keys(smap).length);
 assert.ok(g('sleeperToOurs()["KC"]'), "DEF mapping via team code");
 
-console.log("logic.test OK — engine, snake, saturation, mocks, odds, rounds, injuries, utils, fuzz, story, sweep, sync");
+// league shapes (#446-#460)
+const PRESETS = {
+  espn:  {QB:1,RB:2,WR:2,TE:1,FLEX:1,SF:0,DEF:1,K:0,BN:8},
+  yahoo: {QB:1,RB:2,WR:3,TE:1,FLEX:1,SF:0,DEF:1,K:0,BN:7},
+  buck:  {QB:1,RB:2,WR:2,TE:1,FLEX:1,SF:1,DEF:1,K:0,BN:7},
+};
+for(const [nm2, sl2] of Object.entries(PRESETS)){
+  vm.runInContext(`S.settings.slots=${JSON.stringify(sl2)};S.settings.min={QB:${sl2.QB+sl2.SF},RB:${sl2.RB},WR:${sl2.WR},TE:${sl2.TE},DEF:${sl2.DEF}};S.settings.roster=${Object.values(sl2).reduce((a,b)=>a+b,0)};S.log=[];S.taken={};S.mine=[];_memo={key:null};`, ctx);
+  const mk2 = g('runMock(STRATS[0], 4242)');
+  assert.strictEqual(mk2.mineIds.length, g("S.settings.roster"), nm2+" roster size");
+  const bs2 = g('bestStarters(runMock(STRATS[0], 4242).mineIds, idIndex())');
+  const starters2 = Object.entries(sl2).filter(([k])=>k!=="BN").reduce((a,[,v])=>a+v,0);
+  assert.strictEqual(bs2.line.length, starters2, nm2+" lineup slots");
+  assert.ok(bs2.line.filter(sl3=>sl3.p).length >= starters2-1, nm2+" lineup mostly filled");
+}
+vm.runInContext('S.settings.slots={QB:1,RB:2,WR:2,TE:1,FLEX:1,SF:1,DEF:1,K:0,BN:7};S.settings.min={QB:2,RB:3,WR:3,TE:1,DEF:1};S.settings.roster=16;_memo={key:null};', ctx);
+// fractional scoring (#454)
+vm.runInContext('S.settings.recPts=0.25;_memo={key:null};', ctx);
+const q25 = g('allPlayers().find(p=>p.name==="Ja\'Marr Chase").proj');
+vm.runInContext('S.settings.recPts=null;_memo={key:null};', ctx);
+const q100 = g('allPlayers().find(p=>p.name==="Ja\'Marr Chase").proj');
+assert.ok(q25 < q100 - 50, "0.25 PPR strips reception points: "+q25+" vs "+q100);
+// auction sanity (#450)
+const aAllen = g('auctionOf(allPlayers().find(p=>p.name==="Josh Allen"))');
+assert.ok(aAllen >= 30 && aAllen <= 90, "Allen auction $"+aAllen);
+
+console.log("logic.test OK — engine, snake, saturation, mocks, odds, rounds, injuries, utils, fuzz, story, sweep, sync, leagues");

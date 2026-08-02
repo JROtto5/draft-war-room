@@ -31,8 +31,9 @@ function fmt(n){ return Math.round(n).toLocaleString("en-US"); }
 
 const STARTABLE = {QB:2, RB:5, WR:5, TE:2, DEF:1};
 
-function satAdjust(pos, curCount, score){
-  const over = curCount + 1 - (STARTABLE[pos]||1);
+function satAdjust(pos, curCount, score, startable){
+  const st = startable || STARTABLE;
+  const over = curCount + 1 - (st[pos]||1);
   if(over <= 0) return {score, note:null};
   if(over === 1 && pos!=="DEF") return {score: score*(pos==="QB"?0.45:0.3), note:"your "+pos+" starters are set — depth value only"};
   return {score: Math.min(score,0)-400, note:"you're saturated at "+pos};
