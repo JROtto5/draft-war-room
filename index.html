@@ -172,6 +172,18 @@ tr.mine-row{background:rgba(47,212,122,.07)}
 .overlay{position:fixed; inset:0; background:rgba(5,8,12,.7); backdrop-filter:blur(4px); z-index:100; display:none; align-items:center; justify-content:center}
 .overlay.show{display:flex}
 .modal{background:var(--panel); border:1px solid var(--line); border-radius:16px; width:min(520px,92vw); max-height:88vh; overflow-y:auto; box-shadow:var(--shadow)}
+.modal.wide{width:min(1280px,96vw)}
+.mockgrid{display:flex; gap:12px; overflow-x:auto; padding-bottom:6px}
+.mock{min-width:232px; flex:1; background:var(--bg2); border:1px solid var(--line); border-radius:12px; padding:12px}
+.mock h4{font-size:13.5px; margin-bottom:2px}
+.mock .mtot{font-size:11px; color:var(--dim); margin-bottom:9px}
+.mock .mtot b{color:var(--green); font-size:13px}
+.mkrow{display:flex; align-items:center; gap:6px; font-size:11.5px; padding:2.5px 0; white-space:nowrap}
+.mkrow .rp{color:var(--faint); font-size:10px; width:32px; flex:none}
+.mkrow .mpos{width:30px; flex:none; text-align:center; font-size:9px; font-weight:800; padding:2px 0; border-radius:4px; color:#0b0f14}
+.mkrow .mn{overflow:hidden; text-overflow:ellipsis}
+.mkrow.strt .mn{font-weight:600}
+.mkrow.bench{opacity:.62}
 .modal h3{padding:16px 20px; border-bottom:1px solid var(--line); font-size:15px}
 .modal .body{padding:16px 20px}
 .frow{display:flex; align-items:center; gap:10px; margin-bottom:12px}
@@ -203,6 +215,7 @@ footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--fa
   <div class="spacer"></div>
   <span class="savebadge" id="saveBadge">Autosave on</span>
   <button class="hbtn" id="undoBtn" title="Undo last board action">↩ Undo</button>
+  <button class="hbtn" id="mocksBtn">🎲 Mocks</button>
   <button class="hbtn" id="addBtn">+ Player</button>
   <button class="hbtn" id="settingsBtn">⚙ Settings</button>
   <button class="hbtn" id="exportBtn">⇩ Export</button>
@@ -324,6 +337,25 @@ footer{padding:14px 20px 26px; text-align:center; font-size:11px; color:var(--fa
     <div class="foot">
       <button class="hbtn" id="addCancel">Cancel</button>
       <button class="hbtn" id="addSave" style="border-color:var(--green);color:var(--green)">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Mock drafts modal -->
+<div class="overlay" id="mocksOverlay">
+  <div class="modal wide">
+    <h3>🎲 Five Mock Drafts From Your Seat <span id="mockCtx" style="font-weight:400;color:var(--dim);font-size:12px"></span></h3>
+    <div class="body">
+      <div class="note" style="margin:0 0 12px">
+        Simulated forward from the <b>current board</b>. The other 11 teams draft off market ADP with noise;
+        each CPU gets a random superflex QB-urgency, so how fast QBs fly varies run to run.
+        Your picks follow the engine under five different strategies. Re-roll for new outcomes.
+      </div>
+      <div class="mockgrid" id="mockGrid"></div>
+    </div>
+    <div class="foot">
+      <button class="hbtn" id="mocksReroll" style="border-color:var(--gold);color:var(--gold)">🎲 Re-roll</button>
+      <button class="hbtn" id="mocksClose">Close</button>
     </div>
   </div>
 </div>
@@ -1064,19 +1096,48 @@ function myOverallPicks(){
   for(let r=1;r<=S.settings.roster;r++) out.push((r-1)*t + (r%2===1 ? slot : t+1-slot));
   return out;
 }
-/* Expected draft round per player: from ADP, or estimated (~) from projection
-   rank when the market board doesn't list him. Window spans 1–2 rounds. */
+/* Expected draft round per player. Listed players: straight from ADP.
+   Unlisted (~): interpolate between same-position ADP anchors by projection,
+   so a 205-pt QB prices like the 205-pt QBs the market DID rank — not like a
+   205-pt WR. Positions with no anchors at all (DEF) map to the late rounds
+   by position rank. */
 function roundInfo(players){
   const t = S.settings.teams, cap = t*S.settings.roster, R = S.settings.roster;
-  const sorted = players.slice().sort((a,b)=>b.proj-a.proj);
-  const rank = {}; sorted.forEach((p,i)=>rank[p.id]=i+1);
+  const anchors = {}, posRank = {};
+  for(const pos of POSITIONS){
+    const inPos = players.filter(p=>p.pos===pos).sort((a,b)=>b.proj-a.proj);
+    inPos.forEach((p,i)=>posRank[p.id]=i+1);
+    let run = 0;
+    anchors[pos] = inPos.filter(p=>p.adp).map(p=>{ run=Math.max(run,p.adp); return {proj:p.proj, adp:run}; });
+  }
   const m = {};
   for(const p of players){
-    const a = p.adp || rank[p.id];
-    const est = !p.adp;
-    if(a > cap){ m[p.id] = {rd:99, ud:true, est, label:"UD"}; continue; }
+    let a = p.adp; const est = !a;
+    if(est){
+      const A = anchors[p.pos];
+      if(A.length >= 3){
+        if(p.proj >= A[0].proj) a = A[0].adp;
+        else {
+          for(let i=1;i<A.length;i++){
+            if(p.proj >= A[i].proj){
+              const hi=A[i-1], lo=A[i];
+              const f = (hi.proj-p.proj)/Math.max(0.01, hi.proj-lo.proj);
+              a = Math.round(hi.adp + f*(lo.adp-hi.adp)); break;
+            }
+          }
+          if(!a){ // below every anchor: extend the position's price curve
+            const first=A[0], last=A[A.length-1];
+            const slope = (last.adp-first.adp)/Math.max(1, first.proj-last.proj);
+            a = Math.round(last.adp + (last.proj-p.proj)*Math.max(0.5,slope));
+          }
+        }
+      } else {
+        a = (R-3)*t + posRank[p.id];
+      }
+    }
+    if(a > cap){ m[p.id] = {rd:99, ud:true, est, label:"UD", eadp:a}; continue; }
     const rd = Math.ceil(a/t), rd2 = Math.min(rd+1, R);
-    m[p.id] = {rd, ud:false, est, label:(est?"~":"")+"R"+rd+(rd2>rd?"–"+rd2:"")};
+    m[p.id] = {rd, ud:false, est, label:(est?"~":"")+"R"+rd+(rd2>rd?"–"+rd2:""), eadp:a};
   }
   return m;
 }
@@ -1118,6 +1179,18 @@ function idIndex(){
 }
 
 /* ---------- Recommendation engine ---------- */
+/* Marginal value of adding the Nth player at a position: you start
+   QB+SF (2 QB), 2RB+2WR+TE+flex+DEF. Depth has bench value, hoarding doesn't. */
+const STARTABLE = {QB:2, RB:5, WR:5, TE:2, DEF:1};
+/* Returns adjusted score. First player past startable = depth discount
+   (QB3 is real superflex insurance); anything beyond that is dead weight
+   and gets buried so it can never beat a live position. */
+function satAdjust(pos, curCount, score){
+  const over = curCount + 1 - (STARTABLE[pos]||1);
+  if(over <= 0) return {score, note:null};
+  if(over === 1 && pos!=="DEF") return {score: score*(pos==="QB"?0.45:0.3), note:"your "+pos+" starters are set — depth value only"};
+  return {score: Math.min(score,0)-400, note:"you're saturated at "+pos};
+}
 function needInfo(){
   const counts = myCounts();
   const min = S.settings.min;
@@ -1134,7 +1207,7 @@ function needInfo(){
 function scoreBoard(){
   const players = allPlayers();
   const repl = replacementLevels(players);
-  const {needs, totalNeeded, picksLeft} = needInfo();
+  const {counts, needs, totalNeeded, picksLeft} = needInfo();
   const byId = idIndex();
   const myTeamsQB = new Set(), myTeamsPC = new Set(); // QB teams, pass-catcher teams I own
   for(const id of S.mine){
@@ -1150,6 +1223,9 @@ function scoreBoard(){
     const vorp = p.proj - (repl[p.pos]||0);
     let score = vorp;
     let why = [];
+    // Positional saturation: value the slot he'd actually fill on YOUR roster
+    const sat = satAdjust(p.pos, counts[p.pos], score);
+    score = sat.score; if(sat.note) why.push(sat.note);
     // Need pressure
     if(needs[p.pos] > 0){
       const urgency = picksLeft>0 ? Math.min(1, totalNeeded/picksLeft) : 1;
@@ -1213,6 +1289,121 @@ function editProj(id){
   if(!isNaN(n) && n>=0){ S.overrides[id]=n; commit(); }
 }
 function commit(){ save(); render(); }
+
+/* ---------- Mock draft simulator ---------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+
+const STRATS = [
+ {name:"Balanced Value", icon:"⚖️", blurb:"Pure engine: best value, fill needs", mod:(p,c)=>1},
+ {name:"QB Hammer", icon:"🔨", blurb:"Lock elite QBs before the run", mod:(p,c)=> p.pos==="QB" ? (c.counts.QB<2 ? 1.3 : (c.counts.QB<3 ? 1.05 : 1)) : 1},
+ {name:"RB Anchor", icon:"🏃", blurb:"Pound RB volume in rounds 1–5", mod:(p,c)=> p.pos==="RB" && c.round<=5 ? 1.25 : 1},
+ {name:"Stack Attack", icon:"🔗", blurb:"Chase QB + pass-catcher stacks", mod:(p,c)=> c.stacks ? 1.18 : 1},
+ {name:"Target Hunter", icon:"⭐", blurb:"Lean hard on the analyst board", mod:(p,c)=> p.intel && p.intel.t!=null ? 1.12 : 1},
+];
+
+function bestStarters(ids, byId){
+  const ps = ids.map(id=>byId[id]).filter(Boolean).sort((a,b)=>b.proj-a.proj);
+  const used = new Set();
+  const take = poss => { for(const p of ps){ if(!used.has(p.id) && poss.includes(p.pos)){ used.add(p.id); return p; } } return null; };
+  const slots = [["QB"],["RB"],["RB"],["WR"],["WR"],["TE"],["RB","WR","TE"],["QB","RB","WR","TE"],["DEF"]];
+  const line = slots.map(take);
+  return {starterIds:new Set([...used]), pts:line.reduce((a,p)=>a+(p?p.proj:0),0)};
+}
+
+function runMock(strat, seed){
+  const rng = mulberry32(seed);
+  const players = allPlayers();
+  const repl = replacementLevels(players);
+  const rinfo = roundInfo(players);
+  const byId = {}; players.forEach(p=>byId[p.id]=p);
+  const t=S.settings.teams, R=S.settings.roster, total=t*R, mySlot=Math.min(S.settings.slot,t);
+  const min = S.settings.min;
+  const taken = new Set(Object.keys(S.taken)); S.mine.forEach(id=>taken.add(id));
+  const mineIds = S.mine.slice();
+  const cpu = {}; for(let s=1;s<=t;s++) cpu[s]={QB:0,RB:0,WR:0,TE:0,DEF:0, qbGreed:0.5+rng()*0.55};
+  const picks = [];
+
+  for(let pick=S.log.length+1; pick<=total; pick++){
+    const r = Math.ceil(pick/t);
+    const idx = pick-(r-1)*t;
+    const slot = (r%2===1) ? idx : t+1-idx;
+    const avail = players.filter(p=>!taken.has(p.id));
+    if(!avail.length) break;
+    let chosen = null;
+
+    if(slot===mySlot){
+      const counts={QB:0,RB:0,WR:0,TE:0,DEF:0};
+      mineIds.forEach(id=>{const p=byId[id]; if(p)counts[p.pos]++;});
+      let needed=0; for(const pos of POSITIONS) needed+=Math.max(0,(min[pos]||0)-counts[pos]);
+      const left = R - mineIds.length;
+      const mustFill = needed>=left && left>0;
+      const myQBt=new Set(), myPCt=new Set();
+      mineIds.forEach(id=>{const p=byId[id]; if(!p)return; if(p.pos==="QB")myQBt.add(p.team); if(p.pos==="WR"||p.pos==="TE")myPCt.add(p.team);});
+      let bestScore=-1e9;
+      for(const p of avail){
+        const need=(min[p.pos]||0)-counts[p.pos];
+        if(mustFill && need<=0) continue;
+        let sc = p.proj-(repl[p.pos]||0);
+        if(need>0) sc *= 1+0.35*Math.min(1, needed/Math.max(1,left));
+        const stacks = ((p.pos==="WR"||p.pos==="TE")&&myQBt.has(p.team)) || (p.pos==="QB"&&myPCt.has(p.team));
+        if(stacks) sc*=1.08;
+        if(p.intel){ if(p.intel.t!=null)sc*=1.04; if(p.intel.lean>0)sc*=1.03; if(p.intel.lean<0)sc*=0.97; }
+        if(p.pos==="DEF" && r<12 && need>=0 && !mustFill) sc-=40;         // no early DEF
+        sc = satAdjust(p.pos, counts[p.pos], sc).score;                   // don't hoard
+        sc *= strat.mod(p,{counts, round:r, stacks});
+        sc *= 0.97+rng()*0.06;
+        if(sc>bestScore){bestScore=sc; chosen=p;}
+      }
+      if(!chosen) chosen=avail[0];
+      mineIds.push(chosen.id);
+      picks.push({pick, round:r, idx, p:chosen});
+    } else {
+      const st = cpu[slot];
+      const caps={QB:3,RB:7,WR:8,TE:3,DEF:2};
+      let pool = avail.filter(p=>st[p.pos]<caps[p.pos]);
+      const missing=[]; if(st.QB<1)missing.push("QB"); if(st.TE<1)missing.push("TE"); if(st.DEF<1)missing.push("DEF");
+      const roundsLeft = R-r+1;
+      if(missing.length >= roundsLeft) pool = pool.filter(p=>missing.includes(p.pos));
+      else if(r<12) pool = pool.filter(p=>p.pos!=="DEF" || rng()<0.02);
+      if(!pool.length) pool = avail;
+      let bestKey=1e9;
+      for(const p of pool){
+        let e = rinfo[p.id].eadp;
+        if(p.pos==="QB") e *= st.qbGreed;
+        e += (rng()*2-1)*9;
+        if(e<bestKey){bestKey=e; chosen=p;}
+      }
+      st[chosen.pos]++;
+    }
+    taken.add(chosen.id);
+  }
+  const {starterIds, pts} = bestStarters(mineIds, byId);
+  const totalPts = mineIds.reduce((a,id)=>a+((byId[id]||{}).proj||0),0);
+  return {strat, picks, mineIds, starterIds, startPts:Math.round(pts), totalPts:Math.round(totalPts), byId};
+}
+
+function renderMocks(){
+  const base = Math.floor(Math.random()*1e9);
+  const already = S.mine.length;
+  $("#mockCtx").textContent = already ? "(continuing from your "+already+" real pick"+(already>1?"s":"")+")" : "(from a clean board)";
+  $("#mockGrid").innerHTML = STRATS.map((st,i)=>{
+    const m = runMock(st, base + i*7919);
+    const rows = m.picks.map(pk=>{
+      const isStart = m.starterIds.has(pk.p.id);
+      const tag = (pk.p.intel&&pk.p.intel.t!=null?" ⭐":"");
+      return '<div class="mkrow '+(isStart?"strt":"bench")+'">'+
+        '<span class="rp mono">'+pk.round+'.'+String(pk.idx).padStart(2,"0")+'</span>'+
+        '<span class="mpos pos '+pk.p.pos+'">'+pk.p.pos+'</span>'+
+        '<span class="mn">'+pk.p.name+tag+'</span></div>';
+    }).join("");
+    const kept = already ? '<div class="mkrow" style="color:var(--faint);font-size:10px">+ your '+already+' real pick'+(already>1?"s":"")+'</div>' : '';
+    return '<div class="mock">'+
+      '<h4>'+st.icon+' '+st.name+'</h4>'+
+      '<div class="mtot" title="Optimal starting lineup projection (QB/2RB/2WR/TE/FLEX/SF/DEF)">Starters <b class="mono">'+m.startPts+'</b> pts · roster '+m.totalPts+'</div>'+
+      '<div class="mtot" style="margin:-4px 0 8px; font-size:10px">'+st.blurb+'</div>'+
+      kept + rows + '</div>';
+  }).join("");
+}
 
 /* ---------- Rendering ---------- */
 const $ = s => document.querySelector(s);
@@ -1442,6 +1633,11 @@ document.addEventListener("keydown", e=>{
   if((e.ctrlKey||e.metaKey) && e.key==="z"){ e.preventDefault(); undoLast(); }
   if(e.key==="/" && document.activeElement!==$("#search")){ e.preventDefault(); $("#search").focus(); }
 });
+
+/* Mocks modal */
+$("#mocksBtn").addEventListener("click", ()=>{ $("#mocksOverlay").classList.add("show"); renderMocks(); });
+$("#mocksReroll").addEventListener("click", renderMocks);
+$("#mocksClose").addEventListener("click", ()=>$("#mocksOverlay").classList.remove("show"));
 
 /* Settings modal */
 $("#settingsBtn").addEventListener("click", ()=>{
