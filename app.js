@@ -471,8 +471,24 @@ function scoreBoard(){
 }
 
 /* ---------- Actions ---------- */
+const POS_EMOJI = {QB:"🎯", RB:"💨", WR:"🙌", TE:"🧱", DEF:"🛡"};
+function emojiBurst(pos){
+  if(!S.ui.live) return;
+  for(let i=0;i<7;i++){
+    const s = document.createElement("span");
+    s.className = "cf";
+    s.textContent = POS_EMOJI[pos]||"🏈";
+    s.style.left = (42+Math.random()*16)+"vw";
+    s.style.fontSize = "18px";
+    s.style.background = "transparent";
+    s.style.animationDelay = (Math.random()*0.3)+"s";
+    document.body.appendChild(s);
+    setTimeout(()=>s.remove(), 3600);
+  }
+}
 function confetti(){
-  const colors = ["#2fd47a","#ffc94d","#5aa9ff","#ff6b6b","#b78cff"];
+  const acc = getComputedStyle(document.documentElement).getPropertyValue("--green").trim() || "#2fd47a";
+  const colors = [acc,"#ffc94d","#5aa9ff","#ff6b6b","#b78cff","#ffffff"].sort(()=>Math.random()-0.5);
   for(let i=0;i<48;i++){
     const s = document.createElement("span");
     s.className = "cf";
@@ -486,6 +502,34 @@ function confetti(){
 }
 
 /* ---------- Toasts ---------- */
+const ACHIEVEMENTS = [
+  ["first-blood","🩸 First Blood","Log your first pick of a draft", s=>s.log.length>=1],
+  ["queue-master","⭐ Queue Master","Queue 8+ players", s=>(s.queue||[]).length>=8],
+  ["planner","📌 The Architect","Pin 5+ rounds on the plan board", s=>Object.keys(s.plan||{}).length>=5],
+  ["stacked","🔗 Stacked","Roster a QB + pass-catcher stack", s=>{
+    const byId=idIndex(), teams={};
+    myIds().map(id=>byId[id]).filter(Boolean).forEach(p=>{(teams[p.team]=teams[p.team]||[]).push(p.pos);});
+    return Object.values(teams).some(a=>a.includes("QB")&&(a.includes("WR")||a.includes("TE")));
+  }],
+  ["value-hound","💎 Value Hound","Draft a player 15+ past ADP", s=>{
+    const byId=idIndex();
+    return s.log.some((e,i)=>{ const p=byId[e.id]; return e.who==="me"&&p&&p.adp&&(i+1+(s.pickOffset||0))-p.adp>=15; });
+  }],
+  ["home-team","💖 Homer","Draft a favorite-state/college player", s=>{
+    const byId=idIndex(); return s.mine.some(id=>{const p=byId[id]; return p&&isFav(p);});
+  }],
+  ["full-house","🏟 Full House","Complete a 16-man draft", s=>myIds().length>=s.settings.roster],
+];
+function checkAchievements(){
+  try{
+    const got = JSON.parse(localStorage.getItem(LS_KEY+"-ach")||"{}");
+    let dirty = false;
+    ACHIEVEMENTS.forEach(([id,label,desc,test])=>{
+      if(!got[id] && test(S)){ got[id]=Date.now(); dirty=true; toast("🏆 Achievement: <b>"+label+"</b> — "+desc); }
+    });
+    if(dirty) localStorage.setItem(LS_KEY+"-ach", JSON.stringify(got));
+  }catch(e){}
+}
 function toast(msg, opts){
   let wrap = document.getElementById("toastWrap");
   if(!wrap){ wrap = document.createElement("div"); wrap.id = "toastWrap"; document.body.appendChild(wrap); }
@@ -533,7 +577,10 @@ function pickMine(id){
   }catch(e){}
   redoStack.length=0; S.mine.push(id); S.log.push({id, who:"me", t:Date.now()}); commit();
   const p = idIndex()[id];
-  if(p) toast("✓ Drafted <b style='color:var(--green)'>"+esc(p.name)+"</b>"+gradeChip, {undo:undoLast});
+  const who = S.settings.flair ? esc(S.settings.flair) : "you";
+  if(p) toast("✓ "+who+" drafted <b style='color:var(--green)'>"+esc(p.name)+"</b>"+gradeChip, {undo:undoLast});
+  if(p && isFav(p)) toast("💖 A "+((S.settings.favState||"").toUpperCase()||"favorite")+" kid joins the squad. This is the way.");
+  if(p) emojiBurst(p.pos);
   if(p) announce("Pick "+pickNow()+". You drafted "+p.name+".");
   blip();
 }
@@ -583,6 +630,7 @@ function editProj(id){
 }
 function commit(){
   save(); render();
+  checkAchievements();
   if(window.requestIdleCallback) requestIdleCallback(()=>{ try{ survivalOdds(); }catch(e){} }, {timeout:2000});
 }
 
@@ -1030,6 +1078,7 @@ function openCard(id){
       '<button class="undo1" data-queue="'+id+'">'+(S.queue.includes(id)?"★":"☆")+'</button>'+
       '<button class="undo1" data-plan="'+id+'">📌 plan</button>'+
       '<button class="undo1" data-onepager="'+id+'">📋 one-pager</button>'+
+      '<button class="undo1" data-cardpng="'+id+'">🖼</button>'+
     '</div>';
     $("#cardOverlay").classList.add("show");
 }
@@ -1713,7 +1762,8 @@ function renderBest(){
     pickline = '<div class="pickline'+(h.onClock?' onclock':'')+'" data-picksync="1" title="Click to correct the current overall pick if the board drifted" style="cursor:pointer">Pick <b class="mono">#'+h.cur+'</b> on the clock'+
       (h.onClock ? ' — <b style="color:var(--green)">THAT\'S YOU, DRAFT NOW</b>' : '') +
       ' · your next: <b class="mono">#'+h.mine0+'</b>'+(h.mine1?' then <b class="mono">#'+h.mine1+'</b>':'')+
-      (!h.onClock?' · <button class="undo1" data-simto="1" title="Let the engine make every CPU pick until your turn">⏩ sim to my pick</button>':'')+'</div>';
+      (!h.onClock?' · <button class="undo1" data-simto="1" title="Let the engine make every CPU pick until your turn">⏩ sim to my pick</button>':'')+
+      (S.ui.live?' · <button class="undo1" data-horn="1" title="Airhorn">📢</button><button class="undo1" data-siren="1" title="Steal siren">🚨</button>':'')+'</div>';
   }
   if(h && h.onClock && S.plan){
     const rNow2 = Math.ceil(h.cur/S.settings.teams);
@@ -2089,7 +2139,7 @@ function renderHeader(){
 
 /* ---------- Events (delegated) ---------- */
 document.addEventListener("click", e=>{
-  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-card],[data-cardtab],[data-boost],[data-fade],[data-adpedit],[data-tierup],[data-tierdn],[data-onepager],[data-unpickpre],[data-cmpfrom],[data-slotname],[data-keeper],[data-queue],[data-qup],[data-qfill],[data-plan],[data-unplan],[data-plantoggle],[data-planqueue],[data-qround],[data-qdn],[data-showall],[data-simto],#tradeGo,#matrixCopy,#logMineBtn,#logCsvBtn,#undo5Btn,th[data-sort]");
+  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-card],[data-cardtab],[data-boost],[data-fade],[data-adpedit],[data-tierup],[data-tierdn],[data-onepager],[data-cardpng],[data-unpickpre],[data-cmpfrom],[data-slotname],[data-keeper],[data-queue],[data-qup],[data-qfill],[data-plan],[data-unplan],[data-plantoggle],[data-planqueue],[data-qround],[data-qdn],[data-showall],[data-simto],[data-horn],[data-siren],#tradeGo,#matrixCopy,#logMineBtn,#logCsvBtn,#undo5Btn,th[data-sort]");
   if(!t){
     const rowEl = e.target.closest("#poolBody tr[data-pid]");
     if(rowEl){
@@ -2170,6 +2220,8 @@ document.addEventListener("click", e=>{
   if(t.dataset.qdn!=null){ const i=+t.dataset.qdn; if(i<S.queue.length-1){ [S.queue[i+1],S.queue[i]]=[S.queue[i],S.queue[i+1]]; commit(); } return; }
   if(t.dataset.showall){ window._showAllRows = true; renderPool(); return; }
   if(t.dataset.simto){ return simToMyPick(); }
+  if(t.dataset.horn){ return stinger("horn"); }
+  if(t.dataset.siren){ return stinger("siren"); }
   if(t.id==="undo5Btn"){ undoLastN(5); return; }
   if(t.id==="logMineBtn"){ logMineOnly = !logMineOnly; t.classList.toggle("on", logMineOnly); renderLog(); return; }
   if(t.id==="logCsvBtn"){ return exportLogCsv(); }
@@ -2212,6 +2264,31 @@ document.addEventListener("click", e=>{
     S.plan = {};
     S.queue.forEach((id,i)=>{ if(rounds[i]) S.plan[rounds[i]] = id; });
     return commit();
+  }
+  if(t.dataset.cardpng){
+    const p = idIndex()[t.dataset.cardpng]; if(!p) return;
+    const c = document.createElement("canvas");
+    c.width = 640; c.height = 360;
+    const x = c.getContext("2d");
+    x.fillStyle = "#0b0f14"; x.fillRect(0,0,640,360);
+    x.fillStyle = "#2fd47a"; x.font = "bold 30px sans-serif"; x.fillText(p.name, 28, 54);
+    x.fillStyle = "#8ba0bc"; x.font = "15px sans-serif";
+    x.fillText(p.pos+" · "+p.team+" · proj "+p.proj+" · ADP "+(p.adp||"—"), 28, 84);
+    x.fillStyle = "#e8eef7"; x.font = "14px sans-serif";
+    const words = storyOf(p).split(" ");
+    let line = "", yy = 130;
+    words.forEach(w=>{
+      if((line+w).length > 62){ x.fillText(line, 28, yy); yy += 24; line = ""; }
+      line += w+" ";
+    });
+    x.fillText(line, 28, yy);
+    hist3For(p).forEach((hrow,i)=>{
+      x.fillStyle = "#2fd47a";
+      x.fillRect(28, 250+i*26, Math.min(560, hrow[2]*1.2), 14);
+      x.fillStyle = "#8ba0bc"; x.fillText(hrow[0]+"  "+hrow[2], 30+Math.min(560, hrow[2]*1.2)+8, 262+i*26);
+    });
+    c.toBlob(b=>{ const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=p.name.replace(/\s+/g,"-")+".png"; a.click(); URL.revokeObjectURL(a.href); });
+    return;
   }
   if(t.dataset.onepager){
     const id = t.dataset.onepager, p = idIndex()[id];
@@ -2542,6 +2619,40 @@ function buildReport(){
         steals2.map(m2=>'<div class="mkrow"><span class="mn">💎 '+esc(slotName(m2.slot))+' stole '+esc(m2.p.name)+' ('+m2.d+' late)</span></div>').join("");
     }
   }
+  // end-of-draft awards (#346)
+  {
+    const moves2 = [];
+    S.log.forEach((e,i)=>{
+      const p2 = byId[e.id]; if(!p2 || !p2.adp) return;
+      const n = i+1+(S.pickOffset||0), r2 = Math.ceil(n/S.settings.teams), idx = n-(r2-1)*S.settings.teams;
+      const slot = (r2%2===1)?idx:S.settings.teams+1-idx;
+      moves2.push({p:p2, slot, d:n-p2.adp, n});
+    });
+    if(moves2.length >= S.settings.teams*3){
+      const bestVal = moves2.slice().sort((a,b)=>b.d-a.d)[0];
+      const reach = moves2.slice().sort((a,b)=>a.d-b.d)[0];
+      const lastPick = moves2[moves2.length-1];
+      const dbl = stacks.find(([,ps2])=>ps2.filter(x=>x.pos==="WR"||x.pos==="TE").length>=2);
+      h += '<div class="sechead">🏅 Draft awards</div>'+
+        '<div class="mkrow"><span class="mn">💎 <b>Best Value</b>: '+esc(slotName(bestVal.slot))+' — '+esc(bestVal.p.name)+' ('+bestVal.d+' past ADP)</span></div>'+
+        '<div class="mkrow"><span class="mn">🙈 <b>The Reach</b>: '+esc(slotName(reach.slot))+' — '+esc(reach.p.name)+' ('+(-reach.d)+' early)</span></div>'+
+        '<div class="mkrow"><span class="mn">🎉 <b>Mr. Irrelevant</b>: '+esc(lastPick.p.name)+' (pick '+lastPick.n+')</span></div>'+
+        (dbl?'<div class="mkrow"><span class="mn">🏗 <b>Stack Architect</b>: you, for the '+dbl[0]+' double stack</span></div>':'');
+    }
+  }
+  // hometown map + favorite-state pride (#354/#355)
+  {
+    const states = {};
+    myIds().map(id2=>byId[id2]).filter(Boolean).forEach(p2=>{
+      const hw2 = hometownOf(p2); if(hw2 && hw2.st) states[hw2.st] = (states[hw2.st]||0)+1;
+    });
+    const fs = (S.settings.favState||"").toUpperCase();
+    if(Object.keys(states).length){
+      h += '<div class="sechead">🗺 Roster roots</div><div class="mkrow" style="white-space:normal"><span class="mn">'+
+        Object.entries(states).sort((a,b)=>b[1]-a[1]).map(([st2,c2])=>(st2===fs?"💖":"")+st2+" ×"+c2).join(" · ")+
+        (fs && states[fs] ? ' — <b style="color:#ff7bac">'+states[fs]+' '+fs+' kid'+(states[fs]>1?"s":"")+' on YOUR team</b>' : '')+'</span></div>';
+    }
+  }
   h += '<div class="sechead">Steals</div>' + (steals.length
     ? steals.map(s=>'<div class="mkrow"><span class="mn">💎 '+s.p.name+' — '+s.fall+' picks past ADP</span></div>').join("")
     : '<div class="dimtxt">No 10+ pick discounts landed (yet).</div>');
@@ -2831,7 +2942,7 @@ $("#settingsBtn").addEventListener("click", ()=>{
   const rs=$("#setRival");
   rs.innerHTML='<option value="">none</option>'+Array.from({length:S.settings.teams},(_,i)=>i+1)
     .filter(s2=>s2!==S.settings.slot).map(s2=>'<option value="'+s2+'"'+(+S.settings.rivalSlot===s2?' selected':'')+'>'+esc(slotName(s2))+'</option>').join("");
-  renderTrophies();
+  renderTrophies(); renderAchievements();
   $("#setBaCount").value=S.settings.baCount||15;
   $("#setSimN").value=S.settings.simN||30;
   $("#setRisk").value=S.settings.risk||"balanced";
@@ -3101,6 +3212,14 @@ document.getElementById("prepFile").addEventListener("change", e=>{
 
 /* Board profiles */
 const PROF_KEY = LS_KEY+"-profiles";
+function renderAchievements(){
+  const box = document.getElementById("achCase");
+  if(!box) return;
+  let got = {};
+  try{ got = JSON.parse(localStorage.getItem(LS_KEY+"-ach")||"{}"); }catch(e){}
+  box.innerHTML = ACHIEVEMENTS.map(([id,label,desc])=>
+    '<span class="chip" style="'+(got[id]?'color:var(--gold);border-color:rgba(255,201,77,.5)':'opacity:.45')+'" title="'+esc(desc)+(got[id]?' — earned '+new Date(got[id]).toLocaleDateString():' — locked')+'">'+label+'</span> ').join("");
+}
 function renderTrophies(){
   const box = document.getElementById("trophyCase");
   if(!box) return;
@@ -3257,7 +3376,20 @@ async function sha256hex(s){
   const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
 }
+const LOCK_QUIPS = [
+  "Buck Breakers War Room. Let's get this done.",
+  "12 teams enter. One Otto leaves happy.",
+  "The Schindlers are already nervous.",
+  "Value doesn't draft itself.",
+  "Trust the board. Fear the turn.",
+];
 function initLock(){
+  const q = document.querySelector("#lockScreen .lockbox h1 + p");
+  if(q){
+    const m = new Date().getMonth();
+    const seasonal = m===7 ? "It's draft szn. " : m>=8&&m<=11 ? "Season's live. " : "";
+    q.textContent = seasonal + LOCK_QUIPS[Math.floor(Math.random()*LOCK_QUIPS.length)];
+  }
   const scr = document.getElementById("lockScreen");
   const e2e = location.search.indexOf("e2e") >= 0;
   if(e2e || !window.crypto || !crypto.subtle){ scr.remove(); return; }
@@ -3360,7 +3492,8 @@ function applyTheme(){
   if(m) m.content = dark ? "#0b0f14" : "#eef2f7";
   const b = document.getElementById("themeBtn");
   if(b) b.textContent = pref==="auto" ? "🌓" : (pref==="dark" ? "🌙" : "☀️");
-  const ACCENTS = {green:["#2fd47a","#1d8a50"], blue:["#5aa9ff","#2f6fc0"], gold:["#ffc94d","#b98a1a"]};
+  document.documentElement.classList.toggle("terminal", S.settings.accent==="terminal");
+  const ACCENTS = {green:["#2fd47a","#1d8a50"], blue:["#5aa9ff","#2f6fc0"], gold:["#ffc94d","#b98a1a"], terminal:["#33ff33","#1f9922"]};
   const acc = ACCENTS[S.settings.accent] || null;
   if(acc){ document.documentElement.style.setProperty("--green", acc[0]); document.documentElement.style.setProperty("--green-dim", acc[1]); }
   else { document.documentElement.style.removeProperty("--green"); document.documentElement.style.removeProperty("--green-dim"); }
@@ -3409,6 +3542,33 @@ function blip(){
     g2.gain.setValueAtTime(0.05, ac.currentTime);
     g2.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+0.07);
     o.start(); o.stop(ac.currentTime+0.08);
+  }catch(e){}
+}
+function stinger(kind){
+  if(S.settings.sound===false) return;
+  try{
+    const ac = new (window.AudioContext||window.webkitAudioContext)();
+    if(kind==="horn"){
+      [0,0.12,0.24].forEach(at=>{
+        const o=ac.createOscillator(), g2=ac.createGain();
+        o.type="sawtooth"; o.frequency.setValueAtTime(220, ac.currentTime+at);
+        o.frequency.linearRampToValueAtTime(440, ac.currentTime+at+0.25);
+        o.connect(g2); g2.connect(ac.destination);
+        g2.gain.setValueAtTime(0.12, ac.currentTime+at);
+        g2.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+at+0.3);
+        o.start(ac.currentTime+at); o.stop(ac.currentTime+at+0.32);
+      });
+    } else {
+      const o=ac.createOscillator(), g2=ac.createGain();
+      o.type="triangle"; o.connect(g2); g2.connect(ac.destination);
+      g2.gain.value=0.1;
+      for(let i=0;i<6;i++){
+        o.frequency.setValueAtTime(i%2?880:660, ac.currentTime+i*0.15);
+      }
+      g2.gain.setValueAtTime(0.1, ac.currentTime);
+      g2.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+0.9);
+      o.start(); o.stop(ac.currentTime+0.95);
+    }
   }catch(e){}
 }
 function chime(){
@@ -3507,6 +3667,14 @@ document.getElementById("themeBtn").addEventListener("click", ()=>{
   toast("Theme: "+S.settings.theme);
 });
 window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", applyTheme);
+let _konami = [];
+document.addEventListener("keydown", e=>{
+  _konami.push(e.key); _konami = _konami.slice(-10);
+  if(_konami.join(",")==="ArrowUp,ArrowUp,ArrowDown,ArrowDown,ArrowLeft,ArrowRight,ArrowLeft,ArrowRight,b,a"){
+    confetti(); stinger("horn");
+    toast("🕹 <b>SUPER OTTO MODE</b> — nothing changes, but you feel unstoppable.");
+  }
+});
 
 (function(){
   const av=document.getElementById("aboutVer");

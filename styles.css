@@ -435,3 +435,8 @@ body.spectate header::after{content:"👁 SPECTATING"; font-size:10px; letter-sp
 .sechead.folded::after{content:" ▸"} .sechead:not(.folded)::after{content:" ▾"; opacity:.4}
 body.wall{padding:20px} #wallWrap h1{font-size:22px; margin-bottom:14px}
 body.wall #boardGrid table{font-size:13px!important}
+/* terminal skin */
+:root.terminal{--bg:#000; --bg2:#050f05; --panel:#020a02; --panel2:#0a170a; --line:#0f3d0f; --text:#33ff33; --dim:#22aa22; --faint:#116611; --gold:#aaff00; --red:#ff5533; --headerbg:rgba(0,10,0,.9)}
+:root.terminal body{font-family:'JetBrains Mono',monospace}
+:root.terminal .avatar{filter:grayscale(1) brightness(1.2) sepia(1) hue-rotate(60deg)}
+:root.terminal .pos{background:#0f3d0f!important; color:#33ff33!important; border:1px solid #33ff33}
