@@ -652,7 +652,8 @@ function renderBest(){
       if(nx.length) hq += '<div class="benchhead">🗓 Next up</div><div class="scarce">'+
         nx.map(x=>'<span class="scpill" title="'+esc(x.p.name)+'">'+esc(x.p.name.split(" ").slice(-1)[0])+' W'+x.n.w+' vs '+esc(x.n.opp)+'</span>').join("")+'</div>';
     }
-    if(radar.length) hq += '<div class="benchhead">📡 Waiver radar (unrostered, trending)</div>'+
+    const hqCfg = S.settings.hqWidgets || {};
+    if(hqCfg.radar!==false && radar.length) hq += '<div class="benchhead">📡 Waiver radar (unrostered, trending)</div>'+
       radar.map(p2=>'<div class="barow" data-card="'+p2.id+'">'+avatarImg(p2,22)+posBadge(p2.pos)+
         '<div class="info"><div class="nm">'+p2.name+'</div><div class="sm">📈 '+buzzOf(p2).toLocaleString()+' adds/24h · FAAB ~'+
         Math.min(40, Math.max(1, Math.round((p2.proj-(replacementLevels(allPlayers())[p2.pos]||0))/4)))+'%</div></div></div>').join("");
