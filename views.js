@@ -78,9 +78,13 @@ async function refreshInjuries(silent){
     if(S.log.length > 0) changes.slice(0,3).forEach(c=>
       toast((c.mine?"🚨 YOUR PLAYER — ":"🩹 ")+esc(c.p.name)+": "+esc(c.s), {warn:true}));
     if(S.settings.notifyInj && "Notification" in window && Notification.permission==="granted" && document.visibilityState==="hidden"){
-      changes.filter(c=>c.mine).slice(0,2).forEach(c=>{
-        try{ new Notification("🩹 "+c.p.name, {body:c.s, icon:"icon-192.png", tag:"inj-"+c.p.id}); }catch(e2){}
-      });
+      const mineCh = changes.filter(c=>c.mine);
+      if(mineCh.length===1){
+        try{ new Notification("🩹 "+mineCh[0].p.name, {body:mineCh[0].s, icon:"icon-192.png", tag:"inj"}); }catch(e2){}
+      } else if(mineCh.length>1){
+        try{ new Notification("🩹 "+mineCh.length+" of your players changed status",
+          {body:mineCh.map(c=>c.p.name.split(" ").slice(-1)[0]+": "+c.s).join(" · ").slice(0,180), icon:"icon-192.png", tag:"inj"}); }catch(e2){}
+      }
     }
     render();
     if(document.getElementById("injOverlay").classList.contains("show")) renderInjCenter();
@@ -613,7 +617,13 @@ function renderBest(){
       '<div class="tag">🏟 SEASON HQ'+(kd>0?' · 🏈 kickoff in '+kd+'d':'')+'</div>'+
       '<div class="name">'+esc(S.settings.flair||slotName(S.settings.slot))+'</div>'+
       '<div class="meta">Draft complete · optimal starters <b class="mono" style="color:var(--green)">'+fmt(bsH.pts)+'</b> · projected <b>'+ordinal(myRank)+'</b> of '+st.rows.length+
-      (hurtN?' · 🩹 '+hurtN+' with injury flags':' · roster healthy ✓')+'</div>'+
+      (hurtN?' · 🩹 '+hurtN+' with injury flags':' · roster healthy ✓')+
+      ((()=>{ // title odds: softmax over projected starters
+        const temps = st.rows.map(r2=>Math.exp(r2.pts/120));
+        const z = temps.reduce((a,b)=>a+b,0);
+        const mine2 = temps[st.rows.findIndex(r2=>r2.s===st.mySlot)]/z;
+        return ' · 🏆 title odds ~<b>'+Math.round(mine2*100)+'%</b>';
+      })())+'</div>'+
       '<div class="actions">'+
         '<button class="hbtn" onclick="document.getElementById(\'gradeBtn\').click()">🎓 Report</button>'+
         '<button class="hbtn" onclick="document.getElementById(\'injBtn\').click()">🩺 Injuries</button>'+
@@ -644,13 +654,14 @@ function renderBest(){
     }
     if(radar.length) hq += '<div class="benchhead">📡 Waiver radar (unrostered, trending)</div>'+
       radar.map(p2=>'<div class="barow" data-card="'+p2.id+'">'+avatarImg(p2,22)+posBadge(p2.pos)+
-        '<div class="info"><div class="nm">'+p2.name+'</div><div class="sm">📈 '+buzzOf(p2).toLocaleString()+' adds/24h</div></div></div>').join("");
-    if(myNews.length) hq += '<div class="benchhead">📰 Your players in the news</div>'+
+        '<div class="info"><div class="nm">'+p2.name+'</div><div class="sm">📈 '+buzzOf(p2).toLocaleString()+' adds/24h · FAAB ~'+
+        Math.min(40, Math.max(1, Math.round((p2.proj-(replacementLevels(allPlayers())[p2.pos]||0))/4)))+'%</div></div></div>').join("");
+    if(hqCfg.news && myNews.length) hq += '<div class="benchhead">📰 Your players in the news</div>'+
       myNews.map(x=>'<div class="barow" data-card="'+x.p.id+'">'+avatarImg(x.p,22)+
         '<div class="info"><div class="nm" style="font-size:11.5px">'+esc(x.n.h.slice(0,70))+'</div><div class="sm">'+esc(x.p.name)+' · '+x.n.d+'</div></div></div>').join("");
-    if(irs.length) hq += '<div class="benchhead">🏥 IR-eligible (league has 3 IR slots)</div>'+
+    if(hqCfg.ir && irs.length) hq += '<div class="benchhead">🏥 IR-eligible (league has 3 IR slots)</div>'+
       irs.map(p2=>'<div class="barow" data-card="'+p2.id+'">'+avatarImg(p2,22)+'<div class="info"><div class="nm">'+p2.name+'</div><div class="sm">stash him, open a bench spot</div></div></div>').join("");
-    if(drops.length) hq += '<div class="benchhead">🪓 Thinnest bench spots</div>'+
+    if(hqCfg.drops && drops.length) hq += '<div class="benchhead">🪓 Thinnest bench spots</div>'+
       drops.map(p2=>'<div class="barow" data-card="'+p2.id+'">'+avatarImg(p2,22)+'<div class="info"><div class="nm">'+p2.name+'</div><div class="sm mono">'+p2.proj+' proj</div></div></div>').join("");
     hq += '<div class="benchhead">League rosters</div><div class="scarce">'+
       Array.from({length:S.settings.teams},(_,i2)=>i2+1).map(s2=>'<span class="scpill" data-teampage="'+s2+'" style="cursor:pointer">'+esc(slotName(s2))+'</span>').join("")+'</div>';
@@ -876,6 +887,10 @@ function renderRoster(){
       try{
         const all = profAll();
         const nm = "🏁 "+(S.settings.name||"Draft")+" "+new Date().getFullYear()+" final";
+        // archive schema for next-summer hindsight (#477)
+        all["📦 archive "+new Date().getFullYear()] = all["📦 archive "+new Date().getFullYear()] ||
+          {kind:"season-archive", year:new Date().getFullYear(), stamp:(typeof DATA_STAMP!=="undefined"?DATA_STAMP:""),
+           roster:myIds(), projections:Object.fromEntries(myIds().map(id2=>{const p2=idIndex()[id2]; return [id2, p2?p2.proj:0];}))};
         if(!all[nm]){ all[nm] = JSON.parse(JSON.stringify(S)); localStorage.setItem(PROF_KEY, JSON.stringify(all)); }
       }catch(e){}
       setTimeout(buildReport, 900);
@@ -908,7 +923,9 @@ function renderRoster(){
       });
       return b;
     })();
-    const rowFor = (p, lab) => '<div class="myp"><span class="slotlab">'+lab+'</span>'+avatarImg(p,22)+posBadge(p.pos)+((()=>{const e=injuryOf(p); if(!e) return ""; const sv=injSeverity(e.s); return '<span class="ib '+sv.cls+'" title="'+esc(sv.label+(e.c?" — "+e.c:""))+'">●</span>';})())+
+    const seasonDone = myIds().length >= S.settings.roster;
+    const rowFor = (p, lab) => '<div class="myp"><span class="slotlab">'+lab+'</span>'+avatarImg(p,22)+posBadge(p.pos)+
+      (seasonDone && nextOpp(p.team) ? '<span class="dimtxt" style="font-size:8.5px" title="Next game">W'+nextOpp(p.team).w+' '+esc(nextOpp(p.team).opp)+'</span>' : '')+((()=>{const e=injuryOf(p); if(!e) return ""; const sv=injSeverity(e.s); return '<span class="ib '+sv.cls+'" title="'+esc(sv.label+(e.c?" — "+e.c:""))+'">●</span>';})())+
       '<div class="n">'+p.name+' <span class="t">'+(logoUrl(p.team)?'<img class="tlogo" src="'+logoUrl(p.team)+'" width="12" height="12" loading="lazy" alt=""> ':'')+p.team+' · <span class="mono">'+p.proj+'</span></span></div>'+
       (function(){const d3=Math.round(p.proj-posBase[p.pos]); return '<span class="mono" style="font-size:9.5px;color:'+(d3>=0?'var(--green)':'var(--red)')+'" title="vs average starter at position">'+(d3>0?'+':'')+d3+'</span>';})()+
       '<span class="t mono">'+(orderOf[p.id]==="K"?"👑":"R"+orderOf[p.id])+'</span>'+

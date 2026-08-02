@@ -179,7 +179,10 @@
       <div class="frow"><label>Custom points per reception (blank = use scoring above)</label><input type="number" id="setRecPts" step="0.1" min="0" max="2" placeholder="—"></div>
       <div class="frow"><label>TE premium (extra per TE catch)</label><input type="number" id="setTePrem" step="0.25" min="0" max="1"></div>
       <div class="frow"><label>Announce picks out loud (Live mode)</label><input type="checkbox" id="setSpeak" style="width:auto"></div>
-      <div class="frow"><label>Draft date (for the countdown)</label><input type="date" id="setDraftDate"></div>
+      <div class="frow"><label>Draft date (for the countdown)</label><span style="display:flex;gap:8px"><input type="date" id="setDraftDate">
+        <button class="hbtn" id="icsBtn" title="Calendar file">📆 .ics</button>
+        <button class="hbtn" id="blurbBtn" title="Copy a league announcement">📣</button>
+        <button class="hbtn" id="cdCardBtn" title="Countdown image for the chat">🖼</button></span></div>
       <div class="frow"><label>Team flair (name / emoji on your roster)</label><input class="wide" type="text" id="setFlair" placeholder="Otto's Bucks 🦌"></div>
       <div class="frow"><label>Font size</label><select id="setFont"><option value="s">Small</option><option value="m" selected>Medium</option><option value="l">Large</option></select></div>
       <div class="frow"><label>Colorblind-safe position colors</label><input type="checkbox" id="setCbSafe" style="width:auto"></div>
@@ -198,6 +201,12 @@
       <div class="frow"><label>🏔 Tier sensitivity (higher = fewer, bigger tiers)</label><input type="range" id="setTierSense" min="0.03" max="0.07" step="0.005" style="width:120px"></div>
       <div class="frow"><label>📶 Low-data mode (no photos/logos)</label><input type="checkbox" id="setLowData" style="width:auto"></div>
       <div class="frow"><label>🔔 Notify me when MY players' status changes (tab in background)</label><input type="checkbox" id="setNotify" style="width:auto"></div>
+      <div class="frow"><label>Poll cadence, minutes (injuries/news)</label><input type="number" id="setPoll" min="2" max="30" step="1"></div>
+      <div class="frow"><label>Season HQ widgets</label><span style="display:flex;gap:10px;font-size:11px;color:var(--dim)">
+        <label style="display:flex;gap:3px"><input type="checkbox" id="hqRadar" style="width:auto">radar</label>
+        <label style="display:flex;gap:3px"><input type="checkbox" id="hqNews" style="width:auto">news</label>
+        <label style="display:flex;gap:3px"><input type="checkbox" id="hqIr" style="width:auto">IR</label>
+        <label style="display:flex;gap:3px"><input type="checkbox" id="hqDrops" style="width:auto">drops</label></span></div>
       <div class="sechead">Achievements</div>
       <div class="note" id="achCase"></div>
       <div class="sechead">Trophy case</div>
@@ -290,6 +299,7 @@
     <h3>🩺 Injury Center <span id="injFresh" style="font-weight:400;color:var(--dim);font-size:11.5px"></span></h3>
     <div class="body" id="injBody"></div>
     <div class="foot">
+      <button class="hbtn" id="injMineBtn" title="Show only my roster">MINE</button>
       <button class="hbtn" id="injDigest" title="Copy a summary for the league chat">📤 Digest</button>
       <button class="hbtn" id="injRefresh" style="border-color:var(--green);color:var(--green)">↻ Refresh now</button>
       <button class="hbtn" id="injClose">Close</button>

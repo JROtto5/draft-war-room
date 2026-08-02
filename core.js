@@ -1020,9 +1020,10 @@ async function weekRecap(){
       const s2 = sid && stats[String(sid)];
       return {p:p2, pts: s2 && s2.pts_ppr!=null ? s2.pts_ppr : null};
     }).sort((a,b)=>(b.pts||0)-(a.pts||0));
+    window._wkText = "📅 Week "+wk+" — "+(S.settings.flair||"my team")+":\n"+rows.map(x=>"• "+x.p.name+": "+(x.pts==null?"—":x.pts.toFixed(1))).join("\n");
     $("#cardBody").innerHTML = '<div class="chead"><div class="cid"><div class="cname">📅 Week '+wk+' recap</div></div></div>'+
       rows.map(x=>'<div class="cintel">'+posBadge(x.p.pos)+' '+esc(x.p.name)+' — <b class="mono">'+(x.pts==null?"—":x.pts.toFixed(1))+'</b></div>').join("")+
-      '<div class="cacts"></div>';
+      '<div class="cacts"><button class="hbtn" onclick="navigator.clipboard.writeText(window._wkText).then(()=>toast(\'📋 Recap copied\'))">📋 Copy</button></div>';
     $("#cardOverlay").classList.add("show");
   }catch(e){ toast("Week recap needs a connection", {warn:true}); }
 }
@@ -1063,11 +1064,13 @@ function openTeamPage(slot){
 }
 
 /* ---------- Injury Center ---------- */
+let injMineOnly = false;
 function renderInjCenter(){
   const players = allPlayers();
   const hurt = players
     .map(p=>({p, e:injuryOf(p)}))
     .filter(x=>x.e && !S.taken[x.p.id])
+    .filter(x=>!injMineOnly || S.mine.includes(x.p.id) || myKeeperIds().includes(x.p.id))
     .map(x=>({...x, sv:injSeverity(x.e.s)}))
     .sort((a,b)=>{
       const rank = {IR:0, O:1, D:2, "?":3, Q:4};
@@ -1101,6 +1104,11 @@ document.getElementById("injBtn").addEventListener("click", ()=>{
 });
 document.getElementById("injClose").addEventListener("click", ()=>document.getElementById("injOverlay").classList.remove("show"));
 document.getElementById("injRefresh").addEventListener("click", ()=>{ refreshInjuries(false); refreshTrending(); NEWS.at=0; refreshNews().then(renderInjCenter); });
+document.getElementById("injMineBtn").addEventListener("click", e=>{
+  injMineOnly = !injMineOnly;
+  e.target.classList.toggle("liveon", injMineOnly);
+  renderInjCenter();
+});
 document.getElementById("injDigest").addEventListener("click", ()=>{
   const sevRank = {IR:0,O:1,D:2,"?":3,Q:4};
   const hurt = allPlayers().map(p=>({p, e:injuryOf(p)})).filter(x=>x.e && !S.taken[x.p.id])

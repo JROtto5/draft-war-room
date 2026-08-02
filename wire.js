@@ -621,6 +621,22 @@ function quickStandings(){
   rows.sort((a,b)=>b.pts-a.pts);
   return {rows, mySlot};
 }
+document.getElementById("bundleBtn").addEventListener("click", ()=>{
+  const give = prompt("Trade analyzer — players YOU GIVE (comma-separated):", "");
+  if(give===null) return;
+  const get = prompt("Players YOU GET:", "");
+  if(get===null) return;
+  const find = s => s.split(",").map(x=>x.trim()).filter(Boolean)
+    .map(nm2 => allPlayers().find(p2=>nq(p2.name)===nq(nm2)) || allPlayers().find(p2=>nm2.length>=4 && nq(p2.name).includes(nq(nm2))))
+    .filter(Boolean);
+  const gv = find(give), gt = find(get);
+  if(!gv.length || !gt.length) return toast("Couldn't match those names", {warn:true});
+  const repl = replacementLevels(allPlayers());
+  const val = ps => ps.reduce((a,p2)=>a+Math.max(0, p2.proj-(repl[p2.pos]||0)), 0);
+  const d2 = Math.round(val(gt)-val(gv));
+  toast("⇄ "+gv.map(p2=>p2.name.split(" ").slice(-1)[0]).join("+")+" for "+gt.map(p2=>p2.name.split(" ").slice(-1)[0]).join("+")+
+    " → <b style='color:"+(d2>=0?"var(--green)":"var(--red)")+"'>"+(d2>=0?"ACCEPT +":"DECLINE ")+d2+"</b> value");
+});
 $("#tauntBtn").addEventListener("click", ()=>{
   const {rows, mySlot} = quickStandings();
   const my = rows.findIndex(r=>r.s===mySlot)+1;
@@ -914,6 +930,10 @@ $("#settingsBtn").addEventListener("click", ()=>{
   $("#keyMine").value=kk.mine||"m"; $("#keyTaken").value=kk.taken||"t"; $("#keyQueue").value=kk.queue||"q";
   $("#setTierSense").value=S.settings.tierSense||0.045;
   $("#setNotify").checked=!!S.settings.notifyInj;
+  $("#setPoll").value=S.settings.pollMins||5;
+  const hw = S.settings.hqWidgets||{radar:true,news:true,ir:true,drops:true};
+  $("#hqRadar").checked=hw.radar!==false; $("#hqNews").checked=hw.news!==false;
+  $("#hqIr").checked=hw.ir!==false; $("#hqDrops").checked=hw.drops!==false;
   $("#setSleeperDraft").value=S.settings.sleeperDraftId||"";
   $("#setSleeperLeague").value=S.settings.sleeperLeagueId||"";
   const rs=$("#setRival");
@@ -993,6 +1013,8 @@ $("#settingsSave").addEventListener("click", ()=>{
     Notification.requestPermission();
   }
   S.settings.notifyInj = wantNotify;
+  S.settings.pollMins = Math.min(30, Math.max(2, +$("#setPoll").value||5));
+  S.settings.hqWidgets = {radar:$("#hqRadar").checked, news:$("#hqNews").checked, ir:$("#hqIr").checked, drops:$("#hqDrops").checked};
   S.settings.rivalSlot = $("#setRival").value ? +$("#setRival").value : null;
   S.settings.sleeperDraftId = $("#setSleeperDraft").value.trim();
   const lg = $("#setSleeperLeague").value.trim();
@@ -1152,6 +1174,32 @@ function refreshProjStatus(){
   if(ao) el.textContent += " Manual ADP overrides: "+ao+".";
 }
 $("#projImportBtn").addEventListener("click", ()=>$("#projFile").click());
+document.getElementById("cdCardBtn").addEventListener("click", ()=>{
+  const days = S.settings.draftDate ? Math.ceil((new Date(S.settings.draftDate+"T20:00")-Date.now())/86400000) : null;
+  const c = document.createElement("canvas"); c.width=600; c.height=315;
+  const x = c.getContext("2d");
+  x.fillStyle="#0b0f14"; x.fillRect(0,0,600,315);
+  x.fillStyle="#2fd47a"; x.font="bold 26px sans-serif"; x.fillText((S.settings.name||"DRAFT").toUpperCase(), 40, 70);
+  x.fillStyle="#e8eef7"; x.font="bold 88px sans-serif"; x.fillText(days!=null?days+" DAYS":"SOON", 40, 190);
+  x.fillStyle="#8ba0bc"; x.font="18px sans-serif"; x.fillText("until the war room opens · slot "+S.settings.slot, 40, 240);
+  c.toBlob(b=>{ const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download="countdown.png"; a.click(); URL.revokeObjectURL(a.href); });
+});
+document.getElementById("icsBtn").addEventListener("click", ()=>{
+  if(!S.settings.draftDate) return toast("Set the draft date first", {warn:true});
+  const dt = S.settings.draftDate.replace(/-/g,"");
+  const ics = "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART:"+dt+"T190000\nDTEND:"+dt+"T230000\nSUMMARY:"+(S.settings.name||"Fantasy")+" draft — War Room ready\nDESCRIPTION:Lock in. https://github.com/JROtto5/draft-war-room\nEND:VEVENT\nEND:VCALENDAR";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([ics],{type:"text/calendar"}));
+  a.download = "draft-day.ics"; a.click(); URL.revokeObjectURL(a.href);
+});
+document.getElementById("blurbBtn").addEventListener("click", ()=>{
+  const days = S.settings.draftDate ? Math.ceil((new Date(S.settings.draftDate+"T20:00")-Date.now())/86400000) : null;
+  const txt = "🏈 "+(S.settings.name||"League")+" DRAFT"+(days!=null?" in "+days+" days":"")+
+    (S.settings.draftDate?" — "+S.settings.draftDate:"")+"\n"+
+    Array.from({length:S.settings.teams},(_,i)=>i+1).map(s2=>(s2===S.settings.slot?"➡️ ":"")+s2+". "+slotName(s2)).join("\n")+
+    "\nBring snacks. Bring excuses.";
+  navigator.clipboard.writeText(txt).then(()=>toast("📣 Commissioner blurb copied"));
+});
 $("#projTemplateBtn").addEventListener("click", ()=>{
   const t = "PLAYER,TEAM,POS,PPR,HALF,PATD\nJosh Allen,BUF,QB,365.8,352,25.6\nBijan Robinson,ATL,RB,339.3,283.1,0\nJa'Marr Chase,CIN,WR,331.6,256,0\nBrock Bowers,LVR,TE,249.4,190.7,0\nBroncos D/ST,DEN,DEF,135,135,0\n";
   const a=document.createElement("a");
@@ -1258,7 +1306,7 @@ function refreshProfiles(){
   const q = document.getElementById("profQuick");
   if(q){
     q.style.display = names.length ? "" : "none";
-    q.innerHTML = '<option value="">boards…</option>'+names.map(n=>'<option>'+esc(n)+'</option>').join("");
+    q.innerHTML = '<option value="">'+esc((S.settings.flair||"boards")+"…")+'</option>'+names.map(n=>'<option>'+esc(n)+'</option>').join("");
   }
 }
 document.getElementById("profQuick").addEventListener("change", e=>{

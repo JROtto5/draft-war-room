@@ -87,7 +87,7 @@ if(!E2E_MODE && location.protocol.indexOf("http")===0){
     ["https://api.sleeper.app/v1/state/nfl"].forEach(u=>{ try{ fetch(u, {mode:"cors"}).catch(()=>{}); }catch(e){} });
   }, {timeout:4000});
   setTimeout(()=>{ refreshInjuries(true); refreshTrending(); }, 1500);
-  setInterval(()=>{ if(document.visibilityState==="visible") refreshInjuries(true); }, 5*60e3);
+  setInterval(()=>{ if(document.visibilityState==="visible") refreshInjuries(true); }, Math.max(2, S.settings.pollMins||5)*60e3);
   setInterval(()=>{ if(document.visibilityState==="visible") refreshTrending(); }, 15*60e3);
   setInterval(()=>{
     if(S.ui.live && S.settings.timerSecs && document.visibilityState==="visible"){
