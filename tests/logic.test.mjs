@@ -79,4 +79,19 @@ const ri = g("roundInfoRaw(allPlayers())");
 const law = players.find(p => p.name === "Trevor Lawrence");
 assert.strictEqual(ri[law.id].label, "R8–9");
 
-console.log("logic.test OK — engine, snake, saturation, mocks, odds, rounds");
+// injury severity grading
+const sev = g("injSeverity");
+assert.strictEqual(sev("Questionable").mult, 0.97);
+assert.strictEqual(sev("Doubtful").code, "D");
+assert.strictEqual(sev("Out").mult, 0.85);
+assert.strictEqual(sev("Injured Reserve").code, "IR");
+assert.strictEqual(sev("Active"), null);
+assert.strictEqual(sev(""), null);
+// baked injuries reachable through the live layer
+vm.runInContext("initInjuries()", ctx);
+const hurt = players.filter(p => g("injuryOf")(p));
+assert.ok(hurt.length >= 10, "expected baked injuries, got " + hurt.length);
+const factor = g("injAdpFactor");
+assert.ok(factor(hurt[0]) > 1, "injured player should slide in sim ADP");
+
+console.log("logic.test OK — engine, snake, saturation, mocks, odds, rounds, injuries");

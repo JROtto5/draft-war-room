@@ -211,13 +211,29 @@ def main():
         except (ValueError, TypeError): hgt = str(hi)
         meta[k] = [v.get("age") or 0, v.get("years_exp") if v.get("years_exp") is not None else -1,
                    v.get("college") or "", hgt, v.get("weight") or "", v.get("number") or 0,
-                   v.get("injury_status") or "", v.get("depth_chart_order") or 0, v.get("depth_chart_position") or ""]
+                   v.get("injury_status") or "", v.get("depth_chart_order") or 0, v.get("depth_chart_position") or "",
+                   v.get("injury_body_part") or "", (v.get("injury_notes") or "")[:160]]
         s = stats.get(pid)
         if s and s.get("gp"):
             last[k] = [round(s.get("gp",0)), round(s.get("pass_yd",0)), round(s.get("pass_td",0),1),
                        round(s.get("pass_int",0),1), round(s.get("rush_yd",0)), round(s.get("rush_td",0),1),
                        round(s.get("rec_tgt",0)), round(s.get("rec",0)), round(s.get("rec_yd",0)),
                        round(s.get("rec_td",0),1), round(s.get("pts_ppr",0),1), finish.get(pid, 0)]
+
+    # ---------- ESPN injuries snapshot (baked offline baseline) ----------
+    injbase = {}
+    try:
+        espn = fetch_json("https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries", "espn-injuries.json")
+        ours = {norm(p["name"]) for p in players}
+        for t in espn.get("injuries", []):
+            for i in t.get("injuries", []):
+                a = i.get("athlete") or {}
+                k = norm(a.get("displayName") or "")
+                st = i.get("status") or ""
+                if not k or k not in ours or st.lower().startswith("active"): continue
+                injbase[k] = [st, (i.get("shortComment") or i.get("longComment") or "")[:240], (i.get("date") or "")[:10]]
+    except Exception as e:
+        print("espn injuries snapshot failed:", e, file=sys.stderr)
 
     # ---------- prop/analyst intel ----------
     prop_agg = {}
@@ -250,10 +266,11 @@ def main():
     out.append(f"const LAST{args.season[2:]} = " + json.dumps(last, separators=(',',':')) + ";")
     out.append("const PROJ26 = " + json.dumps(proj26, separators=(',',':')) + ";")
     out.append("const TEAMQB = " + json.dumps(teamqb, ensure_ascii=False, separators=(',',':')) + ";")
+    out.append("const INJBASE = " + json.dumps(injbase, ensure_ascii=False, separators=(',',':')) + ";")
     out.append('const LAST_SEASON = "' + args.season + '";')
     out.append('const DATA_STAMP = "' + datetime.date.today().isoformat() + '";')
     open(args.out, "w").write("\n".join(out) + "\n")
-    print(f"wrote {args.out}: {len(players)} players, {len(heads)} headshots, {len(meta)} bios, {len(last)} stat lines, {len(intel)} intel", file=sys.stderr)
+    print(f"wrote {args.out}: {len(players)} players, {len(heads)} headshots, {len(meta)} bios, {len(last)} stat lines, {len(intel)} intel, {len(injbase)} baked injuries", file=sys.stderr)
 
 if __name__ == "__main__":
     main()

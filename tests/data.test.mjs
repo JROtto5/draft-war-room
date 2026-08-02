@@ -6,14 +6,14 @@ import assert from "node:assert";
 const src = readFileSync(new URL("../data.js", import.meta.url), "utf8");
 
 // no duplicated top-level blocks (the bug class that broke a build once)
-for (const name of ["const RAW", "const INTEL", "const PSOS", "function normName", "const DATA_STAMP", "const HEADSHOT", "const TEAMLOGO", "const PLAYERMETA", "const LAST25", "const PROJ26", "const TEAMQB"]) {
+for (const name of ["const RAW", "const INTEL", "const PSOS", "function normName", "const DATA_STAMP", "const HEADSHOT", "const TEAMLOGO", "const PLAYERMETA", "const LAST25", "const PROJ26", "const TEAMQB", "const INJBASE"]) {
   const n = src.split(name).length - 1;
   assert.strictEqual(n, 1, `${name} appears ${n} times, expected 1`);
 }
 
 const ctx = {};
 vm.createContext(ctx);
-vm.runInContext(src + "\nthis.RAW=RAW;this.INTEL=INTEL;this.PSOS=PSOS;this.normName=normName;this.DATA_STAMP=DATA_STAMP;this.HEADSHOT=HEADSHOT;this.TEAMLOGO=TEAMLOGO;this.PLAYERMETA=PLAYERMETA;this.LAST25=LAST25;this.PROJ26=PROJ26;this.TEAMQB=TEAMQB;", ctx);
+vm.runInContext(src + "\nthis.RAW=RAW;this.INTEL=INTEL;this.PSOS=PSOS;this.normName=normName;this.DATA_STAMP=DATA_STAMP;this.HEADSHOT=HEADSHOT;this.TEAMLOGO=TEAMLOGO;this.PLAYERMETA=PLAYERMETA;this.LAST25=LAST25;this.PROJ26=PROJ26;this.TEAMQB=TEAMQB;this.INJBASE=INJBASE;", ctx);
 
 assert.ok(ctx.RAW.length > 300, "RAW too small: " + ctx.RAW.length);
 const POS = new Set(["QB", "RB", "WR", "TE", "DEF"]);
@@ -53,5 +53,10 @@ assert.ok(Object.keys(ctx.TEAMQB).length >= 30, "team QBs");
 assert.strictEqual(ctx.LAST25["josh allen"][11], 1, "Allen should be QB1 in 2025");
 for (const [k, v] of Object.entries(ctx.LAST25)) assert.strictEqual(v.length, 12, "LAST25 shape " + k);
 for (const [k, v] of Object.entries(ctx.PROJ26)) assert.strictEqual(v.length, 10, "PROJ26 shape " + k);
+for (const [k, v] of Object.entries(ctx.PLAYERMETA)) assert.strictEqual(v.length, 11, "PLAYERMETA shape " + k);
+for (const [k, v] of Object.entries(ctx.INJBASE)) {
+  assert.strictEqual(v.length, 3, "INJBASE shape " + k);
+  assert.ok(typeof v[0] === "string" && v[0].length > 1, "INJBASE status " + k);
+}
 
 console.log(`data.test OK — ${ctx.RAW.length} players, ${Object.keys(ctx.INTEL).length} intel, ${Object.keys(ctx.PSOS).length} teams`);

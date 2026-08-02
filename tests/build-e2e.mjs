@@ -20,6 +20,9 @@ try {
   out.push("undo:"+(S.mine.length===0?"OK":"BAD"));
   openCard(allPlayers()[0].id);
   out.push("card:"+(document.getElementById("cardBody").innerHTML.includes("Projected")?"OK":"BAD"));
+  document.getElementById("cardOverlay").classList.remove("show");
+  renderInjCenter();
+  out.push("inj:"+(document.getElementById("injBody").innerHTML.includes("sevchip")?"OK":"BAD"));
 } catch(e){ out.push("ERR:"+e.message); }
 setTimeout(()=>{ document.title="E2E|"+out.join("|"); }, 900);
 }, 100); });

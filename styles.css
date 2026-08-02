@@ -315,3 +315,17 @@ th[data-sort]:focus-visible{outline:2px solid var(--green); outline-offset:-2px}
 .stattbl th:first-child, .stattbl td:first-child{text-align:left; color:var(--dim)}
 .stattbl td{text-align:right; padding:4px 8px; font-family:'JetBrains Mono',monospace; border-bottom:1px solid rgba(36,50,71,.35)}
 .stattbl tr:last-child td{border-bottom:none}
+/* injury severity colors */
+.sevq{color:var(--gold)} .sevd{color:#ff9f43} .sevo{color:var(--red)} .sevir{color:#ff5d9e}
+.sevchip{font-size:9.5px; font-weight:800; border:1px solid currentColor; border-radius:999px; padding:2px 8px; vertical-align:middle}
+.sevchip.sevq{color:var(--gold)} .sevchip.sevd{color:#ff9f43} .sevchip.sevo{color:var(--red)} .sevchip.sevir{color:#ff5d9e}
+.chip.inj.sevq{color:var(--gold); border-color:rgba(255,201,77,.4)}
+.chip.inj.sevd{color:#ff9f43; border-color:rgba(255,159,67,.4)}
+.injrow{display:flex; align-items:center; gap:10px; padding:8px 6px; border-bottom:1px solid rgba(36,50,71,.4); cursor:pointer}
+.injrow:hover{background:var(--panel2)}
+.injrow .info{flex:1; min-width:0}
+.injrow .nm{font-size:13px; font-weight:600}
+.injrow .sm{font-size:11px; color:var(--dim); line-height:1.45; margin-top:2px}
+.newsrow{font-size:12px; padding:5px 4px; border-bottom:1px solid rgba(36,50,71,.3); line-height:1.45}
+.newsrow a{color:var(--text); text-decoration:none}
+.newsrow a:hover{color:var(--green)}
