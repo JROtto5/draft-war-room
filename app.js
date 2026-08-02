@@ -410,6 +410,7 @@ function toast(msg, opts){
   if(!wrap){ wrap = document.createElement("div"); wrap.id = "toastWrap"; document.body.appendChild(wrap); }
   const el = document.createElement("div");
   el.className = "toast" + (opts && opts.warn ? " warn" : "");
+  el.setAttribute("role", "status");
   el.innerHTML = "<span>"+msg+"</span>";
   const act = opts && (opts.action || (opts.undo ? {label:"UNDO", fn:opts.undo} : null));
   if(act){
@@ -1034,11 +1035,21 @@ function logoUrl(team){
   return s ? "https://a.espncdn.com/i/teamlogos/nfl/500/"+s+".png" : null;
 }
 window._noimg = window._noimg || new Set();
+document.addEventListener("error", e=>{
+  const img = e.target;
+  if(!(img instanceof HTMLImageElement) || !img.classList.contains("avatar")) return;
+  window._noimg.add(img.src);
+  const ph = document.createElement("span");
+  ph.className = "avatar ph";
+  ph.style.width = img.getAttribute("width")+"px"; ph.style.height = img.getAttribute("height")+"px";
+  ph.textContent = "•";
+  img.replaceWith(ph);
+}, true);
 function avatarImg(p, size){
   const u = headshotUrl(p);
   if(u && window._noimg.has(u)) return '<span class="avatar ph" style="width:'+size+'px;height:'+size+'px">'+esc(p.name[0])+'</span>';
   if(!u) return '<span class="avatar ph" style="width:'+size+'px;height:'+size+'px">'+p.name[0]+'</span>';
-  return '<img class="avatar" src="'+u+'" width="'+size+'" height="'+size+'"'+(size>=56?' fetchpriority="high"':' loading="lazy"')+' decoding="async" alt="" onerror="window._noimg.add(this.src);this.outerHTML=\'<span class=&quot;avatar ph&quot; style=&quot;width:'+size+'px;height:'+size+'px&quot;>'+esc(p.name[0])+'</span>\'">';
+  return '<img class="avatar" src="'+u+'" width="'+size+'" height="'+size+'"'+(size>=56?' fetchpriority="high"':' loading="lazy"')+' decoding="async" alt="">';
 }
 function psosFor(team){
   const s = typeof PSOS!=="undefined" ? PSOS[team] : null;
@@ -1265,7 +1276,7 @@ document.addEventListener("click", ()=>{ const m=document.getElementById("ctxMen
 let kbSel = -1;
 function applyKbSel(){
   const trs = document.querySelectorAll("#poolBody tr[data-pid]");
-  trs.forEach((tr,i)=>tr.classList.toggle("kbsel", i===kbSel));
+  trs.forEach((tr,i)=>{ tr.classList.toggle("kbsel", i===kbSel); if(i===kbSel) tr.setAttribute("aria-selected","true"); else tr.removeAttribute("aria-selected"); });
   if(kbSel>=0 && trs[kbSel]) trs[kbSel].scrollIntoView({block:"nearest"});
 }
 
@@ -2107,6 +2118,12 @@ $("#settingsBtn").addEventListener("click", ()=>{
   $("#setSpeak").checked=!!S.settings.speak;
   $("#setBaCount").value=S.settings.baCount||15;
   refreshProfiles(); refreshProjStatus();
+  const su = document.getElementById("storageUse");
+  if(su && navigator.storage && navigator.storage.estimate){
+    navigator.storage.estimate().then(e2=>{
+      su.textContent = "Storage: "+((e2.usage||0)/1048576).toFixed(1)+" MB used of "+((e2.quota||0)/1073741824).toFixed(1)+" GB available.";
+    }).catch(()=>{});
+  }
   $("#setPtd").value=String(S.settings.ptd||6);
   $("#setRecPts").value = S.settings.recPts==null ? "" : S.settings.recPts;
   $("#setTePrem").value = S.settings.tePrem||0;
@@ -2135,6 +2152,16 @@ $("#settingsSave").addEventListener("click", ()=>{
   commit();
 });
 
+$("#debugBtn").addEventListener("click", ()=>{
+  const info = {
+    build: BUILD, data: typeof DATA_STAMP!=="undefined"?DATA_STAMP:"?",
+    stateBytes: JSON.stringify(S).length,
+    players: allPlayers().length, log: S.log.length, mine: S.mine.length,
+    settings: S.settings, errors: window._errLog,
+    ua: navigator.userAgent,
+  };
+  navigator.clipboard.writeText("Draft War Room debug\n"+JSON.stringify(info,null,2)).then(()=>toast("🐞 Debug info copied"));
+});
 $("#defaultsBtn").addEventListener("click", ()=>{
   if(!confirm("Reset all settings to Buck Breakers defaults? Board, notes and names are untouched.")) return;
   S.settings = defaultState().settings;
@@ -2468,7 +2495,11 @@ if(!E2E_MODE && location.protocol.indexOf("http")===0){
   setInterval(()=>{ if(document.visibilityState==="visible") refreshInjuries(true); }, 5*60e3);
   setInterval(()=>{ if(document.visibilityState==="visible") refreshTrending(); }, 15*60e3);
 }
-document.querySelectorAll(".modal").forEach(m=>{ m.setAttribute("role","dialog"); m.setAttribute("aria-modal","true"); });
+document.querySelectorAll(".modal").forEach((m,i)=>{
+  m.setAttribute("role","dialog"); m.setAttribute("aria-modal","true");
+  const h3 = m.querySelector("h3");
+  if(h3){ if(!h3.id) h3.id = "dlg"+i; m.setAttribute("aria-labelledby", h3.id); }
+});
 const BUILD = "4.0";
 /* Theme: auto follows the OS, or force dark/light */
 function applyTheme(){
@@ -2601,7 +2632,10 @@ window.addEventListener("online", ()=>{ setOnlineUI(); refreshInjuries(true); })
 window.addEventListener("offline", setOnlineUI);
 
 let _lastErrToast = 0;
+window._errLog = [];
 function surfaceError(msg){
+  window._errLog.push({t:new Date().toISOString(), m:String(msg).slice(0,200)});
+  if(window._errLog.length>20) window._errLog.shift();
   const now = Date.now();
   if(now - _lastErrToast < 10000) return;
   _lastErrToast = now;

@@ -8,13 +8,11 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#0b0f14">
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://sleepercdn.com https://a.espncdn.com; connect-src 'self' https://site.api.espn.com https://api.sleeper.app; font-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'">
 <link rel="preconnect" href="https://sleepercdn.com">
 <link rel="preconnect" href="https://a.espncdn.com">
 <link rel="dns-prefetch" href="https://site.api.espn.com">
 <link rel="dns-prefetch" href="https://api.sleeper.app">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -98,6 +96,7 @@
       </div>
       <div class="tablewrap">
         <table>
+          <caption class="visually-hidden">Player pool: sortable projections, value, ADP and draft actions</caption>
           <thead>
             <tr>
               <th scope="col" tabindex="0" data-sort="rank" style="width:34px">#</th>
@@ -183,6 +182,7 @@
       <div class="frow"><label>Spectator link (read-only board snapshot)</label><button class="hbtn" id="roShareBtn">👁 Copy</button></div>
       <div class="frow"><label>Back to the built-in dataset</label><button class="hbtn" id="projRevertBtn">↩ Revert</button></div>
       <div class="note" id="projStatus"></div>
+      <div class="note" id="storageUse"></div>
       <div class="sechead">Board profiles</div>
       <div class="frow"><label>Saved boards</label>
         <select id="profileSel" style="width:150px"></select></div>
@@ -196,6 +196,7 @@
     </div>
     <div class="foot">
       <button class="hbtn" id="restoreBtn" title="Undo the last import or reset">↩ Restore backup</button>
+      <button class="hbtn" id="debugBtn" title="Copy diagnostic info for bug reports">🐞</button>
       <button class="hbtn" id="defaultsBtn" style="margin-right:auto" title="Reset settings to league defaults (board untouched)">Defaults</button>
       <button class="hbtn" id="settingsCancel">Cancel</button>
       <button class="hbtn" id="settingsSave" style="border-color:var(--green);color:var(--green)">Save</button>

@@ -1,3 +1,9 @@
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/JetBrainsMono-400.woff2') format('woff2');unicode-range:U+0000-00FF,U+2013-2014,U+2018-201A,U+201C-201E,U+2022,U+2026;}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/JetBrainsMono-400.woff2') format('woff2');unicode-range:U+0000-00FF,U+2013-2014,U+2018-201A,U+201C-201E,U+2022,U+2026;}
+@font-face{font-family:'Sora';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/Sora-400.woff2') format('woff2');unicode-range:U+0000-00FF,U+2013-2014,U+2018-201A,U+201C-201E,U+2022,U+2026;}
+@font-face{font-family:'Sora';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/Sora-400.woff2') format('woff2');unicode-range:U+0000-00FF,U+2013-2014,U+2018-201A,U+201C-201E,U+2022,U+2026;}
+@font-face{font-family:'Sora';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/Sora-400.woff2') format('woff2');unicode-range:U+0000-00FF,U+2013-2014,U+2018-201A,U+201C-201E,U+2022,U+2026;}
+@font-face{font-family:'Sora';font-style:normal;font-weight:800;font-display:swap;src:url('fonts/Sora-400.woff2') format('woff2');unicode-range:U+0000-00FF,U+2013-2014,U+2018-201A,U+201C-201E,U+2022,U+2026;}
 :root, :root[data-theme="dark"]{
   --bg:#0b0f14; --bg2:#111823; --panel:#151e2b; --panel2:#1a2536; --line:#243247;
   --text:#e8eef7; --dim:#8ba0bc; --faint:#5a6d87;
@@ -389,3 +395,4 @@ body.offline .savebadge{border-color:var(--gold)}
 /* spectator mode */
 body.spectate .pick, body.spectate .kill, body.spectate [data-dnd], body.spectate #panicBar{display:none!important}
 body.spectate header::after{content:"👁 SPECTATING"; font-size:10px; letter-spacing:2px; color:var(--gold); border:1px solid var(--gold); border-radius:999px; padding:3px 10px}
+.visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}

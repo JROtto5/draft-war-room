@@ -2,7 +2,9 @@
 // Injects at the LAST </body> (JS strings legitimately contain '</body>').
 import { readFileSync, writeFileSync } from "node:fs";
 
-const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+let html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+// the injected assertion script is inline — drop the CSP for the test page only
+html = html.replace(/<meta http-equiv="Content-Security-Policy"[^>]*>\n?/, "");
 const test = `
 <script>
 window.addEventListener("DOMContentLoaded", ()=>{ setTimeout(()=>{
@@ -23,6 +25,20 @@ try {
   document.getElementById("cardOverlay").classList.remove("show");
   renderInjCenter();
   out.push("inj:"+(document.getElementById("injBody").innerHTML.includes("sevchip")?"OK":"BAD"));
+  // keyboard drafting (#167)
+  document.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowDown",bubbles:true}));
+  document.dispatchEvent(new KeyboardEvent("keydown",{key:"m",bubbles:true}));
+  out.push("kbd:"+(S.mine.length===1?"OK":"BAD"));
+  undoLast();
+  // queue + live + panic (#168)
+  toggleQueue(allPlayers()[3].id); renderQueue();
+  out.push("queue:"+(document.getElementById("queueBox").style.display!=="none"?"OK":"BAD"));
+  S.ui.live = true; S.pickOffset = 11; renderNow();
+  out.push("panic:"+(document.getElementById("panicBar")?"OK":"BAD"));
+  S.ui.live = false; S.pickOffset = 0; toggleQueue(allPlayers()[3].id); renderNow();
+  // perf budget (#170)
+  const t0 = performance.now(); renderPool(); const dt = performance.now()-t0;
+  out.push("perf:"+(dt<400?"OK":"BAD("+Math.round(dt)+"ms)"));
 } catch(e){ out.push("ERR:"+e.message); }
 setTimeout(()=>{ document.title="E2E|"+out.join("|"); }, 900);
 }, 100); });

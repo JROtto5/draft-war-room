@@ -111,4 +111,48 @@ const mig = g("migrate")({mine:[], log:[], taken:{}});
 assert.strictEqual(mig.v, g("STATE_V"));
 assert.ok(Array.isArray(mig.queue) && typeof mig.keepers === "object");
 
-console.log("logic.test OK — engine, snake, saturation, mocks, odds, rounds, injuries, utils");
+// edge cases (#166)
+assert.strictEqual(sat("WR", 4, 80).score, 80, "WR5 still startable");
+assert.strictEqual(sat("WR", 5, 80).score, 80*0.3, "WR6 = depth discount");
+assert.ok(sat("WR", 6, 80).score < -300, "WR7 buried");
+assert.strictEqual(sat("RB", 5, 80).score, 80*0.3, "RB6 = depth discount");
+const tmap = g("tierMapRaw(allPlayers())");
+{ // tiers never decrease as projections fall within a position
+  const qbs = players.filter(p=>p.pos==="QB").sort((a,b)=>b.proj-a.proj);
+  for(let i=1;i<qbs.length;i++) assert.ok(tmap[qbs[i].id] >= tmap[qbs[i-1].id], "tier monotonic");
+}
+{ // a microscopic QB projection prices below the board
+  vm.runInContext("S.custom.push(['Tiny Qb','BUF','QB',31,31,'ctiny'])", ctx);
+  const ri2 = g("roundInfoRaw(allPlayers())");
+  const tiny = g("allPlayers()").find(p=>p.name==="Tiny Qb");
+  assert.ok(ri2[tiny.id].ud || ri2[tiny.id].rd >= 14, "tiny QB near/past the end");
+  vm.runInContext("S.custom.pop()", ctx);
+}
+// fuzz (#169): invariants across random op sequences
+vm.runInContext("S.log=[];S.taken={};S.mine=[];S.queue=[];redoStack.length=0;", ctx);
+const rnd = g("mulberry32(2026)");
+for(let i=0;i<500;i++){
+  const roll = rnd();
+  const pid = "p"+Math.floor(rnd()*300);
+  if(roll<0.4) vm.runInContext(`if(!offBoard("${pid}")) markTaken("${pid}")`, ctx);
+  else if(roll<0.7) vm.runInContext(`if(!offBoard("${pid}")) pickMine("${pid}")`, ctx);
+  else if(roll<0.85) vm.runInContext("undoLast()", ctx);
+  else if(roll<0.95) vm.runInContext("redoLast()", ctx);
+  else vm.runInContext(`if(!offBoard("${pid}")) toggleQueue("${pid}")`, ctx);
+}
+{
+  const logLen = g("S.log.length"), takenN = g("Object.keys(S.taken).length"), mineN = g("S.mine.length");
+  assert.strictEqual(logLen, takenN + mineN, `fuzz: log ${logLen} != taken ${takenN} + mine ${mineN}`);
+  assert.ok(!g("S.mine.some(id=>S.taken[id])"), "fuzz: player both mine and taken");
+  vm.runInContext("pruneQueue()", ctx);
+  assert.ok(!g("S.queue.some(id=>offBoard(id))"), "fuzz: queue holds off-board player");
+}
+// migration fixture (#175): realistic v1 save
+const fixture = {taken:{p0:true}, mine:["p5"], log:[{id:"p0",who:"other"},{id:"p5",who:"me"}],
+  settings:{teams:12, roster:16, slot:12, scoring:"ppr", ptd:6, min:{QB:2,RB:3,WR:3,TE:1,DEF:2,K:0}},
+  notes:{}, custom:[], overrides:{}};
+const up = g("migrate")(JSON.parse(JSON.stringify(fixture)));
+assert.strictEqual(up.v, g("STATE_V"));
+assert.ok(Array.isArray(up.queue) && up.keepers, "fixture upgraded");
+
+console.log("logic.test OK — engine, snake, saturation, mocks, odds, rounds, injuries, utils, fuzz");
