@@ -38,6 +38,8 @@ const defaultState = () => ({
   boost: {},            // id -> +1 (my guy) / -1 (fade)
   adpOverride: {},      // id -> manual ADP
   tierBump: {},         // id -> +/- tier levels
+  plan: {},             // round -> player id (my target board)
+  queueRounds: {},      // id -> "want him by round N"
   notes: {},            // id -> personal note
   dnd: {},              // id -> true (do-not-draft)
   mine: [],             // ids in pick order
@@ -101,6 +103,8 @@ function load(){
       S.boost = p.boost || {};
       S.adpOverride = p.adpOverride || {};
       S.tierBump = p.tierBump || {};
+      S.plan = p.plan || {};
+      S.queueRounds = p.queueRounds || {};
     }
   }catch(e){
     console.warn("load failed, trying backup", e);
@@ -620,13 +624,21 @@ function cpuPick(avail, st, r, rng, rinfo, R, runPos){
     let e = rinfo[p.id].eadp * injAdpFactor(p);
     if(p.pos==="QB") e *= st.qbGreed;
     if(runPos && p.pos===runPos) e *= 0.92;      // run contagion: the room panics
-    e += (rng()*2-1)*9 + (st.bias||0);
+    e += (rng()*2-1)*_mockNoise + (st.bias||0);
     if(e<bk){bk=e; best=p;}
   }
   return best;
 }
 
 
+let _mockNoise = 9;
+const SCENARIOS = [
+  {name:"BPA (engine)", force:[]},
+  {name:"QB-QB start", force:["QB","QB"]},
+  {name:"RB-RB start", force:["RB","RB"]},
+  {name:"WR-WR start", force:["WR","WR"]},
+  {name:"Elite TE first", force:["TE"]},
+];
 const STRATS = [
  {name:"Balanced Value", icon:"⚖️", blurb:"Pure engine: best value, fill needs", mod:(p,c)=>1},
  {name:"QB Hammer", icon:"🔨", blurb:"Lock elite QBs before the run", mod:(p,c)=> p.pos==="QB" ? (c.counts.QB<2 ? 1.3 : (c.counts.QB<3 ? 1.05 : 1)) : 1},
@@ -678,6 +690,7 @@ function runMock(strat, seed){
       for(const p of avail){
         if(S.dnd[p.id]) continue;
         const need=(min[p.pos]||0)-counts[p.pos];
+        if(strat.force && strat.force[picks.length] && p.pos!==strat.force[picks.length]) continue;
         if(mustFill && need<=0) continue;
         let sc = p.proj-(repl[p.pos]||0);
         if(need>0) sc *= 1+0.35*Math.min(1, needed/Math.max(1,left));
@@ -712,10 +725,13 @@ function renderMocks(){
   $("#mockCtx").textContent = already ? "(continuing from your "+already+" real pick"+(already>1?"s":"")+")" : "(from a clean board)";
   $("#mockGrid").innerHTML = '<div class="empty" id="mockProg">Simulating… 0/'+STRATS.length+'</div>';
   $("#mockConsensus").innerHTML = "";
+  const ROOMS = [9, 6, 9, 12, 14];   // sharp → chaos noise per sim
   const results = [];
   const step = i => {
     if(i < STRATS.length){
+      _mockNoise = ROOMS[i] || 9;
       results.push(runMock(STRATS[i], base + i*7919));
+      _mockNoise = 9;
       const prog = document.getElementById("mockProg");
       if(prog) prog.textContent = "Simulating… "+results.length+"/"+STRATS.length;
       setTimeout(()=>step(i+1), 10);                 // yield to the UI between sims
@@ -737,8 +753,9 @@ function finishMocks(results, already){
         '<span class="mn">'+pk.p.name+tag+'</span></div>';
     }).join("");
     const kept = already ? '<div class="mkrow" style="color:var(--faint);font-size:10px">+ your '+already+' real pick'+(already>1?"s":"")+'</div>' : '';
+    const roomLbl = ["", " · 🎯 sharp room", "", " · 🎲 loose room", " · 🌪 chaos room"][i] || "";
     return '<div class="mock">'+
-      '<h4>'+st.icon+' '+st.name+'</h4>'+
+      '<h4>'+st.icon+' '+st.name+'<span class="dimtxt" style="font-size:9px">'+roomLbl+'</span></h4>'+
       '<div class="mtot" title="Optimal starting lineup projection (QB/2RB/2WR/TE/FLEX/SF/DEF)">Starters <b class="mono">'+m.startPts+'</b> pts · roster '+m.totalPts+'</div>'+
       '<div class="mtot" style="margin:-4px 0 8px; font-size:10px">'+st.blurb+'</div>'+
       kept + rows + '</div>';
@@ -980,6 +997,7 @@ function openCard(id){
       '<button class="undo1" data-cmpfrom="'+id+'">⚖</button>'+
       '<button class="undo1" data-keeper="'+id+'">👑</button>'+
       '<button class="undo1" data-queue="'+id+'">'+(S.queue.includes(id)?"★":"☆")+'</button>'+
+      '<button class="undo1" data-plan="'+id+'">📌 plan</button>'+
       '<button class="undo1" data-onepager="'+id+'">📋 one-pager</button>'+
     '</div>';
     $("#cardOverlay").classList.add("show");
@@ -1629,6 +1647,13 @@ function renderBest(){
       ' · your next: <b class="mono">#'+h.mine0+'</b>'+(h.mine1?' then <b class="mono">#'+h.mine1+'</b>':'')+
       (!h.onClock?' · <button class="undo1" data-simto="1" title="Let the engine make every CPU pick until your turn">⏩ sim to my pick</button>':'')+'</div>';
   }
+  if(h && h.onClock && S.plan){
+    const rNow2 = Math.ceil(h.cur/S.settings.teams);
+    const planned = idIndex()[S.plan[rNow2]];
+    if(planned && !offBoard(planned.id)){
+      pickline += '<div class="pickline onclock" style="margin-top:-4px">📌 Your R'+rNow2+' plan is on the board: <b>'+esc(planned.name)+'</b> <button class="pick" data-pick="'+planned.id+'" style="margin-left:6px">✓ TAKE HIM</button></div>';
+    }
+  }
   const pred = predictNextPicks();
   if(pred){
     pickline += '<div class="pickline" style="margin-top:-4px;font-size:10.5px">🔮 '+esc(slotName(pred.slot))+' likely takes: '+
@@ -1968,7 +1993,7 @@ function render(){
 function renderNow(){
   try{ performance.mark("render-start"); }catch(e){}
   _idx = null;
-  [renderHeader, renderTabs, renderPool, renderBest, renderRoster, renderLog, renderQueue].forEach(fn=>{
+  [renderHeader, renderTabs, renderPool, renderBest, renderRoster, renderLog, renderQueue, renderPlan].forEach(fn=>{
     try{ fn(); }catch(e){ console.error(fn.name, e); if(typeof surfaceError==="function") surfaceError(fn.name+": "+e.message); }
   });
   try{ performance.mark("render-end"); performance.measure("war-room-render", "render-start", "render-end"); }catch(e){}
@@ -1990,7 +2015,7 @@ function renderHeader(){
 
 /* ---------- Events (delegated) ---------- */
 document.addEventListener("click", e=>{
-  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-card],[data-cardtab],[data-boost],[data-fade],[data-adpedit],[data-tierup],[data-tierdn],[data-onepager],[data-unpickpre],[data-cmpfrom],[data-slotname],[data-keeper],[data-queue],[data-qup],[data-qfill],[data-qdn],[data-showall],[data-simto],#tradeGo,#logMineBtn,#logCsvBtn,#undo5Btn,th[data-sort]");
+  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-card],[data-cardtab],[data-boost],[data-fade],[data-adpedit],[data-tierup],[data-tierdn],[data-onepager],[data-unpickpre],[data-cmpfrom],[data-slotname],[data-keeper],[data-queue],[data-qup],[data-qfill],[data-plan],[data-unplan],[data-plantoggle],[data-planqueue],[data-qround],[data-qdn],[data-showall],[data-simto],#tradeGo,#matrixCopy,#logMineBtn,#logCsvBtn,#undo5Btn,th[data-sort]");
   if(!t){
     const rowEl = e.target.closest("#poolBody tr[data-pid]");
     if(rowEl){
@@ -2014,6 +2039,7 @@ document.addEventListener("click", e=>{
     save(); renderBoard(); return;
   }
   if(t.id==="tradeGo"){ return tradeEval(); }
+  if(t.id==="matrixCopy"){ navigator.clipboard.writeText(window._matrixTxt||"").then(()=>toast("📋 Matrix copied")); return; }
   if(t.dataset.teampage){ return openTeamPage(+t.dataset.teampage); }
   if(t.id==="randOrder"){
     const t2 = S.settings.teams;
@@ -2058,6 +2084,14 @@ document.addEventListener("click", e=>{
     scored.slice(0,8).forEach(s=>{ if(!S.queue.includes(s.p.id)) S.queue.push(s.p.id); });
     commit(); return;
   }
+  if(t.dataset.qround){
+    const id = t.dataset.qround;
+    const v = prompt("Want him by which round? (blank clears)", (S.queueRounds||{})[id]||"");
+    if(v===null) return;
+    if(v.trim()==="") delete S.queueRounds[id];
+    else S.queueRounds[id] = Math.max(1, Math.min(S.settings.roster, parseInt(v,10)||1));
+    return commit();
+  }
   if(t.dataset.qup!=null){ const i=+t.dataset.qup; if(i>0){ [S.queue[i-1],S.queue[i]]=[S.queue[i],S.queue[i-1]]; commit(); } return; }
   if(t.dataset.qdn!=null){ const i=+t.dataset.qdn; if(i<S.queue.length-1){ [S.queue[i+1],S.queue[i]]=[S.queue[i],S.queue[i+1]]; commit(); } return; }
   if(t.dataset.showall){ window._showAllRows = true; renderPool(); return; }
@@ -2085,6 +2119,26 @@ document.addEventListener("click", e=>{
   }
   if(t.dataset.tierup){ const id=t.dataset.tierup; S.tierBump[id]=(S.tierBump[id]||0)+1; commit(); window._cardTab="intel"; return openCard(id); }
   if(t.dataset.tierdn){ const id=t.dataset.tierdn; S.tierBump[id]=(S.tierBump[id]||0)-1; commit(); window._cardTab="intel"; return openCard(id); }
+  if(t.dataset.plan){
+    const id = t.dataset.plan;
+    const v = prompt("Pin to which of YOUR rounds? (1-"+S.settings.roster+", blank clears)", "");
+    if(v===null) return;
+    for(const r in S.plan) if(S.plan[r]===id) delete S.plan[r];
+    const r2 = parseInt(v,10);
+    if(!isNaN(r2) && r2>=1 && r2<=S.settings.roster) S.plan[r2] = id;
+    $("#cardOverlay").classList.remove("show");
+    return commit();
+  }
+  if(t.dataset.unplan){ delete S.plan[t.dataset.unplan]; return commit(); }
+  if(t.dataset.plantoggle){ window._planCollapsed = !window._planCollapsed; renderPlan(); return; }
+  if(t.dataset.planqueue){
+    pruneQueue();
+    const mine = myOverallPicks(), cur = pickNow();
+    const rounds = mine.filter(x=>x>=cur).map(x=>Math.ceil(x/S.settings.teams));
+    S.plan = {};
+    S.queue.forEach((id,i)=>{ if(rounds[i]) S.plan[rounds[i]] = id; });
+    return commit();
+  }
   if(t.dataset.onepager){
     const id = t.dataset.onepager, p = idIndex()[id];
     const h3 = hist3For(p);
@@ -2281,7 +2335,14 @@ function buildReport(){
   // analyst target capture (#247)
   {
     const got = myIds().map(id2=>byId[id2]).filter(Boolean).filter(p2=>p2.intel && p2.intel.t!=null);
-    h += '<div class="sechead">Analyst targets landed</div><div class="mkrow" style="white-space:normal"><span class="mn">'+
+    {
+    const planned = Object.entries(S.plan||{});
+    if(planned.length){
+      const hits = planned.filter(([,id2])=>S.mine.includes(id2)).length;
+      h += '<div class="sechead">Plan execution</div><div class="mkrow"><span class="mn">📌 '+hits+' of '+planned.length+' pinned targets landed ('+Math.round(100*hits/planned.length)+'%)</span></div>';
+    }
+  }
+  h += '<div class="sechead">Analyst targets landed</div><div class="mkrow" style="white-space:normal"><span class="mn">'+
       (got.length? '⭐ '+got.length+' — '+got.map(p2=>p2.name.split(" ").slice(-1)[0]).join(", ") : "None yet — the board disagreed with the experts.")+'</span></div>';
   }
   // roster age + volatility (#280/#281)
@@ -2634,6 +2695,33 @@ $("#pasteGo").addEventListener("click", ()=>{
 /* Mocks modal */
 $("#mocksBtn").addEventListener("click", ()=>{ $("#mocksOverlay").classList.add("show"); renderMocks(); });
 $("#mocksReroll").addEventListener("click", renderMocks);
+$("#scenarioBtn").addEventListener("click", ()=>{
+  $("#mockGrid").innerHTML = '<div class="empty" id="mockProg">Testing openings… 0/'+SCENARIOS.length+'</div>';
+  const base = Math.floor(Math.random()*1e9);
+  const res = [];
+  const step2 = i => {
+    if(i < SCENARIOS.length){
+      const strat = {name:SCENARIOS[i].name, icon:"🧪", mod:()=>1, force:SCENARIOS[i].force};
+      res.push({sc:SCENARIOS[i], m:runMock(strat, base + i*104729)});
+      const pr = document.getElementById("mockProg");
+      if(pr) pr.textContent = "Testing openings… "+res.length+"/"+SCENARIOS.length;
+      setTimeout(()=>step2(i+1), 10);
+      return;
+    }
+    res.sort((a,b)=>b.m.startPts-a.m.startPts);
+    let txt = "🧪 Opening scenarios ("+(S.settings.name||"league")+", slot "+S.settings.slot+"):\n";
+    $("#mockGrid").innerHTML = '<table class="stattbl" style="max-width:520px"><tr><th style="text-align:left">Opening</th><th>Starters</th><th>vs best</th><th>First 3</th></tr>'+
+      res.map((x,i2)=>{
+        const first3 = x.m.picks.slice(0,3).map(pk=>pk.p.name.split(" ").slice(-1)[0]).join(", ");
+        txt += (i2+1)+". "+x.sc.name+" — "+x.m.startPts+" pts ("+first3+")\n";
+        return '<tr'+(i2===0?' style="color:var(--green);font-weight:700"':'')+'><td style="text-align:left">'+esc(x.sc.name)+'</td><td>'+x.m.startPts+'</td><td>'+(i2===0?"—":"-"+(res[0].m.startPts-x.m.startPts))+'</td><td style="font-size:10px">'+esc(first3)+'</td></tr>';
+      }).join("")+'</table>'+
+      '<button class="hbtn" id="matrixCopy" style="margin-top:10px">📋 Copy matrix</button>';
+    window._matrixTxt = txt;
+    $("#mockConsensus").innerHTML = "Best projected opening from your seat is highlighted. Re-run for different room randomness.";
+  };
+  step2(0);
+});
 $("#mocksClose").addEventListener("click", ()=>$("#mocksOverlay").classList.remove("show"));
 
 /* Settings modal */
@@ -2672,6 +2760,8 @@ $("#settingsBtn").addEventListener("click", ()=>{
   $("#setBaCount").value=S.settings.baCount||15;
   $("#setSimN").value=S.settings.simN||30;
   $("#setRisk").value=S.settings.risk||"balanced";
+  $("#setSheetCount").value=S.settings.sheetCount||200;
+  $("#setSheetNotes").checked=!!S.settings.sheetNotes;
   refreshProfiles(); refreshProjStatus();
   const su = document.getElementById("storageUse");
   if(su && navigator.storage && navigator.storage.estimate){
@@ -2711,6 +2801,8 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.baCount = Math.min(30, Math.max(5, +$("#setBaCount").value||15));
   S.settings.simN = Math.min(100, Math.max(20, +$("#setSimN").value||30));
   S.settings.risk = $("#setRisk").value;
+  S.settings.sheetCount = Math.min(390, Math.max(50, +$("#setSheetCount").value||200));
+  S.settings.sheetNotes = $("#setSheetNotes").checked;
   applyTheme();
   for(const pos of POSITIONS) S.settings.min[pos] = Math.max(0, +$("#min"+pos).value||0);
   $("#settingsOverlay").classList.remove("show");
@@ -2773,18 +2865,18 @@ new MutationObserver(muts=>{
 /* Printable cheat sheet */
 $("#sheetBtn").addEventListener("click", ()=>{
   const players=allPlayers(), repl=replacementLevels(players), tm=tierMap(players), rinfo=roundInfo(players);
-  const rows=players.map(p=>({p, vorp:p.proj-(repl[p.pos]||0)})).sort((a,b)=>b.vorp-a.vorp).slice(0,200);
+  const rows=players.map(p=>({p, vorp:p.proj-(repl[p.pos]||0)})).sort((a,b)=>b.vorp-a.vorp).slice(0, S.settings.sheetCount||200);
   let html='<!DOCTYPE html><html><head><title>Buck Breakers Cheat Sheet</title><style>'+
     'body{font-family:Arial,sans-serif;font-size:10px;margin:18px} h1{font-size:15px;margin:0 0 2px} p{margin:0 0 10px;color:#555;font-size:9px}'+
     'table{border-collapse:collapse;width:100%} th,td{border:1px solid #bbb;padding:2px 5px;text-align:left} th{background:#eee}'+
     'tr:nth-child(even){background:#f6f6f6} .t1{font-weight:bold} @media print{body{margin:8px}}'+
     '</style></head><body><h1>Draft War Room — Cheat Sheet</h1>'+
     '<p>Buck Breakers · superflex · 6pt pass TD · slot '+S.settings.slot+' · top 200 by value over replacement · ★=analyst target ▲▼=prop lean</p>'+
-    '<table><tr><th>#</th><th>Player</th><th>Pos</th><th>Tm</th><th>Tier</th><th>Proj</th><th>Value</th><th>ADP</th><th>Rd</th><th></th></tr>';
+    '<table><tr><th>#</th><th>Player</th><th>Pos</th><th>Tm</th><th>Tier</th><th>Proj</th><th>Value</th><th>ADP</th><th>Rd</th><th></th>'+(S.settings.sheetNotes?'<th>Notes</th>':'')+'</tr>';
   rows.forEach((r,i)=>{
     const p=r.p, badges=(p.intel&&p.intel.t!=null?"★":"")+(p.intel&&p.intel.lean>0?"▲":p.intel&&p.intel.lean<0?"▼":"")+
       ((S.boost||{})[p.id]===1?" MY-GUY":(S.boost||{})[p.id]===-1?" FADE":"")+((S.tierBump||{})[p.id]?" T-adj":"");
-    html+='<tr class="'+(tm[p.id]===1?'t1':'')+'"><td>'+(i+1)+'</td><td>'+p.name+'</td><td>'+p.pos+'</td><td>'+p.team+'</td><td>T'+tm[p.id]+'</td><td>'+p.proj+'</td><td>'+Math.round(r.vorp)+'</td><td>'+(p.adp||"")+'</td><td>'+(rinfo[p.id]?rinfo[p.id].label:"")+'</td><td>'+badges+'</td></tr>';
+    html+='<tr class="'+(tm[p.id]===1?'t1':'')+'"><td>'+(i+1)+'</td><td>'+p.name+'</td><td>'+p.pos+'</td><td>'+p.team+'</td><td>T'+tm[p.id]+'</td><td>'+p.proj+'</td><td>'+Math.round(r.vorp)+'</td><td>'+(p.adp||"")+'</td><td>'+(rinfo[p.id]?rinfo[p.id].label:"")+'</td><td>'+badges+'</td>'+(S.settings.sheetNotes?'<td>'+((S.notes[p.id]||"").slice(0,40))+'</td>':'')+'</tr>';
   });
   html+='</table></body></html>';
   const w=window.open("about:blank");
@@ -2819,7 +2911,20 @@ document.getElementById("changelogBtn").addEventListener("click", async ()=>{
     $("#cardOverlay").classList.add("show");
   }catch(e){ toast("Changelog needs a network/HTTP context", {warn:true}); }
 });
-$("#helpBtn").addEventListener("click", ()=>$("#helpOverlay").classList.add("show"));
+function renderPrepCheck(){
+  const el = document.getElementById("prepCheck");
+  if(!el) return;
+  const ck = (ok, label) => (ok?"✅":"⬜")+" "+label+"<br>";
+  el.innerHTML =
+    ck(S.settings.slot===12 || S.settings.slot>0, "Draft slot set (you: "+S.settings.slot+")")+
+    ck(Object.keys(S.slotNames||{}).length>0, "League names on the board")+
+    ck(!!(S.settings.favState||S.settings.favCollege), "💖 favorites set"+(S.settings.favState?" ("+S.settings.favState+")":""))+
+    ck(S.queue.length>0, "Queue seeded ("+S.queue.length+" players)")+
+    ck(Object.keys(S.plan||{}).length>0, "Plan pinned ("+Object.keys(S.plan||{}).length+" rounds)")+
+    ck(Object.keys(S.boost||{}).length>0, "Boost/fade list started")+
+    ck(!!S.settings.draftDate, "Draft date set");
+}
+$("#helpBtn").addEventListener("click", ()=>{ renderPrepCheck(); $("#helpOverlay").classList.add("show"); });
 $("#helpClose").addEventListener("click", ()=>$("#helpOverlay").classList.remove("show"));
 
 /* Runtime projections import */
@@ -2840,6 +2945,8 @@ function refreshProjStatus(){
   el.textContent = S.dataRows && S.dataRows.length
     ? "Using imported dataset: "+S.dataRows.length+" players (rev "+(S.dataRev||1)+"). ADP and intel merged by name."
     : "Using built-in dataset ("+RAW.length+" players, "+DATA_STAMP+").";
+  const ao = Object.keys(S.adpOverride||{}).length;
+  if(ao) el.textContent += " Manual ADP overrides: "+ao+".";
 }
 $("#projImportBtn").addEventListener("click", ()=>$("#projFile").click());
 $("#projTemplateBtn").addEventListener("click", ()=>{
@@ -2886,6 +2993,30 @@ $("#projFile").addEventListener("change", e=>{
   };
   rd.readAsText(f);
   e.target.value="";
+});
+
+/* Personal prep export/import (#319) */
+document.getElementById("prepExportBtn").addEventListener("click", ()=>{
+  const prep = {__warRoomPrep:1, notes:S.notes, boost:S.boost, tierBump:S.tierBump, adpOverride:S.adpOverride,
+                dnd:S.dnd, queue:S.queue, queueRounds:S.queueRounds, plan:S.plan};
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(prep,null,2)],{type:"application/json"}));
+  a.download = "war-room-prep.json"; a.click(); URL.revokeObjectURL(a.href);
+});
+document.getElementById("prepImportBtn").addEventListener("click", ()=>document.getElementById("prepFile").click());
+document.getElementById("prepFile").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = ()=>{
+    try{
+      const j = JSON.parse(rd.result);
+      if(!j.__warRoomPrep) throw 0;
+      ["notes","boost","tierBump","adpOverride","dnd","queueRounds","plan"].forEach(k=>Object.assign(S[k], j[k]||{}));
+      (j.queue||[]).forEach(id=>{ if(!S.queue.includes(id)) S.queue.push(id); });
+      commit(); toast("📥 Prep merged (notes, boosts, plan, queue)");
+    }catch(err){ toast("Not a prep file", {warn:true}); }
+  };
+  rd.readAsText(f); e.target.value = "";
 });
 
 /* Board profiles */
@@ -3197,6 +3328,38 @@ function toggleQueue(id){
   commit();
 }
 function pruneQueue(){ S.queue = (S.queue||[]).filter(id=>!offBoard(id)); }
+function myRoundNow(){
+  const mine = myOverallPicks(), cur = pickNow();
+  const next = mine.find(x=>x>=cur);
+  return next ? Math.ceil(next/S.settings.teams) : S.settings.roster+1;
+}
+function renderPlan(){
+  const box = document.getElementById("planBox");
+  if(!box) return;
+  const entries = Object.keys(S.plan||{});
+  const collapsed = window._planCollapsed;
+  if(!entries.length){ box.innerHTML=""; box.style.display="none"; return; }
+  box.style.display = "";
+  const byId = idIndex(), rNow = myRoundNow();
+  const keeperRounds = new Set(Object.values(S.keepers||{}).map(k=>k.r).filter(Boolean));
+  let rows = "";
+  if(!collapsed){
+    rows = Array.from({length:S.settings.roster},(_,i)=>i+1).filter(r=>S.plan[r]||keeperRounds.has(r)).map(r=>{
+      if(keeperRounds.has(r) && !S.plan[r]) return '<div class="barow"><span class="rk mono">R'+r+'</span><span class="dimtxt">🔒 keeper cost</span></div>';
+      const p = byId[S.plan[r]];
+      if(!p) return "";
+      const gone = offBoard(p.id) && !S.mine.includes(p.id);
+      const got = S.mine.includes(p.id);
+      return '<div class="barow" data-card="'+p.id+'"><span class="rk mono">R'+r+'</span>'+avatarImg(p,20)+
+        '<div class="info"><div class="nm" style="'+(gone?'text-decoration:line-through;opacity:.5':'')+'">'+p.name+
+        (got?' <b class="ok">✓ GOT HIM</b>':gone?' <span class="low">sniped</span>':r<rNow?' <span class="mid">⏰ round passed</span>':'')+'</div></div>'+
+        '<button class="kill" data-unplan="'+r+'" aria-label="Remove from plan">✕</button></div>';
+    }).join("");
+  }
+  box.innerHTML = '<h2 style="cursor:pointer" data-plantoggle="1"><span class="dot" style="background:var(--wr);box-shadow:0 0 8px var(--wr)"></span> My Plan '+(collapsed?"▸":"▾")+
+    '<button class="hbtn" data-planqueue="1" style="margin-left:auto;padding:2px 8px;font-size:10px" title="Seed the plan from your queue order">from queue</button></h2>'+
+    (collapsed?"":'<div style="padding:6px 8px 10px">'+rows+'</div>');
+}
 function renderQueue(){
   pruneQueue();
   const box = document.getElementById("queueBox");
@@ -3209,8 +3372,11 @@ function renderQueue(){
     '<button class="hbtn" data-qfill="1" style="margin-left:auto;padding:2px 8px;font-size:10px" title="Fill with the engine top needs">autofill</button></h2>'+
     '<div style="padding:6px 8px 10px">'+S.queue.map((id,i)=>{
       const p = byId[id]; if(!p) return "";
+      const wantR = (S.queueRounds||{})[id];
+      const lateQ = wantR && myRoundNow() > wantR;
       return '<div class="barow" data-card="'+id+'">'+avatarImg(p,22)+posBadge(p.pos)+
-        '<div class="info"><div class="nm">'+p.name+(oddsQ&&oddsQ.h1[id]!=null&&oddsQ.h1[id]<60?' <span class="ib bear" title="Under 60% to survive to your pick — snipe risk">🎯</span>':'')+'</div></div>'+
+        '<div class="info"><div class="nm">'+p.name+(oddsQ&&oddsQ.h1[id]!=null&&oddsQ.h1[id]<60?' <span class="ib bear" title="Under 60% to survive to your pick — snipe risk">🎯</span>':'')+
+        (wantR?' <span class="'+(lateQ?"low":"dimtxt")+'" style="font-size:9px" data-qround="'+id+'" title="Target round — click to change">R'+wantR+(lateQ?" ⏰":"")+'</span>':' <span class="dimtxt" style="font-size:9px;cursor:pointer" data-qround="'+id+'" title="Set a target round">+R?</span>')+'</div></div>'+
         '<button class="undo1" data-qup="'+i+'" aria-label="Move up"'+(i===0?' disabled':'')+'>↑</button>'+
         '<button class="undo1" data-qdn="'+i+'" aria-label="Move down"'+(i===S.queue.length-1?' disabled':'')+'>↓</button>'+
         '<button class="pick" data-pick="'+id+'">✓</button>'+

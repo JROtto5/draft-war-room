@@ -68,6 +68,7 @@
   <!-- LEFT: Best available -->
   <div class="left">
     <div class="panel" id="queueBox" style="display:none;margin-bottom:16px"></div>
+    <div class="panel" id="planBox" style="display:none;margin-bottom:16px"></div>
     <div class="panel">
       <h2><span class="dot"></span> Best Available</h2>
       <div class="hero" id="hero"></div>
@@ -205,6 +206,8 @@
       <div class="frow"><label>Load a projections CSV (PLAYER, TEAM, POS, PPR — HALF/PATD optional)</label>
         <button class="hbtn" id="projImportBtn">⇧ CSV</button> <button class="hbtn" id="projTemplateBtn" title="Download a sample CSV in the right format">⬇ template</button></div>
       <div class="frow"><label>Spectator link (read-only board snapshot)</label><button class="hbtn" id="roShareBtn">👁 Copy</button></div>
+      <div class="frow"><label>Prep file (notes, boosts, plan, queue)</label><span style="display:flex;gap:8px"><button class="hbtn" id="prepExportBtn">⇩ Export</button><button class="hbtn" id="prepImportBtn">⇧ Merge</button></span></div>
+      <div class="frow"><label>Cheat sheet length / notes column</label><span style="display:flex;gap:8px;align-items:center"><input type="number" id="setSheetCount" min="50" max="390" step="25" style="width:80px"><label style="display:flex;gap:4px;align-items:center;font-size:11px;color:var(--dim)"><input type="checkbox" id="setSheetNotes" style="width:auto">notes</label></span></div>
       <div class="frow"><label>Back to the built-in dataset</label><button class="hbtn" id="projRevertBtn">↩ Revert</button></div>
       <div class="note" id="projStatus"></div>
       <div class="note" id="storageUse"></div>
@@ -300,9 +303,11 @@
       <span class="mono">/</span> search (fuzzy: cmc, jsn) &nbsp; <span class="mono">↑↓</span> highlight row<br>
       <span class="mono">M</span> my pick &nbsp; <span class="mono">T</span>/<span class="mono">X</span> taken &nbsp; <span class="mono">D</span> do-not-draft &nbsp; <span class="mono">N</span> note &nbsp; <span class="mono">Q</span> queue &nbsp; <span class="mono">C</span> compare &nbsp; <span class="mono">1–9</span> quick-draft (Live) &nbsp; <span class="mono">Ctrl+K</span> palette<br>
       <span class="mono">Ctrl+Z</span> undo &nbsp; <span class="mono">Ctrl+Y</span> redo &nbsp; <span class="mono">Esc</span> clear/blur &nbsp; <span class="mono">?</span> this help
+      <div class="sechead">Prep checklist</div>
+      <div id="prepCheck" style="font-size:12px;line-height:2"></div>
       <div class="sechead">About</div>
       <div style="font-size:11.5px;color:var(--dim);line-height:1.7">Draft War Room <span id="aboutVer"></span> · MIT licensed · built for Buck Breakers.<br>
-      Data: your league CSVs · Sleeper public API (players, stats, trends, headshots) · ESPN public API (injuries, news, logos) · everything stays in this browser.<br><a href="https://github.com/JROtto5/draft-war-room/blob/main/PRIVACY.md" target="_blank" rel="noopener" style="color:var(--dim)">Privacy</a> · Bugs & ideas → <a href="https://github.com/JROtto5/draft-war-room/issues" target="_blank" rel="noopener" style="color:var(--green)">github.com/JROtto5/draft-war-room/issues</a></div>
+      Data: your league CSVs · Sleeper public API (players, stats, trends, headshots) · ESPN public API (injuries, news, logos) · everything stays in this browser.<br><a href="https://github.com/JROtto5/draft-war-room/blob/main/PRIVACY.md" target="_blank" rel="noopener" style="color:var(--dim)">Privacy</a> · Prep guide: <a href="https://github.com/JROtto5/draft-war-room/blob/main/PREP.md" target="_blank" rel="noopener" style="color:var(--dim)">PREP.md</a> · Bugs & ideas → <a href="https://github.com/JROtto5/draft-war-room/issues" target="_blank" rel="noopener" style="color:var(--green)">github.com/JROtto5/draft-war-room/issues</a></div>
       <div class="sechead">Tips</div>
       Click a projection to edit it · click a player name for a note · click the pick banner to resync the pick number · hover a team code for playoff-week matchups.
     </div>
@@ -357,6 +362,7 @@
       <div id="mockConsensus" class="note" style="margin-top:12px"></div>
     </div>
     <div class="foot">
+      <button class="hbtn" id="scenarioBtn" title="Compare forced openings: QB-QB vs RB-RB vs WR-WR vs BPA">🧪 Scenarios</button>
       <button class="hbtn" id="mocksReroll" style="border-color:var(--gold);color:var(--gold)">🎲 Re-roll</button>
       <button class="hbtn" id="mocksClose">Close</button>
     </div>
@@ -365,6 +371,7 @@
 
 <input type="file" id="importFile" accept=".json" style="display:none">
 <input type="file" id="projFile" accept=".csv,text/csv" style="display:none">
+<input type="file" id="prepFile" accept=".json" style="display:none">
 
 <!-- Draft board modal -->
 <div class="overlay" id="boardOverlay">
