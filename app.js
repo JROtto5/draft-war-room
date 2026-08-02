@@ -4,7 +4,22 @@ const POSITIONS = ["QB","RB","WR","TE","DEF"];
 const LS_KEY = "draft-war-room-v2";
 
 /* ---------- State ---------- */
+const STATE_V = 2;
+const MIGRATIONS = {
+  // 1 -> 2: keepers/queue introduced (defaults suffice); stamp only
+  1: s => { s.keepers = s.keepers||{}; s.queue = s.queue||[]; return s; },
+};
+function migrate(p){
+  let v = p.v || 1;
+  while(v < STATE_V){
+    if(MIGRATIONS[v]) p = MIGRATIONS[v](p);
+    v++;
+  }
+  p.v = STATE_V;
+  return p;
+}
 const defaultState = () => ({
+  v: STATE_V,
   taken: {},            // id -> true (drafted by someone else)
   pickOffset: 0,        // manual correction: real overall pick - marked picks
   keepers: {},          // id -> slot number (kept pre-draft, consumes no pick)
@@ -61,7 +76,7 @@ function load(){
   try{
     const raw = localStorage.getItem(LS_KEY);
     if(raw){
-      const p = JSON.parse(raw);
+      const p = migrate(JSON.parse(raw));
       S = Object.assign(defaultState(), p);
       S.settings = Object.assign(defaultState().settings, p.settings||{});
       S.settings.min = Object.assign(defaultState().settings.min, (p.settings||{}).min||{});
@@ -80,7 +95,12 @@ function load(){
 }
 let saveTimer=null;
 function save(){
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }
+  const payload = JSON.stringify(S);
+  if(payload.length > 3500000 && !window._quotaWarned){
+    window._quotaWarned = true;
+    toast("⚠️ Board state is "+(payload.length/1048576).toFixed(1)+"MB — close to browser limits. Consider reverting imported data.", {warn:true});
+  }
+  try{ localStorage.setItem(LS_KEY, payload); }
   catch(e){
     const b = document.getElementById("saveBadge");
     b.textContent = "⚠ SAVE FAILED"; b.style.color = "var(--red)";
@@ -871,7 +891,11 @@ function injAdpFactor(p){
   const sv = injSeverity(e.s);
   return {Q:1.02, D:1.08, O:1.2, IR:1.8, "?":1.04}[sv.code] || 1;
 }
+let _injFails = 0, _injLastTry = 0;
 async function refreshInjuries(silent){
+  if(navigator.onLine===false){ if(!silent) toast("📡 Offline — showing "+INJ.src, {warn:true}); return; }
+  if(silent && _injFails && Date.now()-_injLastTry < Math.min(30, 5*Math.pow(2,_injFails))*60e3) return;
+  _injLastTry = Date.now();
   try{
     const r = await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries");
     if(!r.ok) throw 0;
@@ -898,8 +922,10 @@ async function refreshInjuries(silent){
       toast((c.mine?"🚨 YOUR PLAYER — ":"🩹 ")+esc(c.p.name)+": "+esc(c.s), {warn:true}));
     render();
     if(document.getElementById("injOverlay").classList.contains("show")) renderInjCenter();
+    _injFails = 0;
     if(!silent) toast("🩺 Injuries refreshed — "+Object.keys(m).length+" league-wide reports");
   }catch(e){
+    _injFails++;
     if(!silent) toast("Injury refresh failed — using "+INJ.src, {warn:true});
   }
 }
@@ -956,10 +982,12 @@ function logoUrl(team){
   const s = typeof TEAMLOGO!=="undefined" ? TEAMLOGO[team] : null;
   return s ? "https://a.espncdn.com/i/teamlogos/nfl/500/"+s+".png" : null;
 }
+window._noimg = window._noimg || new Set();
 function avatarImg(p, size){
   const u = headshotUrl(p);
+  if(u && window._noimg.has(u)) return '<span class="avatar ph" style="width:'+size+'px;height:'+size+'px">'+esc(p.name[0])+'</span>';
   if(!u) return '<span class="avatar ph" style="width:'+size+'px;height:'+size+'px">'+p.name[0]+'</span>';
-  return '<img class="avatar" src="'+u+'" width="'+size+'" height="'+size+'"'+(size>=56?' fetchpriority="high"':' loading="lazy"')+' decoding="async" alt="" onerror="this.outerHTML=\'<span class=&quot;avatar ph&quot; style=&quot;width:'+size+'px;height:'+size+'px&quot;>'+esc(p.name[0])+'</span>\'">';
+  return '<img class="avatar" src="'+u+'" width="'+size+'" height="'+size+'"'+(size>=56?' fetchpriority="high"':' loading="lazy"')+' decoding="async" alt="" onerror="window._noimg.add(this.src);this.outerHTML=\'<span class=&quot;avatar ph&quot; style=&quot;width:'+size+'px;height:'+size+'px&quot;>'+esc(p.name[0])+'</span>\'">';
 }
 function psosFor(team){
   const s = typeof PSOS!=="undefined" ? PSOS[team] : null;
@@ -1099,6 +1127,65 @@ function renderPool(){
   $("#poolCount").textContent = (truncated ? rows.length+" of "+fullLen : rows.length) + " players";
   window._poolIds = rows.filter(r=>!r.taken && !r.mine).length ? rows.map(r=>r.p.id) : [];
   applyKbSel();
+}
+
+/* Command palette (Ctrl+K) */
+const PALETTE_ACTIONS = [
+  ["🩺 Injury Center", ()=>document.getElementById("injBtn").click()],
+  ["🎲 Mock drafts", ()=>document.getElementById("mocksBtn").click()],
+  ["🗂 Draft board", ()=>document.getElementById("boardBtn").click()],
+  ["🎓 Draft report", ()=>document.getElementById("gradeBtn").click()],
+  ["⚖ Compare players", ()=>document.getElementById("cmpBtn").click()],
+  ["📋 Paste picks", ()=>document.getElementById("pasteBtn").click()],
+  ["⚙ Settings", ()=>document.getElementById("settingsBtn").click()],
+  ["🔴 Toggle Live mode", ()=>document.getElementById("liveBtn").click()],
+  ["🖨 Cheat sheet", ()=>document.getElementById("sheetBtn").click()],
+  ["🔗 Copy share link", ()=>document.getElementById("shareBtn").click()],
+  ["? Help & shortcuts", ()=>document.getElementById("helpBtn").click()],
+];
+function openPalette(){
+  let w = document.getElementById("palWrap");
+  if(w){ w.remove(); return; }
+  w = document.createElement("div");
+  w.id = "palWrap";
+  w.innerHTML = '<div id="pal"><input id="palIn" placeholder="Type a player or command…" aria-label="Command palette"><div id="palList"></div></div>';
+  document.body.appendChild(w);
+  w.addEventListener("click", e=>{ if(e.target===w) w.remove(); });
+  const inp = document.getElementById("palIn"), list = document.getElementById("palList");
+  let sel = 0, items = [];
+  const draw = ()=>{
+    const q2 = inp.value.trim();
+    const acts = PALETTE_ACTIONS.filter(a=>!q2 || a[0].toLowerCase().includes(q2.toLowerCase())).slice(0,4)
+      .map(a=>({label:a[0], run:a[1], kind:"act"}));
+    const ps = q2.length>=2 ? allPlayers().filter(p=>!offBoard(p.id) && matchesQuery(p,q2)).slice(0,7)
+      .map(p=>({label:p.name+" · "+p.pos+" "+p.team, p, kind:"player"})) : [];
+    items = acts.concat(ps);
+    sel = Math.min(sel, Math.max(0, items.length-1));
+    list.innerHTML = items.map((it,i)=>'<div class="palrow'+(i===sel?" on":"")+'" data-pi="'+i+'">'+
+      (it.kind==="player" ? avatarImg(it.p,20)+" " : "")+esc(it.label)+
+      (it.kind==="player" ? '<span class="palbtns"><button data-pick="'+it.p.id+'">✓</button><button data-take="'+it.p.id+'">✕</button></span>' : "")+
+      '</div>').join("") || '<div class="palrow dimtxt">No matches</div>';
+  };
+  const runSel = ()=>{
+    const it = items[sel]; if(!it) return;
+    w.remove();
+    if(it.kind==="act") it.run(); else openCard(it.p.id);
+  };
+  inp.addEventListener("input", ()=>{ sel=0; draw(); });
+  inp.addEventListener("keydown", e=>{
+    if(e.key==="ArrowDown"){ e.preventDefault(); sel=Math.min(sel+1, items.length-1); draw(); }
+    else if(e.key==="ArrowUp"){ e.preventDefault(); sel=Math.max(sel-1,0); draw(); }
+    else if(e.key==="Enter"){ e.preventDefault(); runSel(); }
+    else if(e.key==="Escape"){ w.remove(); }
+  });
+  list.addEventListener("click", e=>{
+    const b = e.target.closest("[data-pick],[data-take]");
+    if(b){ w.remove(); return; }   // delegated global handler does the action
+    const r = e.target.closest("[data-pi]");
+    if(r){ sel = +r.dataset.pi; runSel(); }
+  });
+  draw();
+  inp.focus();
 }
 
 /* Right-click context menu on pool rows */
@@ -1391,7 +1478,9 @@ function render(){
 }
 function renderNow(){
   _idx = null;
-  renderHeader(); renderTabs(); renderPool(); renderBest(); renderRoster(); renderLog(); renderQueue();
+  [renderHeader, renderTabs, renderPool, renderBest, renderRoster, renderLog, renderQueue].forEach(fn=>{
+    try{ fn(); }catch(e){ console.error(fn.name, e); if(typeof surfaceError==="function") surfaceError(fn.name+": "+e.message); }
+  });
 }
 function renderHeader(){
   const el = document.querySelector(".logo .sub");
@@ -1491,6 +1580,7 @@ $("#fHideHurt").addEventListener("change", e=>{ S.ui.hideHurt=e.target.checked; 
 $("#undoBtn").addEventListener("click", undoLast);
 $("#redoBtn").addEventListener("click", redoLast);
 document.addEventListener("keydown", e=>{
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="k"){ e.preventDefault(); openPalette(); return; }
   if((e.ctrlKey||e.metaKey) && (e.key==="y" || (e.shiftKey && e.key.toLowerCase()==="z"))){ e.preventDefault(); redoLast(); return; }
   if((e.ctrlKey||e.metaKey) && e.key==="z"){ e.preventDefault(); undoLast(); return; }
   if(e.key==="Enter"){
@@ -1500,6 +1590,17 @@ document.addEventListener("keydown", e=>{
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
   if(e.key==="/" && !typing){ e.preventDefault(); $("#search").focus(); return; }
   if(e.key==="?" && !typing){ e.preventDefault(); $("#helpOverlay").classList.toggle("show"); return; }
+  if(e.key==="Tab"){
+    const ov = document.querySelector(".overlay.show");
+    if(ov){
+      const f = [...ov.querySelectorAll("button,input,select,textarea,a[href],[tabindex='0']")].filter(x=>!x.disabled && x.offsetParent!==null);
+      if(f.length){
+        const first = f[0], last = f[f.length-1];
+        if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+        else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+      }
+    }
+  }
   if(e.key==="Escape"){
     const ov = document.querySelector(".overlay.show");
     if(ov){ ov.classList.remove("show"); return; }
@@ -1915,6 +2016,9 @@ $("#projFile").addEventListener("change", e=>{
       rows.push([name,(c[iT]||"").trim().toUpperCase(),pos,Math.round(ppr*10)/10,Math.round(half*10)/10,adpBy[k]||0,patd]);
     }
     if(rows.length<50){ toast("Only parsed "+rows.length+" players — import aborted", {warn:true}); e.target.value=""; return; }
+    const curNames = new Set(allPlayers().map(p=>normName(p.name)));
+    const fresh = rows.filter(r2=>!curNames.has(normName(r2[0]))).length;
+    if(!confirm("Import preview:\n• "+rows.length+" players parsed\n• "+fresh+" names not on the current board\n• current dataset will be replaced (backup saved)\n\nApply?")){ e.target.value=""; return; }
     backupState();
     S.dataRows=rows; S.dataRev=(S.dataRev||0)+1;
     commit(); refreshProjStatus();
@@ -1993,7 +2097,9 @@ function backupState(){
 
 /* Export / Import / Reset */
 $("#exportBtn").addEventListener("click", ()=>{
-  const blob = new Blob([JSON.stringify(S,null,2)], {type:"application/json"});
+  const full = {__warRoomBackup:1, build:BUILD, when:new Date().toISOString(), state:S, profiles:profAll()};
+  try{ full.injuries = JSON.parse(localStorage.getItem(LS_KEY+"-inj")); }catch(e2){}
+  const blob = new Blob([JSON.stringify(full,null,2)], {type:"application/json"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = "draft-war-room-save.json";
@@ -2004,7 +2110,22 @@ $("#importBtn").addEventListener("click", ()=>$("#importFile").click());
 $("#importFile").addEventListener("change", e=>{
   const f = e.target.files[0]; if(!f) return;
   const r = new FileReader();
-  r.onload = ()=>{ try{ const parsed=JSON.parse(r.result); backupState(); S = Object.assign(defaultState(), parsed); commit(); }catch(err){ alert("Invalid save file"); } };
+  r.onload = ()=>{
+    try{
+      const parsed = JSON.parse(r.result);
+      backupState();
+      if(parsed.__warRoomBackup){
+        S = Object.assign(defaultState(), migrate(parsed.state||{}));
+        if(parsed.profiles) localStorage.setItem(PROF_KEY, JSON.stringify(parsed.profiles));
+        if(parsed.injuries) localStorage.setItem(LS_KEY+"-inj", JSON.stringify(parsed.injuries));
+        initInjuries();
+        toast("📥 Full backup restored ("+(parsed.when||"").slice(0,10)+")");
+      } else {
+        S = Object.assign(defaultState(), migrate(parsed));
+      }
+      commit();
+    }catch(err){ alert("Invalid save file"); }
+  };
   r.readAsText(f);
   e.target.value="";
 });
@@ -2162,6 +2283,24 @@ window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", ap
     if(age > 45 && !(S.dataRows&&S.dataRows.length)) setTimeout(()=>toast("📅 Built-in projections are "+Math.round(age)+" days old — Settings → import a fresh CSV", {warn:true}), 900);
   }catch(e){}
 })();
+function setOnlineUI(){
+  const b = document.getElementById("saveBadge");
+  document.body.classList.toggle("offline", navigator.onLine===false);
+  if(navigator.onLine===false){ b.textContent = "📡 offline — cached data"; b.style.color = "var(--gold)"; }
+  else { b.textContent = "Autosave on"; b.style.color = ""; }
+}
+window.addEventListener("storage", e=>{
+  if(e.key !== LS_KEY || !e.newValue) return;
+  try{
+    S = Object.assign(defaultState(), migrate(JSON.parse(e.newValue)));
+    _memo = {key:null};
+    render();
+    toast("🔄 Board updated in another tab");
+  }catch(err){}
+});
+window.addEventListener("online", ()=>{ setOnlineUI(); refreshInjuries(true); });
+window.addEventListener("offline", setOnlineUI);
+
 let _lastErrToast = 0;
 function surfaceError(msg){
   const now = Date.now();

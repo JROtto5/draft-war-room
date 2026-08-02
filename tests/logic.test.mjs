@@ -94,4 +94,21 @@ assert.ok(hurt.length >= 10, "expected baked injuries, got " + hurt.length);
 const factor = g("injAdpFactor");
 assert.ok(factor(hurt[0]) > 1, "injured player should slide in sim ADP");
 
-console.log("logic.test OK — engine, snake, saturation, mocks, odds, rounds, injuries");
+// utilities
+assert.strictEqual(JSON.stringify(g("parsePicks")("1.12, 2.01 37")), "[12,13,37]");
+const curve = g("pickValueCurve()");
+for(let i=1;i<curve.length;i++) assert.ok(curve[i] <= curve[i-1]+1e-9, "value curve must be non-increasing at "+i);
+const r1 = g("mulberry32(42)"), r2 = g("mulberry32(42)");
+assert.strictEqual(r1(), r2(), "mulberry32 not deterministic");
+// teamRosters slot math: picks 1 and 2 belong to slots 1 and 2 in round 1
+vm.runInContext("S.log=[];S.taken={};S.mine=[];", ctx);
+vm.runInContext("markTaken(allPlayers()[0].id); markTaken(allPlayers()[1].id);", ctx);
+const ros = g("teamRosters()");
+assert.strictEqual(ros[1].length, 1, "slot1 roster");
+assert.strictEqual(ros[2].length, 1, "slot2 roster");
+// migration: v1 save gains queue/keepers and v stamp
+const mig = g("migrate")({mine:[], log:[], taken:{}});
+assert.strictEqual(mig.v, g("STATE_V"));
+assert.ok(Array.isArray(mig.queue) && typeof mig.keepers === "object");
+
+console.log("logic.test OK — engine, snake, saturation, mocks, odds, rounds, injuries, utils");

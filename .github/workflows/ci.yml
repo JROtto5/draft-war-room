@@ -21,6 +21,8 @@ jobs:
         run: |
           test "$(grep -c '<script src=' index.html)" = "2"
           ! grep -q '<style>' index.html
+      - name: Lint & size budgets
+        run: node scripts/lint.mjs
       - name: Data tests
         run: node tests/data.test.mjs
       - name: Logic tests

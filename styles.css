@@ -370,3 +370,19 @@ th.sorton[aria-sort="ascending"]::after{content:" ▲"; font-size:8px}
 #ctxMenu button:hover{background:var(--bg2); color:var(--green)}
 #logMineBtn.on{border-color:var(--green); color:var(--green)}
 tr.keeperrow{opacity:.5}
+/* round 9: iOS + palette + forced colors */
+button, input, select, .barow, .myp, tbody tr{-webkit-tap-highlight-color:transparent; touch-action:manipulation}
+#toastWrap{bottom:calc(16px + env(safe-area-inset-bottom,0))}
+#panicBar{padding-top:calc(12px + env(safe-area-inset-top,0))}
+body.offline .savebadge{border-color:var(--gold)}
+#palWrap{position:fixed; inset:0; z-index:400; background:rgba(5,8,12,.6); backdrop-filter:blur(3px); display:flex; justify-content:center; padding-top:12vh}
+#pal{width:min(560px,92vw); height:fit-content; background:var(--panel); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; animation:toastIn .15s}
+#palIn{width:100%; background:var(--bg2); border:none; border-bottom:1px solid var(--line); color:var(--text); padding:14px 16px; font-family:inherit; font-size:15px; outline:none}
+.palrow{display:flex; align-items:center; gap:8px; padding:10px 14px; font-size:13.5px; cursor:pointer}
+.palrow.on, .palrow:hover{background:var(--bg2); color:var(--green)}
+.palbtns{margin-left:auto; display:flex; gap:6px}
+.palbtns button{background:var(--panel2); border:1px solid var(--line); border-radius:6px; color:var(--text); padding:3px 9px; cursor:pointer; font-size:11px}
+@media (forced-colors: active){
+  .pos, .tier, .chip, .sevchip, .rd, .scpill{forced-color-adjust:none; border:1px solid ButtonText}
+  .avatar{border:1px solid ButtonText}
+}
