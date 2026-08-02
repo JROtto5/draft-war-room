@@ -248,6 +248,11 @@ function tierMapRaw(players){
 /* Monte Carlo: % chance each available player survives the CPU picks
    between now and my next pick. Seeded by board state so it's stable
    until another pick happens. Back-to-back turn picks → 100%. */
+/**
+ * Monte Carlo: N seeded sims of the CPU picks before my next two turns.
+ * Returns {at1,at2,h1,h2,posGone} — survival % per player per horizon and
+ * expected positional losses. Cached via survivalOdds().
+ */
 function survivalOddsRaw(){
   const h = nextPickHorizon(); if(!h) return null;
   const from = pickNow();
@@ -394,6 +399,11 @@ function needInfo(){
   return {counts, needs, totalNeeded, picksLeft};
 }
 
+/**
+ * The heart: score every available player for MY next pick.
+ * VORP -> risk dial -> boost/fade -> saturation -> needs/locks -> stacks ->
+ * intel -> injuries -> tier cliffs -> market falls. Memoized per board state.
+ */
 function scoreBoard(){
   const players = allPlayers();
   const repl = replacementLevels(players);
@@ -722,6 +732,11 @@ function bestStarters(ids, byId){
   return {line, starterIds:new Set([...used]), pts:line.reduce((a,s)=>a+(s.p?s.p.proj:0),0)};
 }
 
+/**
+ * Simulate the rest of the draft: CPUs via cpuPick, my picks via a
+ * needs-aware VORP scorer shaped by `strat` (and optional strat.force
+ * opening). Deterministic per seed. Never mutates real state.
+ */
 function runMock(strat, seed){
   const rng = mulberry32(seed);
   const players = allPlayers();

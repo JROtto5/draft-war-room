@@ -1,5 +1,17 @@
 # Changelog — Draft War Room
 
+## v7.0 (2026-08-02) — The fourth hundred (#301–#400)
+Engine: pure kernel (engine.js), adaptive bots that learn each team's reach
+tendency, run contagion, risk dial, sim-count setting, offense environment,
+projection bands. Prep: plan board with on-clock reminders, scenario matrix,
+prep files, queue target rounds. Season: waiver radar, week recaps, injury
+notifications, wake lock, app badge. Delight: awards, achievements,
+soundboard, terminal skin, Konami mode, roster-roots map. A11y/perf: SR
+announcer, font sizes, colorblind palette, scroll windowing, IndexedDB
+mirror, staged paint. QA: goldens, settings sweep, fuzz II, CI matrix +
+artifacts, doctor, DATA.md, pre-commit. Docs: MANUAL, CONTRIBUTING, PREP,
+ENGINE, PERF.
+
 ## v6.0 (2026-08-02) — The personalization & edge hundred (#201–#300)
 Every player now has a life: hometown (with 💖 favorite-state/college mode),
 college in school colors, high school, rookie class, birthday, an auto-written

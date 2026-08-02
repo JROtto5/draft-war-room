@@ -32,5 +32,8 @@ git add -A && git commit -m "2027 data" && git push
 ```
 That regenerates everything (projections, ADP, playoff slates, headshots, bios, last-season stats, injury snapshot via public Sleeper/ESPN APIs), bumps the PWA cache, and runs the test suite. Mid-season news? Settings → import a projections CSV right in the app.
 
+## Docs
+[MANUAL](MANUAL.md) — how to use it · [PREP](PREP.md) — before draft day · [ENGINE](ENGINE.md) — how it thinks · [PERF](PERF.md) · [DATA](DATA.md) · [ARCHITECTURE](ARCHITECTURE.md) · [BESTPRACTICES](BESTPRACTICES.md) · [PRIVACY](PRIVACY.md) · [CONTRIBUTING](CONTRIBUTING.md) · [CHANGELOG](CHANGELOG.md)
+
 ## Development
 `index.html` + `styles.css` + `app.js` + `data.js`, no build step. `python3 -m http.server` to run locally. CI (GitHub Actions) runs syntax checks, data-sanity tests, engine logic tests in a VM, and a headless-Chrome E2E on every push. The repo's 105 closed issues are the changelog.
