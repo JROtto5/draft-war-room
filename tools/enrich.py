@@ -251,6 +251,27 @@ def main():
     except Exception as e:
         print("espn injuries snapshot failed:", e, file=sys.stderr)
 
+    # ---------- real bye weeks + season schedules from ESPN (#404/#408) ----------
+    byes, sched = {}, {}
+    for team, slug in T2ESPN.items():
+        try:
+            js = fetch_json(f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/{slug}/schedule?season=2026",
+                            f"espn-sched-{slug}.json")
+            if js.get("byeWeek"): byes[team] = js["byeWeek"]
+            opps = {}
+            self_ab = "WSH" if slug=="wsh" else slug.upper()
+            for ev in js.get("events", []):
+                wk = (ev.get("week") or {}).get("number")
+                comps = (ev.get("competitions") or [{}])[0].get("competitors") or []
+                opp = None
+                for cmp_ in comps:
+                    ab = ((cmp_.get("team") or {}).get("abbreviation") or "").upper()
+                    if ab and ab != self_ab: opp = ab
+                if wk and opp: opps[wk] = opp
+            sched[team] = opps
+        except Exception as e:
+            print("sched fail", team, e, file=sys.stderr)
+
     # ---------- prop/analyst intel ----------
     prop_agg = {}
     for nm, typ, side, edge in PROPS:
@@ -308,10 +329,12 @@ def main():
     out.append("const COLLEGE = " + json.dumps(COLLEGES, ensure_ascii=False, separators=(',',':')) + ";")
     out.append("const TEAMQB = " + json.dumps(teamqb, ensure_ascii=False, separators=(',',':')) + ";")
     out.append("const INJBASE = " + json.dumps(injbase, ensure_ascii=False, separators=(',',':')) + ";")
+    out.append("const BYES = " + json.dumps(byes, separators=(',',':')) + ";")
+    out.append("const SCHED = " + json.dumps(sched, separators=(',',':')) + ";")
     out.append('const LAST_SEASON = "' + args.season + '";')
     out.append('const DATA_STAMP = "' + datetime.date.today().isoformat() + '";')
     open(args.out, "w").write("\n".join(out) + "\n")
-    print(f"wrote {args.out}: {len(players)} players, {len(heads)} headshots, {len(meta)} bios, {len(last)} stat lines, {len(last3)} 3yr histories, {len(intel)} intel, {len(injbase)} baked injuries", file=sys.stderr)
+    print(f"wrote {args.out}: {len(players)} players, {len(heads)} headshots, {len(meta)} bios, {len(last)} stat lines, {len(last3)} 3yr histories, {len(intel)} intel, {len(injbase)} baked injuries, {len(byes)} byes", file=sys.stderr)
 
 if __name__ == "__main__":
     main()

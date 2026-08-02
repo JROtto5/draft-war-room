@@ -207,4 +207,17 @@ const remig = g("migrate")(JSON.parse(JSON.stringify(g("S"))));
 assert.strictEqual(remig.v, g("STATE_V"), "re-migration idempotent");
 vm.runInContext("S.keepers={};S.plan={};S.queue=[];_memo={key:null};", ctx);
 
-console.log("logic.test OK — engine, snake, saturation, mocks, odds, rounds, injuries, utils, fuzz, story, sweep");
+// byes/SOS/sync mapping (#404-415)
+vm.runInContext("this.d2={BYES,SCHED};", ctx);
+assert.strictEqual(Object.keys(ctx.d2.BYES).length, 32, "32 byes");
+assert.ok(Object.values(ctx.d2.BYES).every(w=>w>=4 && w<=14), "bye weeks sane");
+assert.ok(Object.values(ctx.d2.SCHED).every(s=>Object.keys(s).length>=15), "schedules complete");
+const b1 = g('byeOf("KCC")');
+assert.ok(b1>=4 && b1<=14, "KCC bye");
+const sos1 = g('sosOf("KCC")');
+assert.ok(sos1>=1 && sos1<=32, "SOS rank in range");
+const smap = g("sleeperToOurs()");
+assert.ok(Object.keys(smap).length > 350, "sleeper map coverage: "+Object.keys(smap).length);
+assert.ok(g('sleeperToOurs()["KC"]'), "DEF mapping via team code");
+
+console.log("logic.test OK — engine, snake, saturation, mocks, odds, rounds, injuries, utils, fuzz, story, sweep, sync");

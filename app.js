@@ -862,6 +862,93 @@ function finishMocks(results, already){
     : "No strong consensus across strategies — your seat has options.";
 }
 
+/* ---------- Live Sleeper draft sync (#401-#403, #415) ---------- */
+const SYNC = {on:false, draftId:null, seen:0, myRoster:null, timer:null, base:"https://api.sleeper.app/v1"};
+function sleeperToOurs(){
+  return cached("slp2us", ()=>{
+    const inv = {};
+    if(typeof HEADSHOT!=="undefined"){
+      const byId = idIndex();
+      const byNorm = {}; allPlayers().forEach(p=>byNorm[normName(p.name)]=p.id);
+      for(const k in HEADSHOT) if(byNorm[k]) inv[String(HEADSHOT[k])] = byNorm[k];
+    }
+    // team defenses: sleeper uses team codes as player_id for DEF
+    allPlayers().filter(p=>p.pos==="DEF").forEach(p=>{
+      const slp = ({SFO:"SF",GBP:"GB",KCC:"KC",NEP:"NE",NOS:"NO",TBB:"TB",LVR:"LV",JAC:"JAX"})[p.team] || p.team;
+      inv[slp] = p.id;
+    });
+    return inv;
+  });
+}
+async function syncImportLeague(leagueId){
+  try{
+    const users = await (await fetch(SYNC.base+"/league/"+leagueId+"/users")).json();
+    const rosters = await (await fetch(SYNC.base+"/league/"+leagueId+"/rosters")).json();
+    const drafts = await (await fetch(SYNC.base+"/league/"+leagueId+"/drafts")).json();
+    const draft = drafts && drafts[0];
+    if(draft){
+      const order = draft.draft_order || {};
+      const uname = {}; users.forEach(u=>uname[u.user_id] = u.display_name || (u.metadata&&u.metadata.team_name) || u.user_id);
+      for(const uid in order) S.slotNames[String(order[uid])] = uname[uid] || S.slotNames[String(order[uid])];
+      S.settings.sleeperDraftId = draft.draft_id;
+      commit();
+      toast("📥 League imported: names + draft "+draft.draft_id.slice(-6));
+    } else toast("League found, no draft yet", {warn:true});
+  }catch(e){ toast("League import failed — check the ID", {warn:true}); }
+}
+async function syncPoll(){
+  if(!SYNC.on || !SYNC.draftId) return;
+  try{
+    const picks = await (await fetch(SYNC.base+"/draft/"+SYNC.draftId+"/picks")).json();
+    if(!Array.isArray(picks)) throw 0;
+    if(SYNC.myRoster==null){
+      try{
+        const dr = await (await fetch(SYNC.base+"/draft/"+SYNC.draftId)).json();
+        const order = dr.draft_order || {};
+        for(const uid in order) if(+order[uid]===+S.settings.slot) SYNC.myRoster = uid;
+      }catch(e){}
+    }
+    const map = sleeperToOurs();
+    let applied = 0;
+    picks.slice(SYNC.seen).forEach(pk=>{
+      const ours = map[String(pk.player_id)];
+      if(ours && !offBoard(ours)){
+        const mine = SYNC.myRoster && String(pk.picked_by)===String(SYNC.myRoster);
+        if(mine){ S.mine.push(ours); S.log.push({id:ours, who:"me", t:Date.now()}); }
+        else { S.taken[ours]=true; S.log.push({id:ours, who:"other", t:Date.now()}); }
+        applied++;
+      }
+    });
+    SYNC.seen = picks.length;
+    const chip = document.getElementById("syncChip");
+    if(chip) chip.textContent = "🔄 synced "+picks.length+" picks";
+    if(applied){ redoStack.length=0; pruneQueue(); _memo={key:null}; commit(); toast("🔄 Sleeper sync: +"+applied+" picks"); }
+  }catch(e){
+    const chip = document.getElementById("syncChip");
+    if(chip) chip.textContent = "🔄 sync error — retrying";
+  }
+}
+function setSync(on){
+  SYNC.on = on;
+  SYNC.draftId = (S.settings.sleeperDraftId||"").trim() || null;
+  clearInterval(SYNC.timer);
+  const chip = document.getElementById("syncChip");
+  if(on && SYNC.draftId){
+    SYNC.seen = Math.max(0, S.log.length);   // don't replay what's already marked
+    SYNC.timer = setInterval(syncPoll, 10000);
+    syncPoll();
+    if(chip){ chip.style.display=""; chip.textContent = "🔄 sync armed"; }
+    toast("🔄 Live sync ON — picks will mark themselves (manual edits still yours)");
+  } else {
+    if(chip) chip.style.display="none";
+    if(on) toast("Set a Sleeper draft ID in Settings first", {warn:true});
+    SYNC.on = false;
+  }
+  const b = document.getElementById("syncBtn");
+  if(b) b.classList.toggle("liveon", SYNC.on);
+}
+document.getElementById("syncBtn").addEventListener("click", ()=>setSync(!SYNC.on));
+
 /* ---------- Season HQ actions ---------- */
 async function weekRecap(){
   try{
@@ -1090,7 +1177,7 @@ function openCard(id){
       (logoUrl(p.team)?'<img class="clogo" src="'+logoUrl(p.team)+'" alt="">':'')+
       avatarImg(p,84)+
       '<div class="cid"><div class="cname">'+p.name+intelBadges(p)+(fav?' 💖':'')+'</div>'+
-      '<div class="csub">'+posBadge(p.pos)+' &nbsp;'+p.team+' · T'+tm[p.id]+((()=>{const e2=envRank(p.team); return e2?' · offense #'+e2:'';})())+' · '+status+'</div>'+
+      '<div class="csub">'+posBadge(p.pos)+' &nbsp;'+p.team+' · T'+tm[p.id]+((()=>{const e2=envRank(p.team); return e2?' · offense #'+e2:'';})())+(byeOf(p.team)?' · bye W'+byeOf(p.team):'')+((()=>{const s3=sosOf(p.team); return s3?' · SOS '+(s3<=8?'😊 soft':s3>=25?'😖 brutal':'#'+s3):'';})())+' · '+status+'</div>'+
       (bioLine2?'<div class="cbio">'+bioLine2+'</div>':'')+
       '<div class="cbio">'+
         (hw?'<span class="chip">🏠 '+esc(hw.town)+(hw.st?', '+hw.st:'')+'</span> ':'')+
@@ -1165,6 +1252,7 @@ function renderCompare(){
     row("Expected round", a.rd, b.rd) +
     row("Back at next pick", a.odds, b.odds, 1) +
     row("Health", (()=>{const e=injuryOf(A); return e?injSeverity(e.s).label+(e.c?" — "+e.c.slice(0,40)+"…":""):"healthy ✓";})(), (()=>{const e=injuryOf(B); return e?injSeverity(e.s).label+(e.c?" — "+e.c.slice(0,40)+"…":""):"healthy ✓";})()) +
+    row("Bye week", byeOf(A.team)||"—", byeOf(B.team)||"—") +
     row("Playoff weeks", psosFor(A.team)?psosFor(A.team).short:"—", psosFor(B.team)?psosFor(B.team).short:"—") +
     row("Status", a.status, b.status) +
     '</table><div style="margin-top:12px; font-size:13px">'+verdict+'</div>'+
@@ -1379,6 +1467,33 @@ function winnerIndex(p){
   const c = consistencyOf(p);
   if(c && c.hi>=15) sc++;
   return sc;
+}
+function byeOf(team){ return (typeof BYES!=="undefined" && BYES[team]) || 0; }
+function sosOf(team){
+  // season SOS = avg offense-environment rank of opponents (higher avg rank = softer slate)
+  const r = cached("sos", ()=>{
+    const m = {};
+    if(typeof SCHED==="undefined") return m;
+    // opponents come as ESPN abbreviations — map back to our codes
+    const espn2us = {}; for(const us in TEAMLOGO) espn2us[TEAMLOGO[us].toUpperCase()] = us;
+    espn2us["WSH"] = "WAS";
+    for(const team in SCHED){
+      const opps = Object.values(SCHED[team]).map(ab=>espn2us[ab]).filter(Boolean);
+      if(!opps.length) continue;
+      const avg = opps.reduce((a,t2)=>a+(envRank(t2)||16), 0)/opps.length;
+      m[team] = avg;
+    }
+    const order = Object.keys(m).sort((a,b)=>m[b]-m[a]);  // softest first
+    const rank = {}; order.forEach((t2,i)=>rank[t2] = i+1);
+    return rank;
+  });
+  return r[team] || 0;
+}
+function nextOpp(team){
+  if(typeof SCHED==="undefined" || !SCHED[team]) return null;
+  const wk = Math.max(1, Math.min(18, window._nflWeek || 1));
+  for(let w=wk; w<=18; w++) if(SCHED[team][w]) return {w, opp:SCHED[team][w]};
+  return null;
 }
 function envRank(team){
   const r = cached("env", ()=>{
@@ -1599,7 +1714,7 @@ function renderPool(){
       '<td class="mono" style="color:var(--faint)">'+(i+1)+'</td>'+
       '<td><span class="pcell" data-card="'+r.p.id+'" title="Open player card">'+avatarImg(r.p,24)+'<span class="pname">'+hl(r.p.name)+'</span></span>'+(S.notes[r.p.id]?'<span class="ib gold" title="'+esc(S.notes[r.p.id])+'">📝</span>':'')+(S.dnd[r.p.id]&&!r.taken&&!r.mine?'<span class="ib bear" title="On your do-not-draft list">🚫</span>':'')+((()=>{const e=injuryOf(r.p); if(!e) return ""; const sv=injSeverity(e.s); return '<span class="ib '+sv.cls+'" title="'+esc(sv.label+(e.c?" — "+e.c:"")+(e.d?" ("+e.d+" · "+e.src+")":""))+'">●</span>';})())+(buzzOf(r.p)>3000?'<span class="ib bull" title="'+buzzOf(r.p).toLocaleString()+' Sleeper adds in 24h">📈</span>':'')+((metaFor(r.p)||[])[1]===0?'<span class="ib" title="Rookie">🎓</span>':'')+(isFav(r.p)?'<span class="ib" style="color:#ff7bac" title="Your favorite state/college">💖</span>':'')+((S.boost||{})[r.p.id]===1?'<span class="ib bull" title="On your boost list">▲</span>':(S.boost||{})[r.p.id]===-1?'<span class="ib bear" title="On your fade list">▼</span>':'')+((()=>{const n=newsFor(r.p); return n && (Date.now()-new Date(n.d).getTime())<3*86400e3 ? '<span class="ib" title="'+esc(n.h)+'">📰</span>' : "";})())+intelBadges(r.p)+(r.stack?'<span class="stackchip">🔗 stack</span>':'')+(!r.taken&&!r.mine&&r.p.adp&&(pickNow()-r.p.adp)>=10?'<span class="ib" title="Falling: '+(pickNow()-r.p.adp)+' picks past ADP '+r.p.adp+'">💎</span>':'')+(r.backRisk==="gone"?'<span class="ib" title="Won\'t make it back to your next pick">🔥</span>':r.backRisk==="risky"?'<span class="ib" title="Coin-flip to survive to your next pick">⏳</span>':'')+'</td>'+
       '<td>'+posBadge(r.p.pos)+'<span class="tier t'+Math.min(tm[r.p.id],5)+'">T'+tm[r.p.id]+'</span></td>'+
-      '<td class="mono" style="color:var(--dim)'+(psosFor(r.p.team)?';cursor:help':'')+'"'+(psosFor(r.p.team)?' title="'+esc(psosFor(r.p.team).txt)+'"':'')+'>'+(logoUrl(r.p.team)?'<img class="tlogo" src="'+logoUrl(r.p.team)+'" width="14" height="14" loading="lazy" decoding="async" alt=""> ':'')+r.p.team+'</td>'+
+      '<td class="mono" style="color:var(--dim)'+(psosFor(r.p.team)?';cursor:help':'')+'"'+(psosFor(r.p.team)?' title="'+esc(psosFor(r.p.team).txt+(byeOf(r.p.team)?" · bye W"+byeOf(r.p.team):""))+'"':'')+'>'+(logoUrl(r.p.team)?'<img class="tlogo" src="'+logoUrl(r.p.team)+'" width="14" height="14" loading="lazy" decoding="async" alt=""> ':'')+r.p.team+'</td>'+
       '<td><span class="proj mono" data-edit="'+r.p.id+'">'+r.p.proj+'</span></td>'+
       '<td class="mono" style="color:'+(r.vorp>=0?'var(--green)':'var(--faint)')+(r.vorp>0?';background:rgba(47,212,122,'+Math.min(0.22, r.vorp/700).toFixed(3)+')':'')+'">'+(r.vorp>0?"+":"")+Math.round(r.vorp)+'</td>'+
       '<td class="mono" style="color:var(--dim)">'+(r.p.adp||"—")+'</td>'+
@@ -1782,6 +1897,11 @@ function renderBest(){
     const irs = myIds().map(id2=>byIdH[id2]).filter(Boolean)
       .filter(p2=>{ const e2=injuryOf(p2); return e2 && injSeverity(e2.s).code==="IR"; });
     let hq = "";
+    {
+      const nx = bsH.line.filter(sl=>sl.p).map(sl=>({p:sl.p, n:nextOpp(sl.p.team)})).filter(x=>x.n).slice(0,9);
+      if(nx.length) hq += '<div class="benchhead">🗓 Next up</div><div class="scarce">'+
+        nx.map(x=>'<span class="scpill" title="'+esc(x.p.name)+'">'+esc(x.p.name.split(" ").slice(-1)[0])+' W'+x.n.w+' vs '+esc(x.n.opp)+'</span>').join("")+'</div>';
+    }
     if(radar.length) hq += '<div class="benchhead">📡 Waiver radar (unrostered, trending)</div>'+
       radar.map(p2=>'<div class="barow" data-card="'+p2.id+'">'+avatarImg(p2,22)+posBadge(p2.pos)+
         '<div class="info"><div class="nm">'+p2.name+'</div><div class="sm">📈 '+buzzOf(p2).toLocaleString()+' adds/24h</div></div></div>').join("");
@@ -2065,6 +2185,7 @@ function renderRoster(){
   const stacks = Object.entries(teams).filter(([,ps])=>ps.length>1 && ps.some(x=>x.pos==="QB") && ps.some(x=>x.pos==="WR"||x.pos==="TE"));
   const multis = Object.entries(teams).filter(([,ps])=>ps.length>1);
   let html="";
+  if($("#stackBox").dataset.byeNote){ html += $("#stackBox").dataset.byeNote+"<br>"; delete $("#stackBox").dataset.byeNote; }
   if(stacks.length) html += "🔗 <b>Live stacks:</b> " + stacks.map(([t,ps])=>t+" ("+ps.map(x=>x.name.split(" ").pop()).join(" + ")+")").join(" · ");
   else if(multis.length) html += "Same-team pairs: " + multis.map(([t,ps])=>t+" ×"+ps.length).join(" · ");
   else if(S.mine.length) html += "No stacks yet — pairing a WR/TE with your QB adds a boost to recommendations.";
@@ -2094,6 +2215,19 @@ function renderRoster(){
     if(needQb>0 && seats <= needQb && counts.QB<2 && picksLeft>0){
       warn.innerHTML += '<div class="warn crit">🎵 Musical chairs: <b>'+needQb+'</b> teams (incl. you) still need a QB2 and only <b>'+seats+'</b> startable QBs remain.</div>';
     }
+  }
+  // Bye clashes among starters (#406) + stack bye alignment (#411)
+  if(bs){
+    const byWeek = {};
+    bs.line.forEach(sl=>{ if(sl.p){ const b2=byeOf(sl.p.team); if(b2) (byWeek[b2]=byWeek[b2]||[]).push(sl.p); } });
+    Object.entries(byWeek).filter(([,ps2])=>ps2.length>=3).forEach(([w2,ps2])=>{
+      warn.innerHTML += '<div class="warn">📅 Week '+w2+' bye pile-up: '+ps2.map(p2=>esc(p2.name.split(" ").slice(-1)[0])).join(", ")+' all sit together.</div>';
+    });
+    const stacksB = {};
+    myIds().map(id2=>byId[id2]).filter(Boolean).forEach(p2=>{ (stacksB[p2.team]=stacksB[p2.team]||[]).push(p2); });
+    Object.entries(stacksB).filter(([,ps2])=>ps2.some(x=>x.pos==="QB") && ps2.some(x=>x.pos==="WR"||x.pos==="TE")).forEach(([t2])=>{
+      if(byeOf(t2)) $("#stackBox").dataset.byeNote = "🔗 "+t2+" stack shares the W"+byeOf(t2)+" bye — one hole, not two.";
+    });
   }
   // My roster health warning
   const hurtMine = S.mine.map(id=>byId[id]).filter(Boolean).filter(p=>badInjury(p));
@@ -3020,6 +3154,8 @@ $("#settingsBtn").addEventListener("click", ()=>{
   $("#setTimer").value=S.settings.timerSecs||0;
   $("#setLowData").checked=!!S.settings.lowData;
   $("#setNotify").checked=!!S.settings.notifyInj;
+  $("#setSleeperDraft").value=S.settings.sleeperDraftId||"";
+  $("#setSleeperLeague").value=S.settings.sleeperLeagueId||"";
   const rs=$("#setRival");
   rs.innerHTML='<option value="">none</option>'+Array.from({length:S.settings.teams},(_,i)=>i+1)
     .filter(s2=>s2!==S.settings.slot).map(s2=>'<option value="'+s2+'"'+(+S.settings.rivalSlot===s2?' selected':'')+'>'+esc(slotName(s2))+'</option>').join("");
@@ -3069,6 +3205,9 @@ $("#settingsSave").addEventListener("click", ()=>{
   }
   S.settings.notifyInj = wantNotify;
   S.settings.rivalSlot = $("#setRival").value ? +$("#setRival").value : null;
+  S.settings.sleeperDraftId = $("#setSleeperDraft").value.trim();
+  const lg = $("#setSleeperLeague").value.trim();
+  if(lg && lg!==S.settings.sleeperLeagueId){ S.settings.sleeperLeagueId = lg; syncImportLeague(lg); }
   S.settings.cols = {adp:$("#colADP").checked, edge:$("#colEdge").checked, rd:$("#colRd").checked};
   S.settings.fontSize = $("#setFont").value;
   S.settings.cbSafe = $("#setCbSafe").checked;

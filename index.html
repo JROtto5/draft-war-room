@@ -54,6 +54,8 @@
   <button class="hbtn" id="csvBtn" title="Download the evaluated board as CSV">⇩ CSV</button>
   <button class="hbtn" id="shareBtn" title="Copy a link that restores this exact board anywhere">🔗</button>
   <button class="hbtn" id="liveBtn" title="Draft Day mode: pace clock, pick chime, panic button">⚪ Live</button>
+  <button class="hbtn" id="syncBtn" title="Auto-mark picks from a Sleeper draft (Settings → draft ID)">🔄 Sync</button>
+  <span class="savebadge" id="syncChip" style="display:none"></span>
   <button class="hbtn" id="injBtn" title="Injury Center — live ESPN reports">🩺</button>
   <button class="hbtn" id="installBtn" style="display:none" title="Install as an app">📥 Install</button>
   <button class="hbtn" id="themeBtn" title="Theme: auto / dark / light">🌓</button>
@@ -185,6 +187,9 @@
       <div class="frow"><label>💖 Favorite state (2 letters — OH for the full Ohio experience)</label><input type="text" id="setFavState" maxlength="2" placeholder="OH"></div>
       <div class="frow"><label>💖 Favorite college</label><input class="wide" type="text" id="setFavCollege" placeholder="Ohio State"></div>
       <div class="frow"><label>😤 Rival team</label><select id="setRival"></select></div>
+      <div class="sechead">Sleeper live sync</div>
+      <div class="frow"><label>Sleeper draft ID (picks auto-mark while 🔄 Sync is on)</label><input class="wide" type="text" id="setSleeperDraft" placeholder="123456789012345678"></div>
+      <div class="frow"><label>Sleeper league ID (imports names + finds the draft)</label><input class="wide" type="text" id="setSleeperLeague" placeholder="123456789012345678"></div>
       <div class="frow"><label>⏲ Pick timer seconds (0 = off)</label><input type="number" id="setTimer" min="0" max="600" step="15"></div>
       <div class="frow"><label>📶 Low-data mode (no photos/logos)</label><input type="checkbox" id="setLowData" style="width:auto"></div>
       <div class="frow"><label>🔔 Notify me when MY players' status changes (tab in background)</label><input type="checkbox" id="setNotify" style="width:auto"></div>

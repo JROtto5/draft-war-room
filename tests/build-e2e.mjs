@@ -60,6 +60,23 @@ try {
     pin.value = "josh"; pin.dispatchEvent(new Event("input"));
     out.push("palette:"+(document.querySelectorAll("#palList .palrow").length>1?"OK":"BAD"));
     const pw = document.getElementById("palWrap"); if(pw) pw.remove();
+    // sync path against a stubbed endpoint (#412)
+    const realFetch = window.fetch;
+    window.fetch = (url)=>{
+      if(String(url).includes("/draft/TEST/picks"))
+        return Promise.resolve({ok:true, json:()=>Promise.resolve([
+          {player_id:String(HEADSHOT[normName("Jahmyr Gibbs")]), picked_by:"u1"},
+          {player_id:String(HEADSHOT[normName("Bijan Robinson")]), picked_by:"u2"}])});
+      if(String(url).includes("/draft/TEST"))
+        return Promise.resolve({ok:true, json:()=>Promise.resolve({draft_order:{}})});
+      return Promise.reject(new Error("e2e: no network"));
+    };
+    S.settings.sleeperDraftId = "TEST";
+    SYNC.on = true; SYNC.draftId = "TEST"; SYNC.seen = 0;
+    syncPoll().then(()=>{
+      out.push("sync:"+(S.taken[allPlayers().find(p=>p.name==="Jahmyr Gibbs").id]?"OK":"BAD"));
+      window.fetch = realFetch; SYNC.on = false; undoLast(); undoLast();
+    });
   }, 700);
 } catch(e){ out.push("ERR:"+e.message); }
 setTimeout(()=>{ document.title="E2E|"+out.join("|"); }, 900);
