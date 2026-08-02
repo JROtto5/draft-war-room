@@ -1,9 +1,18 @@
-:root{
+:root, :root[data-theme="dark"]{
   --bg:#0b0f14; --bg2:#111823; --panel:#151e2b; --panel2:#1a2536; --line:#243247;
   --text:#e8eef7; --dim:#8ba0bc; --faint:#5a6d87;
   --green:#2fd47a; --green-dim:#1d8a50; --gold:#ffc94d; --red:#ff5d5d;
   --qb:#ff6b6b; --rb:#4dd88a; --wr:#5aa9ff; --te:#ffa94d; --def:#b78cff; --k:#9aa7b5;
   --shadow:0 10px 30px rgba(0,0,0,.45);
+  --headerbg:rgba(11,15,20,.85);
+}
+:root[data-theme="light"]{
+  --bg:#eef2f7; --bg2:#e3e9f1; --panel:#ffffff; --panel2:#f0f4f9; --line:#d3dce7;
+  --text:#16202c; --dim:#51637a; --faint:#7e91a8;
+  --green:#0b8f52; --green-dim:#0b6e40; --gold:#9a6b00; --red:#cc3340;
+  --qb:#ff8080; --rb:#57d492; --wr:#6cb2ff; --te:#ffb266; --def:#c09fff; --k:#9aa7b5;
+  --shadow:0 8px 22px rgba(30,45,70,.12);
+  --headerbg:rgba(255,255,255,.88);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
@@ -19,7 +28,7 @@ body{
 /* ---------- Header ---------- */
 header{
   position:sticky; top:0; z-index:50; display:flex; align-items:center; gap:14px; row-gap:6px;
-  padding:12px 20px; background:rgba(11,15,20,.85); backdrop-filter:blur(10px);
+  padding:12px 20px; background:var(--headerbg); backdrop-filter:blur(10px);
   border-bottom:1px solid var(--line); flex-wrap:wrap;
 }
 :focus-visible{outline:2px solid var(--green); outline-offset:2px}
@@ -250,3 +259,48 @@ header{box-shadow:0 1px 0 rgba(47,212,122,.12), 0 8px 24px rgba(0,0,0,.35)}
 @media (prefers-reduced-motion:reduce){ *,*::before,*::after{animation:none!important; transition:none!important} }
 .planline{font-size:11px; color:var(--dim); margin-top:7px; border-top:1px dashed var(--line); padding-top:7px; line-height:1.5}
 .planline b{color:var(--text)}
+
+/* ---------- Avatars, logos, player card ---------- */
+.avatar{border-radius:50%; object-fit:cover; background:var(--bg2); border:1px solid var(--line); vertical-align:middle; flex:none}
+.avatar.ph{display:inline-flex; align-items:center; justify-content:center; color:var(--faint); font-weight:700; font-size:11px}
+.pcell{display:inline-flex; align-items:center; gap:8px; cursor:pointer}
+.pcell:hover .pname{color:var(--green)}
+.tlogo{vertical-align:-2px; opacity:.9}
+.heroline{display:flex; align-items:center; gap:12px; cursor:pointer; margin:4px 0 2px}
+.heroline .avatar{border:2px solid rgba(47,212,122,.5); width:56px; height:56px}
+.barow{cursor:pointer}
+.chead{display:flex; align-items:center; gap:14px; padding:18px 20px 12px; position:relative; overflow:hidden}
+.chead .avatar{width:84px; height:84px; border:2px solid var(--line)}
+.clogo{position:absolute; right:-18px; top:-18px; width:120px; height:120px; opacity:.08; pointer-events:none}
+.cname{font-size:20px; font-weight:800}
+.csub{font-size:12px; color:var(--dim); margin-top:4px}
+.cstats{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:4px 20px 12px}
+.cstat{background:var(--bg2); border:1px solid var(--line); border-radius:9px; padding:7px 10px}
+.cstat .cl{font-size:9px; letter-spacing:1px; text-transform:uppercase; color:var(--faint)}
+.cstat .cv{font-size:15px; font-weight:700; font-family:'JetBrains Mono',monospace; margin-top:2px}
+.cwhy{font-size:11.5px; color:var(--gold); padding:0 20px 10px; line-height:1.55}
+.cintel{font-size:12px; padding:0 20px 8px; line-height:1.5}
+.cintel.dim{color:var(--dim); font-size:11.5px}
+.cnote{font-size:12px; color:var(--gold); padding:0 20px 6px}
+.cwiki{padding:6px 20px 12px; border-top:1px solid var(--line); margin-top:4px}
+.wikitxt{font-size:12.5px; line-height:1.65; color:var(--text)}
+.cwiki a{color:var(--green)}
+.dimtxt{font-size:11px; color:var(--faint)}
+.cacts{display:flex; gap:8px; padding:4px 20px 16px}
+
+/* compact density */
+body.compact tbody td{padding:4px 8px; font-size:12.5px}
+body.compact .barow{padding:4px 6px}
+body.compact .myp{padding:4px 6px}
+body.compact tbody tr{contain-intrinsic-height:30px}
+body.compact .avatar{width:18px!important; height:18px!important}
+/* #49 phone layout: drop #, team, ADP, Edge, Rd columns */
+@media (max-width:640px){
+  th:nth-child(1),td:nth-child(1),th:nth-child(4),td:nth-child(4),
+  th:nth-child(7),td:nth-child(7),th:nth-child(8),td:nth-child(8),
+  th:nth-child(9),td:nth-child(9){display:none}
+  table{min-width:0}
+  .act .undo1[data-dnd]{display:none}
+}
+.stackrow{background:rgba(255,201,77,.04)}
+th[data-sort]:focus-visible{outline:2px solid var(--green); outline-offset:-2px}

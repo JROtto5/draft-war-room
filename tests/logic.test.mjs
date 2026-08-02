@@ -26,9 +26,13 @@ const ctx = {
   document: anyProxy(), localStorage: anyProxy(), navigator: anyProxy(),
   location: { protocol: "file:" }, window: {}, alert: () => {}, confirm: () => false,
   prompt: () => null, requestAnimationFrame: () => 0, MutationObserver: anyProxy(),
+  matchMedia: () => ({ matches: false, addEventListener: () => {} }),
+  Date, fetch: () => Promise.reject(new Error("no network in tests")),
   Blob: anyProxy(), URL: anyProxy(), FileReader: anyProxy(),
 };
 ctx.window = ctx;
+ctx.addEventListener = () => {};
+ctx.removeEventListener = () => {};
 vm.createContext(ctx);
 vm.runInContext(readFileSync(new URL("../data.js", import.meta.url), "utf8"), ctx);
 vm.runInContext(readFileSync(new URL("../app.js", import.meta.url), "utf8"), ctx);

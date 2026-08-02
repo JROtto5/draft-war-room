@@ -1,0 +1,30 @@
+// Builds e2e.html: index.html + an injected assertion script.
+// Injects at the LAST </body> (JS strings legitimately contain '</body>').
+import { readFileSync, writeFileSync } from "node:fs";
+
+const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const test = `
+<script>
+window.addEventListener("DOMContentLoaded", ()=>{ setTimeout(()=>{
+const out=[];
+try {
+  renderNow();
+  out.push("rows:"+(document.querySelectorAll("#poolBody tr[data-pid]").length>300?"OK":"BAD"));
+  out.push("hero:"+(document.getElementById("hero").innerHTML.includes("% at #")?"OK":"BAD"));
+  out.push("avatars:"+(document.querySelectorAll("#poolBody .avatar").length>10?"OK":"BAD"));
+  out.push("stamp:"+(document.getElementById("buildStamp").textContent.includes("build v")?"OK":"BAD"));
+  pickMine(allPlayers().find(p=>p.name==="Josh Allen").id);
+  const c={QB:0}; S.mine.forEach(id=>{const p=idIndex()[id]; if(p&&p.pos==="QB")c.QB++;});
+  out.push("pick:"+(c.QB===1?"OK":"BAD"));
+  undoLast();
+  out.push("undo:"+(S.mine.length===0?"OK":"BAD"));
+  openCard(allPlayers()[0].id);
+  out.push("card:"+(document.getElementById("cardBody").innerHTML.includes("Projected")?"OK":"BAD"));
+} catch(e){ out.push("ERR:"+e.message); }
+setTimeout(()=>{ document.title="E2E|"+out.join("|"); }, 900);
+}, 100); });
+</scr` + `ipt>`;
+
+const i = html.lastIndexOf("</body>");
+writeFileSync(new URL("../e2e.html", import.meta.url), html.slice(0, i) + test + html.slice(i));
+console.log("e2e.html written");

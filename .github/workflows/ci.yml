@@ -25,3 +25,15 @@ jobs:
         run: node tests/data.test.mjs
       - name: Logic tests
         run: node tests/logic.test.mjs
+      - name: Browser E2E smoke
+        run: |
+          node tests/build-e2e.mjs
+          python3 -m http.server 8765 &
+          sleep 1
+          CHROME=$(command -v google-chrome || command -v chromium-browser || command -v chromium)
+          OUT=$("$CHROME" --headless --no-sandbox --disable-gpu --virtual-time-budget=25000 --dump-dom http://localhost:8765/e2e.html | grep -o '<title>E2E|[^<]*' || true)
+          echo "result: $OUT"
+          case "$OUT" in
+            *E2E\|*BAD*|*E2E\|*ERR*|"") exit 1 ;;
+            *E2E\|*) exit 0 ;;
+          esac

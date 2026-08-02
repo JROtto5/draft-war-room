@@ -6,6 +6,7 @@
 <title>Draft War Room — 2QB League</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#0b0f14">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -29,6 +30,7 @@
   <button class="hbtn" id="cmpBtn">⚖ Compare</button>
   <button class="hbtn" id="sheetBtn" title="Printable cheat sheet (Ctrl+P → PDF)">🖨 Sheet</button>
   <button class="hbtn" id="csvBtn" title="Download the evaluated board as CSV">⇩ CSV</button>
+  <button class="hbtn" id="themeBtn" title="Theme: auto / dark / light">🌓</button>
   <button class="hbtn" id="helpBtn" title="Legend & keyboard shortcuts (?)">?</button>
   <button class="hbtn" id="addBtn">+ Player</button>
   <button class="hbtn" id="settingsBtn">⚙ Settings</button>
@@ -68,20 +70,23 @@
         <label class="toggle"><input type="checkbox" id="fTargets"> ⭐ targets only</label>
         <label class="toggle"><input type="checkbox" id="fStacks"> 🔗 stack fits</label>
         <label class="toggle"><input type="checkbox" id="fSurvive"> ⏳ lasts to my pick</label>
+        <label class="toggle"><input type="checkbox" id="fFallers"> 💎 fallers</label>
+        <button class="undo1" id="clearFiltersBtn" data-clearfilters="1" style="display:none">✕ clear filters</button>
         <span class="mono" id="poolCount" style="margin-left:auto; font-size:11px; color:var(--faint)"></span>
       </div>
       <div class="tablewrap">
         <table>
           <thead>
             <tr>
-              <th scope="col" data-sort="rank" style="width:34px">#</th>
-              <th scope="col" data-sort="name">Player</th>
-              <th scope="col" data-sort="pos" style="width:56px">Pos</th>
-              <th scope="col" data-sort="team" style="width:52px">Team</th>
-              <th scope="col" data-sort="proj" style="width:70px">Proj</th>
-              <th scope="col" data-sort="vorp" style="width:70px">Value</th>
-              <th scope="col" data-sort="adp" style="width:56px">ADP</th>
-              <th scope="col" data-sort="rd" style="width:64px">Rd</th>
+              <th scope="col" tabindex="0" data-sort="rank" style="width:34px">#</th>
+              <th scope="col" tabindex="0" data-sort="name">Player</th>
+              <th scope="col" tabindex="0" data-sort="pos" style="width:56px">Pos</th>
+              <th scope="col" tabindex="0" data-sort="team" style="width:52px">Team</th>
+              <th scope="col" tabindex="0" data-sort="proj" style="width:70px">Proj</th>
+              <th scope="col" tabindex="0" data-sort="vorp" style="width:70px">Value</th>
+              <th scope="col" tabindex="0" data-sort="adp" style="width:56px">ADP</th>
+              <th scope="col" tabindex="0" data-sort="edge" style="width:52px" title="ADP minus value rank — positive means the market is sleeping on him">Edge</th>
+              <th scope="col" tabindex="0" data-sort="rd" style="width:64px">Rd</th>
               <th style="width:150px"></th>
             </tr>
           </thead>
@@ -128,6 +133,7 @@
       <div class="frow"><label>Your draft slot (snake)</label><input type="number" id="setSlot" min="1" max="20"></div>
       <div class="frow"><label>Scoring</label><select id="setScoring"><option value="ppr">Full PPR</option><option value="half">Half PPR</option></select></div>
       <div class="frow"><label>Points per passing TD</label><select id="setPtd"><option value="6">6 (this league)</option><option value="4">4</option></select></div>
+      <div class="frow"><label>Compact rows (more players on screen)</label><input type="checkbox" id="setCompact" style="width:auto"></div>
       <div class="sechead">Required starters (minimums)</div>
       <div class="frow"><label>QB (you start 2)</label><input type="number" id="minQB" min="0" max="4"></div>
       <div class="frow"><label>RB</label><input type="number" id="minRB" min="0" max="6"></div>
@@ -137,7 +143,7 @@
       <div class="note">The recommender boosts positions you still owe, and locks onto them when you're running out of picks. Replacement-level value scales with league size (2-QB makes QBs scarce — that's handled).</div>
       <div class="sechead">Projection data</div>
       <div class="frow"><label>Load a projections CSV (PLAYER, TEAM, POS, PPR — HALF/PATD optional)</label>
-        <button class="hbtn" id="projImportBtn">⇧ CSV</button></div>
+        <button class="hbtn" id="projImportBtn">⇧ CSV</button> <button class="hbtn" id="projTemplateBtn" title="Download a sample CSV in the right format">⬇ template</button></div>
       <div class="frow"><label>Back to the built-in dataset</label><button class="hbtn" id="projRevertBtn">↩ Revert</button></div>
       <div class="note" id="projStatus"></div>
       <div class="sechead">Board profiles</div>
@@ -174,6 +180,26 @@
       <button class="hbtn" id="addCancel">Cancel</button>
       <button class="hbtn" id="addSave" style="border-color:var(--green);color:var(--green)">Add</button>
     </div>
+  </div>
+</div>
+
+<!-- Draft report modal -->
+<div class="overlay" id="reportOverlay">
+  <div class="modal" style="width:min(600px,94vw)">
+    <h3>🎓 Draft Report</h3>
+    <div class="body" id="reportBody"></div>
+    <div class="foot">
+      <button class="hbtn" id="reportCopy" style="border-color:var(--gold);color:var(--gold)">📤 Copy report</button>
+      <button class="hbtn" id="reportClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Player card modal -->
+<div class="overlay" id="cardOverlay">
+  <div class="modal" style="width:min(560px,94vw)">
+    <div id="cardBody"></div>
+    <div class="foot"><button class="hbtn" id="cardClose">Close</button></div>
   </div>
 </div>
 

@@ -171,25 +171,18 @@ function survivalOddsRaw(){
   const t = S.settings.teams;
   const myPicks = new Set(myOverallPicks());
   const trials = 30, s1 = {}, s2 = {};
+  const R = S.settings.roster;
   for(let k=0;k<trials;k++){
     const rng = mulberry32(987654 + k*104729 + S.log.length*7919);
     const taken = new Set(Object.keys(S.taken)); S.mine.forEach(id=>taken.add(id));
-    const greed = {};
+    const cpu = seedCpuTeams(rng);
     for(let pk=from; pk<end; pk++){
       if(pk===at1) for(const p of players){ if(!taken.has(p.id)) s1[p.id]=(s1[p.id]||0)+1; }
       if(myPicks.has(pk)) continue;
       const r = Math.ceil(pk/t), idx = pk-(r-1)*t, slot = (r%2===1)?idx:t+1-idx;
-      if(greed[slot]===undefined) greed[slot] = 0.5+rng()*0.55;
-      let best=null, bk=1e9;
-      for(const p of players){
-        if(taken.has(p.id)) continue;
-        if(p.pos==="DEF" && r<12) continue;
-        let e = rinfo[p.id].eadp;
-        if(p.pos==="QB") e *= greed[slot];
-        e += (rng()*2-1)*9;
-        if(e<bk){bk=e; best=p;}
-      }
-      if(best){ taken.add(best.id); if(pk<at1) gone[best.pos]++; }
+      const avail = players.filter(p=>!taken.has(p.id));
+      const best = cpuPick(avail, cpu[slot], r, rng, rinfo, R);
+      if(best){ taken.add(best.id); cpu[slot][best.pos]++; if(pk<at1) gone[best.pos]++; }
     }
     if(end===at1) for(const p of players){ if(!taken.has(p.id)) s1[p.id]=(s1[p.id]||0)+1; }
     for(const p of players){ if(!taken.has(p.id)) s2[p.id]=(s2[p.id]||0)+1; }
@@ -343,9 +336,10 @@ function toast(msg, opts){
   const el = document.createElement("div");
   el.className = "toast" + (opts && opts.warn ? " warn" : "");
   el.innerHTML = "<span>"+msg+"</span>";
-  if(opts && opts.undo){
-    const b = document.createElement("button"); b.textContent = "UNDO";
-    b.addEventListener("click", ()=>{ opts.undo(); el.remove(); });
+  const act = opts && (opts.action || (opts.undo ? {label:"UNDO", fn:opts.undo} : null));
+  if(act){
+    const b = document.createElement("button"); b.textContent = act.label;
+    b.addEventListener("click", ()=>{ act.fn(); el.remove(); });
     el.appendChild(b);
   }
   wrap.appendChild(el);
@@ -411,6 +405,37 @@ function editProj(id){
 function commit(){ save(); render(); }
 
 /* ---------- Mock draft simulator ---------- */
+/* One CPU drafting brain shared by odds sims and mocks (#46), with team
+   rosters reconstructed from the actual pick log (#47). */
+function seedCpuTeams(rng){
+  const t = S.settings.teams, cpu = {};
+  for(let s=1;s<=t;s++) cpu[s] = {QB:0,RB:0,WR:0,TE:0,DEF:0, qbGreed:0.5+rng()*0.55};
+  const byId = idIndex();
+  S.log.forEach((e,i)=>{
+    const n = i+1+(S.pickOffset||0), r = Math.ceil(n/t), idx = n-(r-1)*t;
+    const slot = (r%2===1) ? idx : t+1-idx;
+    const p = byId[e.id];
+    if(p && cpu[slot]) cpu[slot][p.pos]++;
+  });
+  return cpu;
+}
+function cpuPick(avail, st, r, rng, rinfo, R){
+  const caps = {QB:3,RB:7,WR:8,TE:3,DEF:2};
+  let pool = avail.filter(p=>st[p.pos]<caps[p.pos]);
+  const missing = []; if(st.QB<1)missing.push("QB"); if(st.TE<1)missing.push("TE"); if(st.DEF<1)missing.push("DEF");
+  if(missing.length >= R-r+1) pool = pool.filter(p=>missing.includes(p.pos));
+  else if(r<12) pool = pool.filter(p=>p.pos!=="DEF" || rng()<0.02);
+  if(!pool.length) pool = avail;
+  let best=null, bk=1e9;
+  for(const p of pool){
+    let e = rinfo[p.id].eadp;
+    if(p.pos==="QB") e *= st.qbGreed;
+    e += (rng()*2-1)*9;
+    if(e<bk){bk=e; best=p;}
+  }
+  return best;
+}
+
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
 
 const STRATS = [
@@ -440,7 +465,7 @@ function runMock(strat, seed){
   const min = S.settings.min;
   const taken = new Set(Object.keys(S.taken)); S.mine.forEach(id=>taken.add(id));
   const mineIds = S.mine.slice();
-  const cpu = {}; for(let s=1;s<=t;s++) cpu[s]={QB:0,RB:0,WR:0,TE:0,DEF:0, qbGreed:0.5+rng()*0.55};
+  const cpu = seedCpuTeams(rng);
   const picks = [];
 
   for(let pick=pickNow(); pick<=total; pick++){
@@ -480,20 +505,7 @@ function runMock(strat, seed){
       picks.push({pick, round:r, idx, p:chosen});
     } else {
       const st = cpu[slot];
-      const caps={QB:3,RB:7,WR:8,TE:3,DEF:2};
-      let pool = avail.filter(p=>st[p.pos]<caps[p.pos]);
-      const missing=[]; if(st.QB<1)missing.push("QB"); if(st.TE<1)missing.push("TE"); if(st.DEF<1)missing.push("DEF");
-      const roundsLeft = R-r+1;
-      if(missing.length >= roundsLeft) pool = pool.filter(p=>missing.includes(p.pos));
-      else if(r<12) pool = pool.filter(p=>p.pos!=="DEF" || rng()<0.02);
-      if(!pool.length) pool = avail;
-      let bestKey=1e9;
-      for(const p of pool){
-        let e = rinfo[p.id].eadp;
-        if(p.pos==="QB") e *= st.qbGreed;
-        e += (rng()*2-1)*9;
-        if(e<bestKey){bestKey=e; chosen=p;}
-      }
+      chosen = cpuPick(avail, st, r, rng, rinfo, R);
       st[chosen.pos]++;
     }
     taken.add(chosen.id);
@@ -533,6 +545,68 @@ function renderMocks(){
     ? '🎯 <b>Your guys</b> — landed on your team in 3+ of 5 sims: ' + guys.map(x=>'<b>'+x.p.name+'</b> ('+x.n+'/5)').join(" · ")
     : "No strong consensus across strategies — your seat has options.";
 }
+
+/* ---------- Player card ---------- */
+const wikiCache = {};
+function openCard(id){
+  const p = idIndex()[id]; if(!p) return;
+  const players = allPlayers();
+  const repl = replacementLevels(players), tm = tierMap(players), rinfo = roundInfo(players), odds = survivalOdds();
+  const {scored} = scoreBoard(); const sc = scored.find(s=>s.p.id===id);
+  const vorp = Math.round(p.proj-(repl[p.pos]||0));
+  const status = S.mine.includes(id) ? "on your roster" : (S.taken[id] ? "drafted" : (S.dnd[id] ? "do-not-draft" : "available"));
+  const ps = psosFor(p.team);
+  const stat = (l,v)=>'<div class="cstat"><div class="cl">'+l+'</div><div class="cv">'+v+'</div></div>';
+  $("#cardBody").innerHTML =
+    '<div class="chead">'+
+      (logoUrl(p.team)?'<img class="clogo" src="'+logoUrl(p.team)+'" alt="">':'')+
+      avatarImg(p,84)+
+      '<div class="cid"><div class="cname">'+p.name+intelBadges(p)+'</div>'+
+      '<div class="csub">'+posBadge(p.pos)+' &nbsp;'+p.team+' · T'+tm[p.id]+' · '+status+'</div></div>'+
+    '</div>'+
+    '<div class="cstats">'+
+      stat("Projected", p.proj)+
+      stat("Value", (vorp>0?"+":"")+vorp)+
+      stat("ADP", p.adp||"—")+
+      stat("Round", rinfo[p.id]?rinfo[p.id].label:"—")+
+      stat("At #"+(odds?odds.at1:"?"), odds&&odds.h1[id]!=null?odds.h1[id]+"%":"—")+
+      stat(odds&&odds.at2?"At #"+odds.at2:"Later", odds&&odds.h2&&odds.h2[id]!=null?odds.h2[id]+"%":"—")+
+    '</div>'+
+    (sc && sc.why.length ? '<div class="cwhy">▸ '+sc.why.join("<br>▸ ")+'</div>' : '')+
+    (p.intel&&p.intel.t?'<div class="cintel">⭐ '+esc(p.intel.t)+'</div>':'')+
+    (p.intel&&p.intel.p?'<div class="cintel dim">'+esc(p.intel.p)+'</div>':'')+
+    (ps?'<div class="cintel dim">🗓 '+ps.short+'</div>':'')+
+    '<div class="cnote" id="cardNote">'+(S.notes[id]?'📝 '+esc(S.notes[id]):'')+'</div>'+
+    '<div class="cwiki" id="cardWiki"><span class="dimtxt">Loading bio…</span></div>'+
+    '<div class="cacts">'+
+      (status==="available"||status==="do-not-draft" ?
+        '<button class="pick" data-pick="'+id+'">✓ MINE</button>'+
+        '<button class="kill" data-take="'+id+'">✕ taken</button>'+
+        '<button class="undo1" data-dnd="'+id+'">'+(S.dnd[id]?"↩ allow":"🚫 never")+'</button>' : '')+
+      '<button class="undo1" data-note="'+id+'">📝 note</button>'+
+    '</div>';
+  $("#cardOverlay").classList.add("show");
+  loadWiki(p);
+}
+function loadWiki(p){
+  const el = $("#cardWiki"); if(!el) return;
+  if(p.pos==="DEF"){ el.innerHTML=""; return; }
+  const key = normName(p.name);
+  if(wikiCache[key]){ el.innerHTML = wikiCache[key]; return; }
+  const tryFetch = title => fetch("https://en.wikipedia.org/api/rest_v1/page/summary/"+encodeURIComponent(title), {headers:{Accept:"application/json"}})
+    .then(r=>{ if(!r.ok) throw 0; return r.json(); });
+  tryFetch(p.name+" (American football)")
+    .catch(()=>tryFetch(p.name))
+    .then(j=>{
+      if(!j.extract || j.type==="disambiguation") throw 0;
+      const htmlOut = '<div class="wikitxt">'+esc(j.extract).slice(0,420)+(j.extract.length>420?"…":"")+'</div>'+
+        '<div class="dimtxt">— Wikipedia'+(j.content_urls?' · <a href="'+j.content_urls.desktop.page+'" target="_blank" rel="noopener">full article ↗</a>':'')+'</div>';
+      wikiCache[key] = htmlOut;
+      if($("#cardOverlay").classList.contains("show")) el.innerHTML = htmlOut;
+    })
+    .catch(()=>{ el.innerHTML = '<span class="dimtxt">No bio available'+(navigator.onLine===false?" (offline)":"")+'.</span>'; });
+}
+document.getElementById("cardClose").addEventListener("click", ()=>document.getElementById("cardOverlay").classList.remove("show"));
 
 /* ---------- Head-to-head compare ---------- */
 function renderCompare(){
@@ -626,6 +700,20 @@ function matchesQuery(p, q){
   return false;
 }
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
+function headshotUrl(p){
+  if(p.pos==="DEF") return logoUrl(p.team);
+  const id = typeof HEADSHOT!=="undefined" ? HEADSHOT[normName(p.name)] : null;
+  return id ? "https://sleepercdn.com/content/nfl/players/thumb/"+id+".jpg" : null;
+}
+function logoUrl(team){
+  const s = typeof TEAMLOGO!=="undefined" ? TEAMLOGO[team] : null;
+  return s ? "https://a.espncdn.com/i/teamlogos/nfl/500/"+s+".png" : null;
+}
+function avatarImg(p, size){
+  const u = headshotUrl(p);
+  if(!u) return '<span class="avatar ph" style="width:'+size+'px;height:'+size+'px">'+p.name[0]+'</span>';
+  return '<img class="avatar" src="'+u+'" width="'+size+'" height="'+size+'" loading="lazy" decoding="async" alt="" onerror="this.outerHTML=\'<span class=&quot;avatar ph&quot; style=&quot;width:'+size+'px;height:'+size+'px&quot;>'+esc(p.name[0])+'</span>\'">';
+}
 function psosFor(team){
   const s = typeof PSOS!=="undefined" ? PSOS[team] : null;
   if(!s) return null;
@@ -665,6 +753,10 @@ function renderPool(){
     backRisk: vorpMap[p.id] ? vorpMap[p.id].backRisk : null,
     rd: rinfo[p.id]
   }));
+  const vRank = {}; players.slice().sort((a,b)=>{
+    const va=a.proj-(repl[a.pos]||0), vb=b.proj-(repl[b.pos]||0); return vb-va;
+  }).forEach((p,i)=>vRank[p.id]=i+1);
+  rows.forEach(r=>{ r.edge = r.p.adp ? r.p.adp - vRank[r.p.id] : null; });
 
   if(S.ui.pos==="FLEX") rows = rows.filter(r=>["RB","WR","TE"].includes(r.p.pos));
   else if(S.ui.pos!=="ALL") rows = rows.filter(r=>r.p.pos===S.ui.pos);
@@ -682,6 +774,10 @@ function renderPool(){
   if(S.ui.targetsOnly) rows = rows.filter(r=> r.p.intel && r.p.intel.t!=null);
   if(S.ui.stacksOnly) rows = rows.filter(r=> r.stack);
   if(S.ui.survivors) rows = rows.filter(r=> r.backRisk!=="gone" && !r.taken && !r.mine);
+  if(S.ui.fallers) rows = rows.filter(r=> !r.taken && !r.mine && r.p.adp && (pickNow()-r.p.adp)>=10);
+  const filtersOn = S.ui.pos!=="ALL" || S.ui.round!=="ALL" || S.ui.targetsOnly || S.ui.stacksOnly || S.ui.survivors || S.ui.fallers || S.ui.showTaken || q;
+  const cfb = document.getElementById("clearFiltersBtn");
+  if(cfb) cfb.style.display = filtersOn ? "" : "none";
 
   const dir = S.ui.dir, key = S.ui.sort;
   rows.sort((a,b)=>{
@@ -693,12 +789,15 @@ function renderPool(){
       case "proj": return dir*(a.p.proj-b.p.proj);
       case "adp": return dir*((a.p.adp||999)-(b.p.adp||999));
       case "rd": return dir*(a.rd.rd-b.rd.rd) || (a.p.adp||999)-(b.p.adp||999);
+      case "edge": return dir*((a.edge==null?-999:a.edge)-(b.edge==null?-999:b.edge));
       case "rank": case "vorp": default: return dir*(a.vorp-b.vorp);
     }
   });
 
   document.querySelectorAll("thead th").forEach(th=>{
-    th.classList.toggle("sorton", th.dataset.sort===key);
+    const on = th.dataset.sort===key;
+    th.classList.toggle("sorton", on);
+    if(th.dataset.sort) th.setAttribute("aria-sort", on ? (dir===-1?"descending":"ascending") : "none");
   });
 
   const curRd = Math.min(Math.ceil(pickNow()/S.settings.teams), S.settings.roster);
@@ -717,20 +816,21 @@ function renderPool(){
           '<button class="undo1" data-dnd="'+r.p.id+'" title="'+(S.dnd[r.p.id]?"Allow drafting again":"Do not draft — hide from recommendations")+'" aria-label="Toggle do-not-draft">'+(S.dnd[r.p.id]?"↩":"🚫")+'</button>';
     let div = "";
     if(showTierDividers && tm[r.p.id]!==prevTier){
-      div = '<tr class="tdiv"><td colspan="9">Tier '+tm[r.p.id]+'</td></tr>';
+      div = '<tr class="tdiv"><td colspan="10">Tier '+tm[r.p.id]+'</td></tr>';
       prevTier = tm[r.p.id];
     }
     return div + '<tr class="'+cls+'" data-pid="'+r.p.id+'">'+
       '<td class="mono" style="color:var(--faint)">'+(i+1)+'</td>'+
-      '<td><span class="pname" data-note="'+r.p.id+'" title="'+(S.notes[r.p.id]?esc(S.notes[r.p.id])+' — click to edit':'Click to add a note')+'" style="cursor:pointer">'+r.p.name+'</span>'+(S.notes[r.p.id]?'<span class="ib gold" title="'+esc(S.notes[r.p.id])+'">📝</span>':'')+(S.dnd[r.p.id]&&!r.taken&&!r.mine?'<span class="ib bear" title="On your do-not-draft list">🚫</span>':'')+intelBadges(r.p)+(r.stack?'<span class="stackchip">🔗 stack</span>':'')+(!r.taken&&!r.mine&&r.p.adp&&(pickNow()-r.p.adp)>=10?'<span class="ib" title="Falling: '+(pickNow()-r.p.adp)+' picks past ADP '+r.p.adp+'">💎</span>':'')+(r.backRisk==="gone"?'<span class="ib" title="Won\'t make it back to your next pick">🔥</span>':r.backRisk==="risky"?'<span class="ib" title="Coin-flip to survive to your next pick">⏳</span>':'')+'</td>'+
+      '<td><span class="pcell" data-card="'+r.p.id+'" title="Open player card">'+avatarImg(r.p,24)+'<span class="pname">'+r.p.name+'</span></span>'+(S.notes[r.p.id]?'<span class="ib gold" title="'+esc(S.notes[r.p.id])+'">📝</span>':'')+(S.dnd[r.p.id]&&!r.taken&&!r.mine?'<span class="ib bear" title="On your do-not-draft list">🚫</span>':'')+intelBadges(r.p)+(r.stack?'<span class="stackchip">🔗 stack</span>':'')+(!r.taken&&!r.mine&&r.p.adp&&(pickNow()-r.p.adp)>=10?'<span class="ib" title="Falling: '+(pickNow()-r.p.adp)+' picks past ADP '+r.p.adp+'">💎</span>':'')+(r.backRisk==="gone"?'<span class="ib" title="Won\'t make it back to your next pick">🔥</span>':r.backRisk==="risky"?'<span class="ib" title="Coin-flip to survive to your next pick">⏳</span>':'')+'</td>'+
       '<td>'+posBadge(r.p.pos)+'<span class="tier t'+Math.min(tm[r.p.id],5)+'">T'+tm[r.p.id]+'</span></td>'+
-      '<td class="mono" style="color:var(--dim)'+(psosFor(r.p.team)?';cursor:help':'')+'"'+(psosFor(r.p.team)?' title="'+esc(psosFor(r.p.team).txt)+'"':'')+'>'+r.p.team+'</td>'+
+      '<td class="mono" style="color:var(--dim)'+(psosFor(r.p.team)?';cursor:help':'')+'"'+(psosFor(r.p.team)?' title="'+esc(psosFor(r.p.team).txt)+'"':'')+'>'+(logoUrl(r.p.team)?'<img class="tlogo" src="'+logoUrl(r.p.team)+'" width="14" height="14" loading="lazy" decoding="async" alt=""> ':'')+r.p.team+'</td>'+
       '<td><span class="proj mono" data-edit="'+r.p.id+'">'+r.p.proj+'</span></td>'+
       '<td class="mono" style="color:'+(r.vorp>=0?'var(--green)':'var(--faint)')+'">'+(r.vorp>0?"+":"")+Math.round(r.vorp)+'</td>'+
       '<td class="mono" style="color:var(--dim)">'+(r.p.adp||"—")+'</td>'+
+      '<td class="mono" style="font-size:12px;color:'+(r.edge>0?'var(--green)':r.edge<0?'var(--red)':'var(--faint)')+'" title="ADP minus value rank: positive = market prices him later than his value">'+(r.edge==null?"—":(r.edge>0?"+":"")+r.edge)+'</td>'+
       '<td><span class="rd'+(curRd && !r.rd.ud && r.rd.rd<=curRd?" now":"")+'" title="'+(r.rd.est?"Estimated from projection rank (no market ADP)":"Expected round window from ADP")+'">'+r.rd.label+'</span></td>'+
       '<td><div class="act">'+act+'</div></td></tr>';
-  }).join("") || '<tr><td colspan="9" class="empty">No players match the current filters.<br><br><button class="undo1" data-clearfilters="1">✕ Clear all filters</button></td></tr>';
+  }).join("") || '<tr><td colspan="10" class="empty">No players match the current filters.<br><br><button class="undo1" data-clearfilters="1">✕ Clear all filters</button></td></tr>';
   if(tw) tw.scrollTop = scrollSave;
   $("#poolCount").textContent = rows.length + " players";
   window._poolIds = rows.filter(r=>!r.taken && !r.mine).length ? rows.map(r=>r.p.id) : [];
@@ -781,13 +881,14 @@ function renderBest(){
     }
     return m.picks.slice(0,3).map(pk=>pk.round+"."+String(pk.idx).padStart(2,"0")+" "+pk.p.name+" ("+pk.p.pos+")");
   });
+  const heroGain = S.mine.length ? Math.max(0, Math.round(bestStarters(S.mine.concat([p.id]), idIndex()).pts - bestStarters(S.mine, idIndex()).pts)) : 0;
   const freshTop = window._lastTopId !== p.id;
   window._lastTopId = p.id;
   hero.innerHTML = pickline + scarce +
     '<div class="toppick'+(freshTop?' fresh':'')+'">'+
       '<div class="tag">⭐ Top Pick Right Now</div>'+
-      '<div class="name">'+p.name+'</div>'+
-      '<div class="meta">'+posBadge(p.pos)+' &nbsp;'+p.team+' &nbsp;·&nbsp; <span class="mono">'+p.proj+' proj</span> &nbsp;·&nbsp; <span class="mono" style="color:var(--green)">+'+Math.round(top.vorp)+' vs replacement</span>'+(rinfo[p.id]&&!rinfo[p.id].ud?' &nbsp;·&nbsp; <span class="rd">'+rinfo[p.id].label+'</span>':'')+(odds&&odds.h1[p.id]!=null?' &nbsp;·&nbsp; <b class="'+oddsClass(odds.h1[p.id])+'" title="Simulated survival odds at your next two picks">'+odds.h1[p.id]+'% at #'+odds.at1+(odds.h2?' · '+odds.h2[p.id]+'% at #'+odds.at2:'')+'</b>':'')+'</div>'+
+      '<div class="heroline" data-card="'+p.id+'" title="Open player card">'+avatarImg(p,56)+'<div><div class="name">'+p.name+'</div>'+
+      '<div class="meta">'+posBadge(p.pos)+' &nbsp;'+p.team+' &nbsp;·&nbsp; <span class="mono">'+p.proj+' proj</span> &nbsp;·&nbsp; <span class="mono" style="color:var(--green)">+'+Math.round(top.vorp)+' vs replacement</span>'+(heroGain?' &nbsp;·&nbsp; <span class="mono ok">+'+heroGain+' lineup</span>':'')+(rinfo[p.id]&&!rinfo[p.id].ud?' &nbsp;·&nbsp; <span class="rd">'+rinfo[p.id].label+'</span>':'')+(odds&&odds.h1[p.id]!=null?' &nbsp;·&nbsp; <b class="'+oddsClass(odds.h1[p.id])+'" title="Simulated survival odds at your next two picks">'+odds.h1[p.id]+'% at #'+odds.at1+(odds.h2?' · '+odds.h2[p.id]+'% at #'+odds.at2:'')+'</b>':'')+'</div></div></div>'+
       '<div class="why">'+why+'</div>'+
       (plan.length?'<div class="planline" title="Continuation sim: what the engine would do with your following picks">▸ then likely: '+plan.join(" · ")+'</div>':'')+
       '<div class="actions">'+
@@ -796,17 +897,44 @@ function renderBest(){
       '</div>'+
     '</div>';
   const bl = document.querySelector(".balist"); const blScroll = bl ? bl.scrollTop : 0;
+  const byIdL = idIndex();
+  const baseLineup = S.mine.length ? bestStarters(S.mine, byIdL).pts : 0;
+  const lineupGain = pp => {
+    const g = bestStarters(S.mine.concat([pp.id]), byIdL).pts - baseLineup;
+    return g > 0.5 ? Math.round(g) : 0;
+  };
   $("#baList").innerHTML = scored.slice(1,16).map((s,i)=>
-    '<div class="barow">'+
+    '<div class="barow" data-card="'+s.p.id+'">'+
       '<div class="rk mono">'+(i+2)+'</div>'+
+      avatarImg(s.p,26)+
       posBadge(s.p.pos)+
       '<div class="info"><div class="nm">'+s.p.name+intelBadges(s.p)+(s.stack?'<span class="stackchip">🔗</span>':'')+(s.steal?' 💎':'')+(s.backRisk==="gone"?' 🔥':s.backRisk==="risky"?' ⏳':'')+'</div>'+
-      '<div class="sm">'+s.p.team+' · '+s.p.proj+' pts'+(s.p.adp?' · ADP '+s.p.adp:'')+(odds&&odds.h1[s.p.id]!=null?' · <b class="'+oddsClass(odds.h1[s.p.id])+'">'+odds.h1[s.p.id]+'% back</b>':'')+'</div></div>'+
+      '<div class="sm">'+s.p.team+' · '+s.p.proj+' pts'+(s.p.adp?' · ADP '+s.p.adp:'')+(odds&&odds.h1[s.p.id]!=null?' · <b class="'+oddsClass(odds.h1[s.p.id])+'">'+odds.h1[s.p.id]+'% back</b>':'')+(lineupGain(s.p)?' · <b class="ok">+'+lineupGain(s.p)+' lineup</b>':'')+'</div></div>'+
       '<div class="val mono">+'+Math.round(s.vorp)+'</div>'+
       '<button class="pick" data-pick="'+s.p.id+'">✓</button>'+
       '<button class="kill" data-take="'+s.p.id+'">✕</button>'+
     '</div>'
   ).join("");
+  // Stack opportunities: available partners for YOUR QBs / pass-catchers
+  const stacks = scored.filter(s=>s.stack).slice(0,4);
+  if(stacks.length){
+    const byId2 = idIndex();
+    const partnerOf = sp => {
+      const mates = S.mine.map(id=>byId2[id]).filter(Boolean).filter(m=>m.team===sp.team &&
+        ((sp.pos==="QB" && (m.pos==="WR"||m.pos==="TE")) || ((sp.pos==="WR"||sp.pos==="TE") && m.pos==="QB")));
+      return mates.length ? mates[0].name.split(" ").slice(-1)[0] : "";
+    };
+    $("#baList").innerHTML += '<div class="benchhead" style="border-top:1px solid var(--line);margin-top:8px">🔗 Stack opportunities</div>' +
+      stacks.map(s=>'<div class="barow stackrow" data-card="'+s.p.id+'">'+
+        avatarImg(s.p,26)+posBadge(s.p.pos)+
+        '<div class="info"><div class="nm">'+s.p.name+' <span class="stackchip">🔗 '+esc(partnerOf(s.p))+'</span></div>'+
+        '<div class="sm">'+(logoUrl(s.p.team)?'<img class="tlogo" src="'+logoUrl(s.p.team)+'" width="12" height="12" alt=""> ':'')+s.p.team+' · '+s.p.proj+' pts'+(odds&&odds.h1[s.p.id]!=null?' · <b class="'+oddsClass(odds.h1[s.p.id])+'">'+odds.h1[s.p.id]+'% back</b>':'')+'</div></div>'+
+        '<div class="val mono">+'+Math.round(s.vorp)+'</div>'+
+        '<button class="pick" data-pick="'+s.p.id+'">✓</button></div>').join("");
+    // shout when the turn is coming and a stack is at risk
+    const risky = stacks.find(s=>odds && odds.h1[s.p.id]!=null && odds.h1[s.p.id]<50);
+    if(risky) $("#baList").innerHTML = '<div class="warn" style="border-radius:9px;margin:4px 2px 8px">🔗 <b>'+risky.p.name+'</b> stacks with your roster and is only <b>'+odds.h1[risky.p.id]+'%</b> to last until #'+odds.at1+'.</div>' + $("#baList").innerHTML;
+  }
   // Best available at each position
   const bypos = {};
   for(const s of scored){ if(!bypos[s.p.pos]) bypos[s.p.pos] = s; }
@@ -859,8 +987,8 @@ function renderRoster(){
   } else {
     bs = bestStarters(S.mine, byId);
     const orderOf = {}; S.mine.forEach((id,i)=>orderOf[id]=i+1);
-    const rowFor = (p, lab) => '<div class="myp"><span class="slotlab">'+lab+'</span>'+posBadge(p.pos)+
-      '<div class="n">'+p.name+' <span class="t">'+p.team+' · <span class="mono">'+p.proj+'</span></span></div>'+
+    const rowFor = (p, lab) => '<div class="myp"><span class="slotlab">'+lab+'</span>'+avatarImg(p,22)+posBadge(p.pos)+
+      '<div class="n">'+p.name+' <span class="t">'+(logoUrl(p.team)?'<img class="tlogo" src="'+logoUrl(p.team)+'" width="12" height="12" loading="lazy" alt=""> ':'')+p.team+' · <span class="mono">'+p.proj+'</span></span></div>'+
       '<span class="t mono">R'+orderOf[p.id]+'</span>'+
       '<span class="x" data-drop="'+p.id+'" role="button" tabindex="0" aria-label="Remove '+esc(p.name)+' from my roster" title="Remove from my roster">✕</span></div>';
     let html = bs.line.map(sl => sl.p ? rowFor(sl.p, sl.lab) :
@@ -902,7 +1030,7 @@ function renderLog(){
     const n = i+1+(S.pickOffset||0), r = Math.ceil(n/t), ri = n-(r-1)*t;
     return '<div class="logrow"><span class="pickno mono">'+r+'.'+String(ri).padStart(2,"0")+'</span>'+
       '<span class="who '+(e.who==="me"?"me":"")+'">'+(e.who==="me"?"MY PICK":"taken")+'</span>'+
-      '<span class="n">'+p.name+' <span style="color:var(--faint)">'+p.pos+' · '+p.team+'</span></span>'+
+      '<span class="n">'+(logoUrl(p.team)?'<img class="tlogo" src="'+logoUrl(p.team)+'" width="13" height="13" loading="lazy" alt=""> ':'')+p.name+' <span style="color:var(--faint)">'+p.pos+' · '+p.team+'</span></span>'+
       '<span class="x undo1" data-undoentry="'+i+'" role="button" tabindex="0" aria-label="Undo this pick" style="font-size:10.5px">undo</span></div>';
   }).reverse().join("") : '<div class="empty">Nothing yet. Mark players as they come off the board.</div>';
 }
@@ -924,7 +1052,7 @@ function renderHeader(){
 
 /* ---------- Events (delegated) ---------- */
 document.addEventListener("click", e=>{
-  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],th[data-sort]");
+  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-card],th[data-sort]");
   if(!t){
     const rowEl = e.target.closest("#poolBody tr[data-pid]");
     if(rowEl){
@@ -940,16 +1068,21 @@ document.addEventListener("click", e=>{
     if(!isNaN(n) && n>=1){ S.pickOffset = n - 1 - S.log.length; commit(); }
     return;
   }
-  if(t.dataset.note){ return editNote(t.dataset.note); }
+  if(t.dataset.card){ return openCard(t.dataset.card); }
+  if(t.dataset.note){
+    editNote(t.dataset.note);
+    if($("#cardOverlay").classList.contains("show")) openCard(t.dataset.note);
+    return;
+  }
   if(t.dataset.dnd){ S.dnd[t.dataset.dnd] ? delete S.dnd[t.dataset.dnd] : S.dnd[t.dataset.dnd]=true; return commit(); }
   if(t.dataset.clearfilters){
-    S.ui.pos="ALL"; S.ui.round="ALL"; S.ui.targetsOnly=false; S.ui.stacksOnly=false; S.ui.survivors=false; S.ui.showTaken=false;
+    S.ui.pos="ALL"; S.ui.round="ALL"; S.ui.targetsOnly=false; S.ui.stacksOnly=false; S.ui.survivors=false; S.ui.fallers=false; S.ui.showTaken=false;
     $("#search").value=""; $("#roundFilter").value="ALL";
-    ["fTargets","fStacks","fSurvive","showTaken"].forEach(id=>$("#"+id).checked=false);
+    ["fTargets","fStacks","fSurvive","fFallers","showTaken"].forEach(id=>$("#"+id).checked=false);
     save(); renderTabs(); renderPool(); return;
   }
-  if(t.dataset.pick) return pickMine(t.dataset.pick);
-  if(t.dataset.take) return markTaken(t.dataset.take);
+  if(t.dataset.pick){ $("#cardOverlay").classList.remove("show"); return pickMine(t.dataset.pick); }
+  if(t.dataset.take){ $("#cardOverlay").classList.remove("show"); return markTaken(t.dataset.take); }
   if(t.dataset.untake){ delete S.taken[t.dataset.untake]; for(let i=S.log.length-1;i>=0;i--){if(S.log[i].id===t.dataset.untake&&S.log[i].who==="other"){S.log.splice(i,1);break;}} return commit(); }
   if(t.dataset.drop) return dropMine(t.dataset.drop);
   if(t.dataset.edit) return editProj(t.dataset.edit);
@@ -967,6 +1100,7 @@ $("#roundFilter").addEventListener("change", e=>{ S.ui.round=e.target.value; sav
 $("#fTargets").addEventListener("change", e=>{ S.ui.targetsOnly=e.target.checked; save(); renderPool(); });
 $("#fStacks").addEventListener("change", e=>{ S.ui.stacksOnly=e.target.checked; save(); renderPool(); });
 $("#fSurvive").addEventListener("change", e=>{ S.ui.survivors=e.target.checked; save(); renderPool(); });
+$("#fFallers").addEventListener("change", e=>{ S.ui.fallers=e.target.checked; save(); renderPool(); });
 $("#undoBtn").addEventListener("click", undoLast);
 $("#redoBtn").addEventListener("click", redoLast);
 document.addEventListener("keydown", e=>{
@@ -974,7 +1108,7 @@ document.addEventListener("keydown", e=>{
   if((e.ctrlKey||e.metaKey) && e.key==="z"){ e.preventDefault(); undoLast(); return; }
   if(e.key==="Enter"){
     const ae = document.activeElement;
-    if(ae && ae.dataset && (ae.dataset.drop!=null || ae.dataset.undoentry!=null)){ e.preventDefault(); ae.click(); return; }
+    if(ae && ae.dataset && (ae.dataset.drop!=null || ae.dataset.undoentry!=null || (ae.tagName==="TH" && ae.dataset.sort))){ e.preventDefault(); ae.click(); return; }
   }
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
   if(e.key==="/" && !typing){ e.preventDefault(); $("#search").focus(); return; }
@@ -1035,14 +1169,57 @@ $("#recapBtn").addEventListener("click", ()=>{
   navigator.clipboard.writeText(txt).then(()=>toast("📤 Roster copied — paste it in the chat"), ()=>toast("Copy failed", {warn:true}));
 });
 
-/* Draft grade */
-$("#gradeBtn").addEventListener("click", ()=>{
+/* Draft grade + full report (#51) */
+let _reportText = "";
+function buildReport(){
   const g = gradeDraft();
+  const byId = idIndex();
   const col = g.letter[0]==="A" ? "var(--green)" : g.letter[0]==="B" ? "var(--gold)" : "var(--red)";
-  $("#gradeBox").innerHTML = '<div class="warn" style="display:flex;align-items:center;gap:12px;color:var(--text)">'+
-    '<span style="font-size:26px;font-weight:800;color:'+col+'">'+g.letter+'</span>'+
-    '<span style="font-size:11.5px;line-height:1.5">Finish on autopilot → <b class="mono">'+g.myPts+'</b> starter pts vs <b class="mono">'+g.basePts+'</b> expected from your seat ('+(g.diff>=0?'+':'')+g.diff+').</span>'+
-    '</div>';
+  const bs = S.mine.length ? bestStarters(S.mine, byId) : null;
+  // steals: my picks made 10+ past ADP
+  const steals = [];
+  S.log.forEach((e,i)=>{
+    if(e.who!=="me") return;
+    const p = byId[e.id]; if(!p || !p.adp) return;
+    const overall = i+1+(S.pickOffset||0);
+    if(overall - p.adp >= 10) steals.push({p, fall: overall - p.adp});
+  });
+  // stacks
+  const teams = {};
+  S.mine.forEach(id=>{ const p=byId[id]; if(p) (teams[p.team]=teams[p.team]||[]).push(p); });
+  const stacks = Object.entries(teams).filter(([,ps])=>ps.some(x=>x.pos==="QB") && ps.some(x=>x.pos==="WR"||x.pos==="TE"));
+  let h = '<div style="display:flex;align-items:center;gap:16px;margin-bottom:14px">'+
+    '<span style="font-size:44px;font-weight:800;color:'+col+'">'+g.letter+'</span>'+
+    '<span style="font-size:12.5px;line-height:1.6">Projected optimal starters if you finish on autopilot: <b class="mono">'+g.myPts+'</b><br>'+
+    'Expected from slot '+S.settings.slot+': <b class="mono">'+g.basePts+'</b> → <b style="color:'+col+'">'+(g.diff>=0?'+':'')+g.diff+' pts</b></span></div>';
+  let txt = "🎓 "+(S.settings.name||"League")+" draft report — grade "+g.letter+" ("+(g.diff>=0?"+":"")+g.diff+" vs expected)\n";
+  if(bs){
+    h += '<div class="sechead">Current lineup</div>' + bs.line.map(sl=> sl.p ?
+      '<div class="mkrow strt"><span class="rp mono">'+sl.lab+'</span>'+(logoUrl(sl.p.team)?'<img class="tlogo" src="'+logoUrl(sl.p.team)+'" width="12" height="12" alt=""> ':'')+'<span class="mpos pos '+sl.p.pos+'">'+sl.p.pos+'</span><span class="mn">'+sl.p.name+' <span class="dimtxt mono">'+sl.p.proj+'</span></span></div>'
+      : '<div class="mkrow bench"><span class="rp mono">'+sl.lab+'</span><span class="mn dimtxt">— open</span></div>').join("");
+    bs.line.forEach(sl=>{ if(sl.p) txt += sl.lab.padEnd(5)+" "+sl.p.name+" ("+sl.p.team+")\n"; });
+  }
+  h += '<div class="sechead">Stacks</div>' + (stacks.length
+    ? stacks.map(([t,ps])=>'<div class="mkrow">'+(logoUrl(t)?'<img class="tlogo" src="'+logoUrl(t)+'" width="13" height="13" alt=""> ':'')+'<span class="mn">🔗 '+t+' — '+ps.map(x=>x.name.split(" ").slice(-1)[0]).join(" + ")+'</span></div>').join("")
+    : '<div class="dimtxt">None yet — pair a WR/TE with one of your QBs.</div>');
+  if(stacks.length) txt += "Stacks: "+stacks.map(([t,ps])=>t+" ("+ps.map(x=>x.name.split(" ").slice(-1)[0]).join("+")+")").join(", ")+"\n";
+  h += '<div class="sechead">Steals</div>' + (steals.length
+    ? steals.map(s=>'<div class="mkrow"><span class="mn">💎 '+s.p.name+' — '+s.fall+' picks past ADP</span></div>').join("")
+    : '<div class="dimtxt">No 10+ pick discounts landed (yet).</div>');
+  if(steals.length) txt += "Steals: "+steals.map(s=>s.p.name+" (-"+s.fall+")").join(", ")+"\n";
+  if(bs){
+    const slates = [...new Set(bs.line.filter(sl=>sl.p).map(sl=>sl.p.team))].map(t=>({t, ps:psosFor(t)})).filter(x=>x.ps);
+    h += '<div class="sechead">Playoff weeks (15–17)</div>' + slates.map(x=>'<div class="mkrow"><span class="rp mono">'+x.t+'</span><span class="mn dimtxt">'+x.ps.short+'</span></div>').join("");
+  }
+  txt += "Projected starters: "+g.myPts+" pts";
+  _reportText = txt.replace(/\\n/g, "\n");
+  $("#reportBody").innerHTML = h;
+  $("#reportOverlay").classList.add("show");
+}
+$("#gradeBtn").addEventListener("click", buildReport);
+$("#reportClose").addEventListener("click", ()=>$("#reportOverlay").classList.remove("show"));
+$("#reportCopy").addEventListener("click", ()=>{
+  navigator.clipboard.writeText(_reportText).then(()=>toast("📤 Report copied"), ()=>toast("Copy failed", {warn:true}));
 });
 
 /* Draft board grid */
@@ -1063,7 +1240,7 @@ function renderBoard(){
     for(let s2=1;s2<=t;s2++){
       const c = cells[r+"-"+s2];
       h += '<td style="padding:3px 5px;border:1px solid var(--line);'+(s2===mySlot?'background:rgba(47,212,122,.06);':'')+'">'+
-        (c ? '<span class="pos '+c.p.pos+'" style="width:26px;font-size:8px;padding:2px 0">'+c.p.pos+'</span> '+c.p.name.split(" ").slice(-1)[0] : '<span style="color:var(--line)">·</span>')+'</td>';
+        (c ? (logoUrl(c.p.team)?'<img class="tlogo" src="'+logoUrl(c.p.team)+'" width="12" height="12" loading="lazy" alt=""> ':'')+'<span class="pos '+c.p.pos+'" style="width:26px;font-size:8px;padding:2px 0">'+c.p.pos+'</span> '+c.p.name.split(" ").slice(-1)[0] : '<span style="color:var(--line)">·</span>')+'</td>';
     }
     h += '</tr>';
   }
@@ -1107,6 +1284,7 @@ $("#settingsBtn").addEventListener("click", ()=>{
   $("#setTeams").value=S.settings.teams; $("#setRoster").value=S.settings.roster;
   $("#setSlot").value=S.settings.slot; $("#setScoring").value=S.settings.scoring;
   $("#setName").value=S.settings.name||"Buck Breakers";
+  $("#setCompact").checked=!!S.settings.compact;
   refreshProfiles(); refreshProjStatus();
   $("#setPtd").value=String(S.settings.ptd||6);
   for(const pos of POSITIONS) $("#min"+pos).value=S.settings.min[pos]||0;
@@ -1120,6 +1298,8 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.scoring = $("#setScoring").value==="half" ? "half" : "ppr";
   S.settings.ptd = +$("#setPtd").value===4 ? 4 : 6;
   S.settings.name = $("#setName").value.trim() || "Buck Breakers";
+  S.settings.compact = $("#setCompact").checked;
+  applyTheme();
   for(const pos of POSITIONS) S.settings.min[pos] = Math.max(0, +$("#min"+pos).value||0);
   $("#settingsOverlay").classList.remove("show");
   commit();
@@ -1219,6 +1399,12 @@ function refreshProjStatus(){
     : "Using built-in dataset ("+RAW.length+" players, "+DATA_STAMP+").";
 }
 $("#projImportBtn").addEventListener("click", ()=>$("#projFile").click());
+$("#projTemplateBtn").addEventListener("click", ()=>{
+  const t = "PLAYER,TEAM,POS,PPR,HALF,PATD\nJosh Allen,BUF,QB,365.8,352,25.6\nBijan Robinson,ATL,RB,339.3,283.1,0\nJa'Marr Chase,CIN,WR,331.6,256,0\nBrock Bowers,LVR,TE,249.4,190.7,0\nBroncos D/ST,DEN,DEF,135,135,0\n";
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([t],{type:"text/csv"}));
+  a.download="projections-template.csv"; a.click(); URL.revokeObjectURL(a.href);
+});
 $("#projRevertBtn").addEventListener("click", ()=>{ S.dataRows=null; S.dataRev=(S.dataRev||0)+1; commit(); refreshProjStatus(); toast("Reverted to built-in projections"); });
 $("#projFile").addEventListener("change", e=>{
   const f=e.target.files[0]; if(!f) return;
@@ -1323,13 +1509,53 @@ $("#resetBtn").addEventListener("click", ()=>{
 /* ---------- Boot ---------- */
 load();
 document.querySelectorAll(".modal").forEach(m=>{ m.setAttribute("role","dialog"); m.setAttribute("aria-modal","true"); });
-const BUILD = "3.0";
+const BUILD = "3.1";
+/* Theme: auto follows the OS, or force dark/light */
+function applyTheme(){
+  const pref = S.settings.theme || "auto";
+  const dark = pref==="auto" ? !window.matchMedia("(prefers-color-scheme: light)").matches : pref==="dark";
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  const m = document.querySelector('meta[name="theme-color"]');
+  if(m) m.content = dark ? "#0b0f14" : "#eef2f7";
+  const b = document.getElementById("themeBtn");
+  if(b) b.textContent = pref==="auto" ? "🌓" : (pref==="dark" ? "🌙" : "☀️");
+  document.body.classList.toggle("compact", !!S.settings.compact);
+}
+document.getElementById("themeBtn").addEventListener("click", ()=>{
+  const order = ["auto","dark","light"];
+  S.settings.theme = order[(order.indexOf(S.settings.theme||"auto")+1)%3];
+  save(); applyTheme();
+  toast("Theme: "+S.settings.theme);
+});
+window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", applyTheme);
+
 (function(){
   const el=document.getElementById("buildStamp");
   if(el) el.textContent = "build v"+BUILD+" · projections "+(typeof DATA_STAMP!=="undefined"?DATA_STAMP:"?")+" · press ? for help";
   if(window._recovered) setTimeout(()=>toast("♻️ Save was corrupt — restored backup from "+esc(window._recovered), {warn:true}), 400);
+  applyTheme();
+  // stale projections hint (#58)
+  try{
+    const age = (Date.now() - new Date(DATA_STAMP).getTime())/86400000;
+    if(age > 45 && !(S.dataRows&&S.dataRows.length)) setTimeout(()=>toast("📅 Built-in projections are "+Math.round(age)+" days old — Settings → import a fresh CSV", {warn:true}), 900);
+  }catch(e){}
 })();
+let _lastErrToast = 0;
+function surfaceError(msg){
+  const now = Date.now();
+  if(now - _lastErrToast < 10000) return;
+  _lastErrToast = now;
+  toast("⚠️ Something broke: "+esc(String(msg).slice(0,120))+" — try a refresh; your board is saved.", {warn:true});
+}
+window.addEventListener("error", e=>surfaceError(e.message||"script error"));
+window.addEventListener("unhandledrejection", e=>surfaceError((e.reason&&e.reason.message)||e.reason||"async error"));
+
+/* #53: tell open sessions when a new version takes over */
 if("serviceWorker" in navigator && location.protocol.indexOf("http")===0){
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", ()=>{
+    if(hadController) toast("⬆️ New version deployed", {action:{label:"RELOAD", fn:()=>location.reload()}});
+  });
   navigator.serviceWorker.register("sw.js").catch(()=>{});
 }
 $("#showTaken").checked = S.ui.showTaken;
@@ -1337,4 +1563,5 @@ $("#roundFilter").value = S.ui.round || "ALL";
 $("#fTargets").checked = !!S.ui.targetsOnly;
 $("#fStacks").checked = !!S.ui.stacksOnly;
 $("#fSurvive").checked = !!S.ui.survivors;
+$("#fFallers").checked = !!S.ui.fallers;
 render();

@@ -6,14 +6,14 @@ import assert from "node:assert";
 const src = readFileSync(new URL("../data.js", import.meta.url), "utf8");
 
 // no duplicated top-level blocks (the bug class that broke a build once)
-for (const name of ["const RAW", "const INTEL", "const PSOS", "function normName", "const DATA_STAMP"]) {
+for (const name of ["const RAW", "const INTEL", "const PSOS", "function normName", "const DATA_STAMP", "const HEADSHOT", "const TEAMLOGO"]) {
   const n = src.split(name).length - 1;
   assert.strictEqual(n, 1, `${name} appears ${n} times, expected 1`);
 }
 
 const ctx = {};
 vm.createContext(ctx);
-vm.runInContext(src + "\nthis.RAW=RAW;this.INTEL=INTEL;this.PSOS=PSOS;this.normName=normName;this.DATA_STAMP=DATA_STAMP;", ctx);
+vm.runInContext(src + "\nthis.RAW=RAW;this.INTEL=INTEL;this.PSOS=PSOS;this.normName=normName;this.DATA_STAMP=DATA_STAMP;this.HEADSHOT=HEADSHOT;this.TEAMLOGO=TEAMLOGO;", ctx);
 
 assert.ok(ctx.RAW.length > 300, "RAW too small: " + ctx.RAW.length);
 const POS = new Set(["QB", "RB", "WR", "TE", "DEF"]);
@@ -40,5 +40,10 @@ for (const [t, s] of Object.entries(ctx.PSOS)) {
   assert.strictEqual(s.r.length, 3, t);
 }
 assert.match(ctx.DATA_STAMP, /^\d{4}-\d{2}-\d{2}$/);
+// headshots: most non-DEF players should have one; logos: all 32 team codes
+const nonDef = ctx.RAW.filter(r => r[2] !== "DEF");
+const withHead = nonDef.filter(r => ctx.HEADSHOT[ctx.normName(r[0])]);
+assert.ok(withHead.length / nonDef.length > 0.9, `headshot coverage ${withHead.length}/${nonDef.length}`);
+for (const r of ctx.RAW) assert.ok(ctx.TEAMLOGO[r[1]], "no logo slug for team " + r[1]);
 
 console.log(`data.test OK — ${ctx.RAW.length} players, ${Object.keys(ctx.INTEL).length} intel, ${Object.keys(ctx.PSOS).length} teams`);
