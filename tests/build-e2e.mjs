@@ -45,6 +45,12 @@ try {
   window._cardTab="hist"; openCard(allPlayers().find(p=>p.name==="Josh Allen").id);
   out.push("hist3:"+(document.querySelectorAll("#cardBody .h3row").length>=3?"OK":"BAD"));
   window._cardTab="ov"; document.getElementById("cardOverlay").classList.remove("show");
+  // chunked mocks complete with progress (#312/#313)
+  renderMocks();
+  setTimeout(()=>{
+    out.push("mocks:"+(document.querySelectorAll("#mockGrid .mock").length===5?"OK":"BAD"));
+    document.getElementById("mocksOverlay").classList.remove("show");
+  }, 700);
 } catch(e){ out.push("ERR:"+e.message); }
 setTimeout(()=>{ document.title="E2E|"+out.join("|"); }, 900);
 }, 100); });

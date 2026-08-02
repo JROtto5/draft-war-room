@@ -242,19 +242,23 @@ function survivalOddsRaw(){
   const rinfo = roundInfo(players);
   const t = S.settings.teams;
   const myPicks = new Set(myOverallPicks());
-  const trials = 30, s1 = {}, s2 = {};
+  const trials = Math.min(100, Math.max(20, S.settings.simN||30)), s1 = {}, s2 = {};
   const R = S.settings.roster;
   for(let k=0;k<trials;k++){
     const rng = mulberry32(987654 + k*104729 + S.log.length*7919);
     const taken = new Set(Object.keys(S.taken)); S.mine.forEach(id=>taken.add(id));
     const cpu = seedCpuTeams(rng);
+    let lastP2 = null, runP2 = 0;
     for(let pk=from; pk<end; pk++){
       if(pk===at1) for(const p of players){ if(!taken.has(p.id)) s1[p.id]=(s1[p.id]||0)+1; }
       if(myPicks.has(pk)) continue;
       const r = Math.ceil(pk/t), idx = pk-(r-1)*t, slot = (r%2===1)?idx:t+1-idx;
       const avail = players.filter(p=>!taken.has(p.id));
-      const best = cpuPick(avail, cpu[slot], r, rng, rinfo, R);
-      if(best){ taken.add(best.id); cpu[slot][best.pos]++; if(pk<at1) gone[best.pos]++; }
+      const best = cpuPick(avail, cpu[slot], r, rng, rinfo, R, runP2>=2?lastP2:null);
+      if(best){
+        taken.add(best.id); cpu[slot][best.pos]++; if(pk<at1) gone[best.pos]++;
+        if(best.pos===lastP2) runP2++; else { lastP2=best.pos; runP2=1; }
+      }
     }
     if(end===at1) for(const p of players){ if(!taken.has(p.id)) s1[p.id]=(s1[p.id]||0)+1; }
     for(const p of players){ if(!taken.has(p.id)) s2[p.id]=(s2[p.id]||0)+1; }
@@ -263,6 +267,7 @@ function survivalOddsRaw(){
     out1[p.id] = Math.round(100*(s1[p.id]||0)/trials);
     out2[p.id] = Math.round(100*(s2[p.id]||0)/trials);
   }
+  gone.__trials = trials;
   for(const pos in gone) gone[pos] = Math.round(gone[pos]/trials*10)/10;
   return {at1, at2: at2||null, h1:out1, h2: at2?out2:null, posGone:gone};
 }
@@ -351,16 +356,9 @@ function idIndex(){
 /* ---------- Recommendation engine ---------- */
 /* Marginal value of adding the Nth player at a position: you start
    QB+SF (2 QB), 2RB+2WR+TE+flex+DEF. Depth has bench value, hoarding doesn't. */
-const STARTABLE = {QB:2, RB:5, WR:5, TE:2, DEF:1};
 /* Returns adjusted score. First player past startable = depth discount
    (QB3 is real superflex insurance); anything beyond that is dead weight
    and gets buried so it can never beat a live position. */
-function satAdjust(pos, curCount, score){
-  const over = curCount + 1 - (STARTABLE[pos]||1);
-  if(over <= 0) return {score, note:null};
-  if(over === 1 && pos!=="DEF") return {score: score*(pos==="QB"?0.45:0.3), note:"your "+pos+" starters are set — depth value only"};
-  return {score: Math.min(score,0)-400, note:"you're saturated at "+pos};
-}
 function needInfo(){
   const counts = myCounts();
   const min = S.settings.min;
@@ -412,11 +410,28 @@ function scoreBoard(){
     if((p.pos==="WR"||p.pos==="TE") && myTeamsQB.has(p.team)){ stack = "stacks with your "+p.team+" QB"; }
     if(p.pos==="QB" && myTeamsPC.has(p.team)){ stack = "stacks with your "+p.team+" pass-catcher"; }
     if(stack){ score *= 1.08; why.push(stack); }
+    else if(p.pos!=="QB" && p.pos!=="DEF"){
+      const mate = myIds().map(id2=>byId[id2]).filter(Boolean).find(q=>q.team===p.team && q.pos!=="QB" && q.pos!=="DEF");
+      if(mate){ score *= 0.99; why.push("shares the "+p.team+" offense with your "+mate.name.split(" ").slice(-1)[0]+" (mild anti-correlation)"); }
+    }
     // Analyst / prop-market intel
     if(p.intel){
       if(p.intel.t!=null){ score *= 1.04; why.push("⭐ analyst target: "+(p.intel.t||"flagged as a value pick")); }
       if(p.intel.lean>0){ score *= 1.03; why.push("▲ prop market leans bullish on his volume"); }
       if(p.intel.lean<0){ score *= 0.97; why.push("▼ prop market leans bearish on his volume"); }
+    }
+    // Risk tolerance: weight 3-year floor/ceiling into the score
+    if(S.settings.risk && S.settings.risk!=="balanced"){
+      const cns = consistencyOf(p);
+      if(cns && cns.mean>0){
+        if(S.settings.risk==="ceiling"){
+          const up = Math.min(0.12, Math.max(0, (cns.hi/cns.mean-1))*0.5);
+          if(up>0.02){ score *= 1+up; why.push("🎢 ceiling mode: best-year PPG "+cns.hi.toFixed(1)); }
+        } else if(S.settings.risk==="floor"){
+          const dn = Math.min(0.12, Math.max(0, (1-cns.lo/cns.mean))*0.5);
+          if(dn>0.02){ score *= 1-dn; why.push("🛡 floor mode: worst-year PPG "+cns.lo.toFixed(1)); }
+        }
+      }
     }
     // Personal boost/fade (my-guys list)
     const bf = (S.boost||{})[p.id];
@@ -562,14 +577,28 @@ function editProj(id){
   const n = parseFloat(v);
   if(!isNaN(n) && n>=0){ S.overrides[id]=n; commit(); }
 }
-function commit(){ save(); render(); }
+function commit(){
+  save(); render();
+  if(window.requestIdleCallback) requestIdleCallback(()=>{ try{ survivalOdds(); }catch(e){} }, {timeout:2000});
+}
 
 /* ---------- Mock draft simulator ---------- */
 /* One CPU drafting brain shared by odds sims and mocks (#46), with team
    rosters reconstructed from the actual pick log (#47). */
 function seedCpuTeams(rng){
   const t = S.settings.teams, cpu = {};
-  for(let s=1;s<=t;s++) cpu[s] = {QB:0,RB:0,WR:0,TE:0,DEF:0, qbGreed:0.5+rng()*0.55};
+  const byId0 = idIndex(), tend = {};
+  S.log.forEach((e,i)=>{
+    const p0 = byId0[e.id]; if(!p0 || !p0.adp) return;
+    const n = i+1+(S.pickOffset||0), r0 = Math.ceil(n/t), idx0 = n-(r0-1)*t;
+    const slot0 = (r0%2===1)?idx0:t+1-idx0;
+    (tend[slot0]=tend[slot0]||[]).push(n - p0.adp);
+  });
+  for(let s=1;s<=t;s++){
+    const arr = tend[s]||[];
+    const bias = arr.length>=2 ? Math.max(-10, Math.min(10, arr.reduce((a,b)=>a+b,0)/arr.length)) : 0;
+    cpu[s] = {QB:0,RB:0,WR:0,TE:0,DEF:0, qbGreed:0.5+rng()*0.55, bias};
+  }
   const byId = idIndex();
   S.log.forEach((e,i)=>{
     const n = i+1+(S.pickOffset||0), r = Math.ceil(n/t), idx = n-(r-1)*t;
@@ -579,7 +608,7 @@ function seedCpuTeams(rng){
   });
   return cpu;
 }
-function cpuPick(avail, st, r, rng, rinfo, R){
+function cpuPick(avail, st, r, rng, rinfo, R, runPos){
   const caps = {QB:3,RB:7,WR:8,TE:3,DEF:2};
   let pool = avail.filter(p=>st[p.pos]<caps[p.pos]);
   const missing = []; if(st.QB<1)missing.push("QB"); if(st.TE<1)missing.push("TE"); if(st.DEF<1)missing.push("DEF");
@@ -590,13 +619,13 @@ function cpuPick(avail, st, r, rng, rinfo, R){
   for(const p of pool){
     let e = rinfo[p.id].eadp * injAdpFactor(p);
     if(p.pos==="QB") e *= st.qbGreed;
-    e += (rng()*2-1)*9;
+    if(runPos && p.pos===runPos) e *= 0.92;      // run contagion: the room panics
+    e += (rng()*2-1)*9 + (st.bias||0);
     if(e<bk){bk=e; best=p;}
   }
   return best;
 }
 
-function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
 
 const STRATS = [
  {name:"Balanced Value", icon:"⚖️", blurb:"Pure engine: best value, fill needs", mod:(p,c)=>1},
@@ -626,6 +655,7 @@ function runMock(strat, seed){
   const taken = new Set(Object.keys(S.taken)); S.mine.forEach(id=>taken.add(id));
   const mineIds = S.mine.slice();
   const cpu = seedCpuTeams(rng);
+  let mockLast = null, mockRun = 0;
   const picks = [];
 
   for(let pick=pickNow(); pick<=total; pick++){
@@ -665,9 +695,10 @@ function runMock(strat, seed){
       picks.push({pick, round:r, idx, p:chosen});
     } else {
       const st = cpu[slot];
-      chosen = cpuPick(avail, st, r, rng, rinfo, R);
+      chosen = cpuPick(avail, st, r, rng, rinfo, R, mockRun>=2?mockLast:null);
       st[chosen.pos]++;
     }
+    if(chosen){ if(chosen.pos===mockLast) mockRun++; else { mockLast=chosen.pos; mockRun=1; } }
     taken.add(chosen.id);
   }
   const {starterIds, pts} = bestStarters(mineIds, byId);
@@ -679,7 +710,22 @@ function renderMocks(){
   const base = Math.floor(Math.random()*1e9);
   const already = S.mine.length;
   $("#mockCtx").textContent = already ? "(continuing from your "+already+" real pick"+(already>1?"s":"")+")" : "(from a clean board)";
-  const results = STRATS.map((st,i)=>runMock(st, base + i*7919));
+  $("#mockGrid").innerHTML = '<div class="empty" id="mockProg">Simulating… 0/'+STRATS.length+'</div>';
+  $("#mockConsensus").innerHTML = "";
+  const results = [];
+  const step = i => {
+    if(i < STRATS.length){
+      results.push(runMock(STRATS[i], base + i*7919));
+      const prog = document.getElementById("mockProg");
+      if(prog) prog.textContent = "Simulating… "+results.length+"/"+STRATS.length;
+      setTimeout(()=>step(i+1), 10);                 // yield to the UI between sims
+      return;
+    }
+    finishMocks(results, already);
+  };
+  step(0);
+}
+function finishMocks(results, already){
   $("#mockGrid").innerHTML = STRATS.map((st,i)=>{
     const m = results[i];
     const rows = m.picks.map(pk=>{
@@ -883,7 +929,8 @@ function openCard(id){
   const overview =
     (ovChips.length?'<div class="chips">'+ovChips.join("")+'</div>':'')+
     '<div class="cstats">'+
-      stat("Projected", p.proj)+stat("Value", (vorp>0?"+":"")+vorp)+stat("ADP", p.adp||"—")+
+      stat("Projected", p.proj+((()=>{ if(!cons||!cons.mean) return ""; const band=Math.round(p.proj*Math.min(.3,(cons.hi-cons.lo)/(2*cons.mean))); return band>5?' <span class="dimtxt" style="font-size:10px">±'+band+'</span>':""; })()))+
+      stat("Value", (vorp>0?"+":"")+vorp)+stat("ADP", p.adp||"—")+
       stat("Round", rinfo[p.id]?rinfo[p.id].label:"—")+
       stat("At #"+(odds?odds.at1:"?"), odds&&odds.h1[id]!=null?odds.h1[id]+"%":"—")+
       stat(odds&&odds.at2?"At #"+odds.at2:"Later", odds&&odds.h2&&odds.h2[id]!=null?odds.h2[id]+"%":"—")+
@@ -914,7 +961,7 @@ function openCard(id){
       (logoUrl(p.team)?'<img class="clogo" src="'+logoUrl(p.team)+'" alt="">':'')+
       avatarImg(p,84)+
       '<div class="cid"><div class="cname">'+p.name+intelBadges(p)+(fav?' 💖':'')+'</div>'+
-      '<div class="csub">'+posBadge(p.pos)+' &nbsp;'+p.team+' · T'+tm[p.id]+' · '+status+'</div>'+
+      '<div class="csub">'+posBadge(p.pos)+' &nbsp;'+p.team+' · T'+tm[p.id]+((()=>{const e2=envRank(p.team); return e2?' · offense #'+e2:'';})())+' · '+status+'</div>'+
       (bioLine2?'<div class="cbio">'+bioLine2+'</div>':'')+
       '<div class="cbio">'+
         (hw?'<span class="chip">🏠 '+esc(hw.town)+(hw.st?', '+hw.st:'')+'</span> ':'')+
@@ -937,7 +984,6 @@ function openCard(id){
     '</div>';
     $("#cardOverlay").classList.add("show");
 }
-function ordSuffix(n){ return n%10===1&&n%100!==11?"st":n%10===2&&n%100!==12?"nd":n%10===3&&n%100!==13?"rd":"th"; }
 document.getElementById("cardClose").addEventListener("click", ()=>document.getElementById("cardOverlay").classList.remove("show"));
 
 /* ---------- Head-to-head compare ---------- */
@@ -1026,12 +1072,6 @@ function posBadge(pos){ return '<span class="pos '+pos+'">'+pos+'</span>'; }
 /* Fuzzy player search: punctuation-insensitive, multi-token AND with
    word-prefix matching, plus initials/subsequence for shorthand
    ("jsn" → Jaxon Smith-Njigba, "cmc" → Christian McCaffrey). */
-function nq(s){ return s.toLowerCase().replace(/[.'’\-]/g,"").trim(); }
-function isSubseq(needle, hay){
-  let i=0;
-  for(let j=0; j<hay.length && i<needle.length; j++) if(hay[j]===needle[i]) i++;
-  return i===needle.length;
-}
 function matchesQuery(p, q){
   const toks = nq(q).split(/\s+/).filter(Boolean);
   if(!toks.length) return true;
@@ -1046,21 +1086,9 @@ function matchesQuery(p, q){
   }
   return false;
 }
-function fmt(n){ return Math.round(n).toLocaleString("en-US"); }
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
 /* ---------- Injury intelligence (live ESPN + baked Sleeper/ESPN) ---------- */
 let INJ = {map:{}, at:0, src:"baked snapshot"};
-function injSeverity(status){
-  const s = String(status||"").toLowerCase();
-  if(!s || s.indexOf("active")===0) return null;
-  if(s.indexOf("quest")===0 || s.indexOf("day-to-day")>=0) return {code:"Q", mult:0.97, cls:"sevq", label:"Questionable"};
-  if(s.indexOf("doubt")===0) return {code:"D", mult:0.92, cls:"sevd", label:"Doubtful"};
-  if(s.indexOf("out")===0) return {code:"O", mult:0.85, cls:"sevo", label:"Out"};
-  if(s.indexOf("injured reserve")>=0 || s==="ir" || s.indexOf("pup")===0 || s.indexOf("unable")>=0 ||
-     s.indexOf("sus")===0 || s.indexOf("nfi")>=0 || s.indexOf("dnr")>=0)
-    return {code:"IR", mult:0.5, cls:"sevir", label:status};
-  return {code:"?", mult:0.96, cls:"sevq", label:status};
-}
 function initInjuries(){
   const m = {};
   if(typeof PLAYERMETA!=="undefined")
@@ -1216,12 +1244,21 @@ function winnerIndex(p){
   if(c && c.hi>=15) sc++;
   return sc;
 }
+function envRank(team){
+  const r = cached("env", ()=>{
+    const totals = {};
+    allPlayers().forEach(p=>{ if(p.pos!=="DEF") totals[p.team]=(totals[p.team]||0)+p.proj; });
+    const order = Object.keys(totals).sort((a,b)=>totals[b]-totals[a]);
+    const m = {}; order.forEach((t2,i)=>m[t2]=i+1);
+    return m;
+  });
+  return r[team] || 0;
+}
 function playoffStars(team){
   const s = typeof PSOS!=="undefined" ? PSOS[team] : null;
   if(!s) return 0;
   return Math.max(1, Math.min(5, Math.round((s.r[0]+s.r[1]+s.r[2])/3/32*5)));
 }
-const PRIME = {RB:[23,27], WR:[24,29], TE:[25,30], QB:[26,36]};
 function primeNote(p){
   const m = metaFor(p);
   if(!m || !m[0] || !PRIME[p.pos]) return "";
@@ -1247,6 +1284,9 @@ function storyOf(p){
   let out = bits.length ? bits.join(", ")+". " : "";
   out += arc ? arc+" " : "";
   if(pn) out += pn.charAt(0).toUpperCase()+pn.slice(1)+". ";
+  const er = typeof envRank==="function" ? envRank(p.team) : 0;
+  if(er && er<=5) out += "Lands in a top-5 projected offense. ";
+  else if(er && er>=28) out += "Buried in a bottom-5 projected offense. ";
   if(inj) out += "Currently "+injSeverity(inj.s).label.toLowerCase()+". ";
   const fav = isFav(p);
   if(fav) out += "And yes — one of yours"+(fav.st?" ("+(S.settings.favState||"").toUpperCase()+" roots)":"")+". 💖";
@@ -1926,10 +1966,12 @@ function render(){
   requestAnimationFrame(()=>{ _rafPending = false; renderNow(); });
 }
 function renderNow(){
+  try{ performance.mark("render-start"); }catch(e){}
   _idx = null;
   [renderHeader, renderTabs, renderPool, renderBest, renderRoster, renderLog, renderQueue].forEach(fn=>{
     try{ fn(); }catch(e){ console.error(fn.name, e); if(typeof surfaceError==="function") surfaceError(fn.name+": "+e.message); }
   });
+  try{ performance.mark("render-end"); performance.measure("war-room-render", "render-start", "render-end"); }catch(e){}
 }
 function renderHeader(){
   const el = document.querySelector(".logo .sub");
@@ -2402,7 +2444,6 @@ $("#tauntBtn").addEventListener("click", ()=>{
   const line = lines[Math.floor(Math.random()*lines.length)];
   navigator.clipboard.writeText(line.replace(/<[^>]+>/g,"")).then(()=>toast("😈 Taunt copied: "+line));
 });
-function ordinal(n){ return n+(n%10===1&&n%100!==11?"st":n%10===2&&n%100!==12?"nd":n%10===3&&n%100!==13?"rd":"th"); }
 $("#reportPng").addEventListener("click", ()=>{
   const c = document.createElement("canvas");
   const lines = _reportText.split("\n");
@@ -2526,19 +2567,10 @@ function pickValueCurve(){
     return players.map(p=>Math.max(0, p.proj-(repl[p.pos]||0))).sort((a,b)=>b-a);
   });
 }
-function parsePicks(str){
-  const t = S.settings.teams, out = [];
-  String(str).split(/[,\s]+/).filter(Boolean).forEach(tok=>{
-    const m = tok.match(/^(\d+)\.(\d+)$/);
-    if(m) out.push((+m[1]-1)*t + Math.min(t,+m[2]));
-    else if(/^\d+$/.test(tok)) out.push(+tok);
-  });
-  return out;
-}
 function tradeEval(){
   const curve = pickValueCurve();
   const v = n => curve[Math.min(curve.length-1, Math.max(0, n-1))] || 0;
-  const give = parsePicks($("#tradeGive").value), get = parsePicks($("#tradeGet").value);
+  const give = parsePicks($("#tradeGive").value, S.settings.teams), get = parsePicks($("#tradeGet").value, S.settings.teams);
   if(!give.length || !get.length){ $("#tradeOut").textContent = "Enter picks on both sides (1.12 or overall numbers)."; return; }
   const gv = give.reduce((a,n)=>a+v(n),0), rv = get.reduce((a,n)=>a+v(n),0);
   const d = Math.round(rv-gv);
@@ -2638,6 +2670,8 @@ $("#settingsBtn").addEventListener("click", ()=>{
     .filter(s2=>s2!==S.settings.slot).map(s2=>'<option value="'+s2+'"'+(+S.settings.rivalSlot===s2?' selected':'')+'>'+esc(slotName(s2))+'</option>').join("");
   renderTrophies();
   $("#setBaCount").value=S.settings.baCount||15;
+  $("#setSimN").value=S.settings.simN||30;
+  $("#setRisk").value=S.settings.risk||"balanced";
   refreshProfiles(); refreshProjStatus();
   const su = document.getElementById("storageUse");
   if(su && navigator.storage && navigator.storage.estimate){
@@ -2675,6 +2709,8 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.rivalSlot = $("#setRival").value ? +$("#setRival").value : null;
   S.settings.cols = {adp:$("#colADP").checked, edge:$("#colEdge").checked, rd:$("#colRd").checked};
   S.settings.baCount = Math.min(30, Math.max(5, +$("#setBaCount").value||15));
+  S.settings.simN = Math.min(100, Math.max(20, +$("#setSimN").value||30));
+  S.settings.risk = $("#setRisk").value;
   applyTheme();
   for(const pos of POSITIONS) S.settings.min[pos] = Math.max(0, +$("#min"+pos).value||0);
   $("#settingsOverlay").classList.remove("show");

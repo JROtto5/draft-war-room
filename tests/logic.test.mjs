@@ -35,6 +35,7 @@ ctx.addEventListener = () => {};
 ctx.removeEventListener = () => {};
 vm.createContext(ctx);
 vm.runInContext(readFileSync(new URL("../data.js", import.meta.url), "utf8"), ctx);
+vm.runInContext(readFileSync(new URL("../engine.js", import.meta.url), "utf8"), ctx);
 vm.runInContext(readFileSync(new URL("../app.js", import.meta.url), "utf8"), ctx);
 const g = name => vm.runInContext(name, ctx);
 
@@ -95,7 +96,7 @@ const factor = g("injAdpFactor");
 assert.ok(factor(hurt[0]) > 1, "injured player should slide in sim ADP");
 
 // utilities
-assert.strictEqual(JSON.stringify(g("parsePicks")("1.12, 2.01 37")), "[12,13,37]");
+assert.strictEqual(JSON.stringify(g("parsePicks")("1.12, 2.01 37", 12)), "[12,13,37]");
 const curve = g("pickValueCurve()");
 for(let i=1;i<curve.length;i++) assert.ok(curve[i] <= curve[i-1]+1e-9, "value curve must be non-increasing at "+i);
 const r1 = g("mulberry32(42)"), r2 = g("mulberry32(42)");

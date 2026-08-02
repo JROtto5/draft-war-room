@@ -187,6 +187,8 @@
       <div class="frow"><label>Compact rows (more players on screen)</label><input type="checkbox" id="setCompact" style="width:auto"></div>
       <div class="frow"><label>On-the-clock chime (Live mode)</label><input type="checkbox" id="setSound" style="width:auto"></div>
       <div class="frow"><label>Best Available list length</label><input type="number" id="setBaCount" min="5" max="30"></div>
+      <div class="frow"><label>Survival sims per refresh (more = steadier %)</label><input type="number" id="setSimN" min="20" max="100" step="10"></div>
+      <div class="frow"><label>Risk appetite</label><select id="setRisk"><option value="balanced">Balanced</option><option value="ceiling">Chase ceilings 🎢</option><option value="floor">Protect floors 🛡</option></select></div>
       <div class="frow"><label>Show columns</label><span style="display:flex;gap:12px;font-size:12px;color:var(--dim)">
         <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="colADP" style="width:auto">ADP</label>
         <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="colEdge" style="width:auto">Edge</label>
@@ -376,6 +378,7 @@
 </div>
 
 <script src="data.js" defer></script>
+<script src="engine.js" defer></script>
 <script src="app.js" defer></script>
 </body>
 </html>

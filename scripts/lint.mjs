@@ -9,11 +9,11 @@ const overlays = (html.match(/class="overlay"/g) || []).length;
 const modals = (html.match(/class="modal[" ]/g) || []).length;
 if (overlays !== modals) fail(`overlay/modal mismatch: ${overlays} vs ${modals}`);
 if (!html.includes("Content-Security-Policy")) fail("CSP meta missing");
-if ((html.match(/<script src=/g) || []).length !== 2) fail("index.html must load exactly data.js + app.js");
+if ((html.match(/<script src=/g) || []).length !== 3) fail("index.html must load data.js + engine.js + app.js");
 if (!html.includes('rel="stylesheet" href="styles.css"')) fail("styles.css link missing");
 // Re-baselined after the v6 personalization data (LAST3 histories, hometowns,
 // college map): app 215K, data 450K leave ~20% headroom over current sizes.
-const budgets = { "app.js": 220000, "data.js": 450000, "styles.css": 70000, "index.html": 30000 };
+const budgets = { "app.js": 220000, "engine.js": 40000, "data.js": 450000, "styles.css": 70000, "index.html": 30000 };
 for (const [f, cap] of Object.entries(budgets)) {
   const size = statSync(f).size;
   if (size > cap) fail(`${f} is ${size}B > budget ${cap}B`);
