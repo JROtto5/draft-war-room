@@ -396,3 +396,21 @@ body.offline .savebadge{border-color:var(--gold)}
 body.spectate .pick, body.spectate .kill, body.spectate [data-dnd], body.spectate #panicBar{display:none!important}
 body.spectate header::after{content:"👁 SPECTATING"; font-size:10px; letter-spacing:2px; color:var(--gold); border:1px solid var(--gold); border-radius:999px; padding:3px 10px}
 .visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* round 13 */
+.skel td{padding:12px 10px}
+.shimmer{height:14px; border-radius:6px; background:linear-gradient(90deg,var(--bg2) 25%,var(--panel2) 50%,var(--bg2) 75%); background-size:200% 100%; animation:shim 1.2s infinite}
+@keyframes shim{to{background-position:-200% 0}}
+#fabs{display:none}
+@media (max-width:700px){
+  #fabs{display:flex; flex-direction:column; gap:10px; position:fixed; right:14px; bottom:calc(74px + env(safe-area-inset-bottom,0)); z-index:90}
+  .fab{width:46px; height:46px; border-radius:50%; border:1px solid var(--line); background:var(--panel2); color:var(--text); font-size:18px; box-shadow:var(--shadow); cursor:pointer}
+  .fab:active{transform:scale(.92)}
+}
+@media print{
+  header .hbtn, header .savebadge, header select, .left, .right, .toolbar, .toolbar2, td:last-child, th:last-child, #fabs, footer{display:none!important}
+  body{background:#fff; color:#000}
+  .panel{border:none; box-shadow:none}
+  .wrap{display:block}
+  tbody td, thead th{color:#000; border-bottom:1px solid #ccc}
+  .pos{border:1px solid #999; color:#000!important; background:#fff!important}
+}

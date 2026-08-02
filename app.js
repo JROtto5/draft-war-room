@@ -429,6 +429,7 @@ function markTaken(id){
   const p = idIndex()[id];
   if(p) toast("✕ <b>"+esc(p.name)+"</b> off the board", {undo:undoLast});
   if(p) announce(p.name+", off the board.");
+  blip();
   pruneQueue();
 }
 function pickMine(id){
@@ -436,6 +437,7 @@ function pickMine(id){
   const p = idIndex()[id];
   if(p) toast("✓ Drafted <b style='color:var(--green)'>"+esc(p.name)+"</b>", {undo:undoLast});
   if(p) announce("Pick "+pickNow()+". You drafted "+p.name+".");
+  blip();
 }
 function undoLast(){
   const last = S.log.pop();
@@ -905,6 +907,7 @@ function matchesQuery(p, q){
   }
   return false;
 }
+function fmt(n){ return Math.round(n).toLocaleString("en-US"); }
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
 /* ---------- Injury intelligence (live ESPN + baked Sleeper/ESPN) ---------- */
 let INJ = {map:{}, at:0, src:"baked snapshot"};
@@ -1287,6 +1290,28 @@ function renderBest(){
   const hz = nextPickHorizon();
   const top = scored[0];
   const hero = $("#hero");
+  const doneN = myIds().length;
+  if(doneN >= S.settings.roster && doneN > 0){
+    const byIdH = idIndex();
+    const bsH = bestStarters(myIds(), byIdH);
+    const hurtN = myIds().map(id=>byIdH[id]).filter(Boolean).filter(p2=>injuryOf(p2)).length;
+    const st = quickStandings();
+    const myRank = st.rows.findIndex(r=>r.s===st.mySlot)+1;
+    hero.innerHTML = '<div class="toppick">'+
+      '<div class="tag">🏟 SEASON HQ</div>'+
+      '<div class="name">'+esc(S.settings.flair||slotName(S.settings.slot))+'</div>'+
+      '<div class="meta">Draft complete · optimal starters <b class="mono" style="color:var(--green)">'+fmt(bsH.pts)+'</b> · projected <b>'+ordinal(myRank)+'</b> of '+st.rows.length+
+      (hurtN?' · 🩹 '+hurtN+' with injury flags':' · roster healthy ✓')+'</div>'+
+      '<div class="actions">'+
+        '<button class="hbtn" onclick="document.getElementById(\'gradeBtn\').click()">🎓 Report</button>'+
+        '<button class="hbtn" onclick="document.getElementById(\'injBtn\').click()">🩺 Injuries</button>'+
+        '<button class="hbtn" onclick="document.getElementById(\'recapBtn\').click()">📤 Share team</button>'+
+      '</div></div>';
+    $("#baList").innerHTML = "";
+    document.title = "Draft War Room — 2QB";
+    updatePanic(null, null);
+    return;
+  }
   if(!top){ hero.innerHTML = '<div class="empty">Board is empty — nice draft!</div>'; $("#baList").innerHTML=""; return; }
   const p = top.p;
   const why = top.why.length ? "▸ " + top.why.join("<br>▸ ") : "▸ best raw value on the board";
@@ -1578,7 +1603,17 @@ function renderNow(){
 }
 function renderHeader(){
   const el = document.querySelector(".logo .sub");
-  if(el) el.textContent = (S.settings.name||"Buck Breakers")+" · Superflex · "+(S.settings.ptd||6)+"pt Pass TD · Slot "+S.settings.slot;
+  if(!el) return;
+  let txt = (S.settings.name||"Buck Breakers")+" · Superflex · "+(S.settings.ptd||6)+"pt Pass TD · Slot "+S.settings.slot;
+  if(S.settings.draftDate){
+    const days = Math.ceil((new Date(S.settings.draftDate+"T20:00").getTime()-Date.now())/86400000);
+    if(days>1) txt += " · ⏳ "+days+"d to draft";
+    else if(days===1) txt += " · ⏳ TOMORROW";
+    else if(days===0) txt += " · 🏈 DRAFT DAY";
+  }
+  el.textContent = txt;
+  const fl = document.getElementById("rosFlair");
+  if(fl) fl.textContent = S.settings.flair || "";
 }
 
 /* ---------- Events (delegated) ---------- */
@@ -2116,6 +2151,10 @@ $("#settingsBtn").addEventListener("click", ()=>{
   $("#colADP").checked=cols.adp!==false; $("#colEdge").checked=cols.edge!==false; $("#colRd").checked=cols.rd!==false;
   $("#setSound").checked=S.settings.sound!==false;
   $("#setSpeak").checked=!!S.settings.speak;
+  $("#setDraftDate").value=S.settings.draftDate||"";
+  $("#setFlair").value=S.settings.flair||"";
+  $("#setAccent").value=S.settings.accent||"green";
+  renderTrophies();
   $("#setBaCount").value=S.settings.baCount||15;
   refreshProfiles(); refreshProjStatus();
   const su = document.getElementById("storageUse");
@@ -2144,6 +2183,9 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.compact = $("#setCompact").checked;
   S.settings.sound = $("#setSound").checked;
   S.settings.speak = $("#setSpeak").checked;
+  S.settings.draftDate = $("#setDraftDate").value || null;
+  S.settings.flair = $("#setFlair").value.trim();
+  S.settings.accent = $("#setAccent").value;
   S.settings.cols = {adp:$("#colADP").checked, edge:$("#colEdge").checked, rd:$("#colRd").checked};
   S.settings.baCount = Math.min(30, Math.max(5, +$("#setBaCount").value||15));
   applyTheme();
@@ -2240,6 +2282,19 @@ $("#csvBtn").addEventListener("click", ()=>{
 });
 
 /* Help modal */
+document.getElementById("fabSearch").addEventListener("click", ()=>{ $("#search").focus(); $("#search").scrollIntoView({block:"center"}); });
+document.getElementById("fabInj").addEventListener("click", ()=>document.getElementById("injBtn").click());
+document.getElementById("fabUndo").addEventListener("click", undoLast);
+document.getElementById("changelogBtn").addEventListener("click", async ()=>{
+  try{
+    const r = await fetch("CHANGELOG.md");
+    const txt = await r.text();
+    $("#cardBody").innerHTML = '<div class="chead"><div class="cid"><div class="cname">📜 Changelog</div></div></div>'+
+      '<div class="cintel" style="white-space:pre-wrap;font-size:12px;line-height:1.6;max-height:55vh;overflow-y:auto">'+esc(txt)+'</div><div class="cacts"></div>';
+    document.getElementById("helpOverlay").classList.remove("show");
+    $("#cardOverlay").classList.add("show");
+  }catch(e){ toast("Changelog needs a network/HTTP context", {warn:true}); }
+});
 $("#helpBtn").addEventListener("click", ()=>$("#helpOverlay").classList.add("show"));
 $("#helpClose").addEventListener("click", ()=>$("#helpOverlay").classList.remove("show"));
 
@@ -2311,6 +2366,23 @@ $("#projFile").addEventListener("change", e=>{
 
 /* Board profiles */
 const PROF_KEY = LS_KEY+"-profiles";
+function renderTrophies(){
+  const box = document.getElementById("trophyCase");
+  if(!box) return;
+  const all = profAll();
+  const finals = Object.keys(all).filter(n=>n.startsWith("🏁"));
+  if(!finals.length){ box.innerHTML = '<span class="dimtxt">No finished drafts yet — finish one and it lands here automatically.</span>'; return; }
+  const byId = idIndex();
+  box.innerHTML = finals.map(n=>{
+    let pts = "";
+    try{
+      const st2 = all[n];
+      const ids = (st2.mine||[]).concat(Object.keys(st2.keepers||{}).filter(id=>+st2.keepers[id]===+(st2.settings||{}).slot));
+      if(ids.length) pts = fmt(bestStarters(ids, byId).pts)+" pts";
+    }catch(e){}
+    return '<div class="mkrow">🏆 <span class="mn">'+esc(n)+'</span> <span class="mono dimtxt">'+pts+'</span></div>';
+  }).join("");
+}
 function profAll(){ try{ return JSON.parse(localStorage.getItem(PROF_KEY))||{}; }catch(e){ return {}; } }
 function refreshProfiles(){
   const sel=$("#profileSel"); if(!sel) return;
@@ -2477,6 +2549,18 @@ initLock();
 
 /* ---------- Boot ---------- */
 load();
+if(location.search.indexOf("demo")>=0 && location.search.indexOf("e2e")<0){
+  window._spectate = true;
+  document.body.classList.add("spectate");
+  setTimeout(()=>{
+    const byAdp = allPlayers().filter(p=>p.adp>0).sort((a,b)=>a.adp-b.adp);
+    S.taken={}; S.mine=[]; S.log=[]; S.keepers={}; S.queue=[];
+    byAdp.slice(0,11).forEach(p=>{ S.taken[p.id]=true; S.log.push({id:p.id, who:"other", t:Date.now()}); });
+    _memo={key:null};
+    render();
+    toast("🎮 Demo mode — a live board at your pick, nothing is saved");
+  }, 700);
+}
 setTimeout(()=>{
   const mo = (location.hash.match(/#open=(\w+)/)||[])[1];
   if(mo){
@@ -2510,6 +2594,10 @@ function applyTheme(){
   if(m) m.content = dark ? "#0b0f14" : "#eef2f7";
   const b = document.getElementById("themeBtn");
   if(b) b.textContent = pref==="auto" ? "🌓" : (pref==="dark" ? "🌙" : "☀️");
+  const ACCENTS = {green:["#2fd47a","#1d8a50"], blue:["#5aa9ff","#2f6fc0"], gold:["#ffc94d","#b98a1a"]};
+  const acc = ACCENTS[S.settings.accent] || null;
+  if(acc){ document.documentElement.style.setProperty("--green", acc[0]); document.documentElement.style.setProperty("--green-dim", acc[1]); }
+  else { document.documentElement.style.removeProperty("--green"); document.documentElement.style.removeProperty("--green-dim"); }
   document.body.classList.toggle("compact", !!S.settings.compact);
   document.body.classList.toggle("live", !!S.ui.live);
   const cols = S.settings.cols || {};
@@ -2534,6 +2622,18 @@ function announce(text){
     const u = new SpeechSynthesisUtterance(text);
     u.rate = 1.15; u.volume = 0.85;
     speechSynthesis.speak(u);
+  }catch(e){}
+}
+function blip(){
+  if(S.settings.sound===false || !S.ui.live) return;
+  try{
+    const ac = new (window.AudioContext||window.webkitAudioContext)();
+    const o = ac.createOscillator(), g2 = ac.createGain();
+    o.type = "square"; o.frequency.value = 520;
+    o.connect(g2); g2.connect(ac.destination);
+    g2.gain.setValueAtTime(0.05, ac.currentTime);
+    g2.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+0.07);
+    o.start(); o.stop(ac.currentTime+0.08);
   }catch(e){}
 }
 function chime(){

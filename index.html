@@ -111,7 +111,7 @@
               <th style="width:150px"></th>
             </tr>
           </thead>
-          <tbody id="poolBody"></tbody>
+          <tbody id="poolBody"><tr class="skel"><td colspan="10"><div class="shimmer"></div></td></tr><tr class="skel"><td colspan="10"><div class="shimmer"></div></td></tr><tr class="skel"><td colspan="10"><div class="shimmer"></div></td></tr><tr class="skel"><td colspan="10"><div class="shimmer"></div></td></tr><tr class="skel"><td colspan="10"><div class="shimmer"></div></td></tr><tr class="skel"><td colspan="10"><div class="shimmer"></div></td></tr><tr class="skel"><td colspan="10"><div class="shimmer"></div></td></tr><tr class="skel"><td colspan="10"><div class="shimmer"></div></td></tr><tr class="skel"><td colspan="10"><div class="shimmer"></div></td></tr></tbody>
         </table>
       </div>
     </div>
@@ -120,7 +120,7 @@
   <!-- RIGHT: My roster + log -->
   <div class="right">
     <div class="panel">
-      <h2><span class="dot"></span> My Roster
+      <h2><span class="dot"></span> My Roster <span id="rosFlair" style="font-weight:400;font-size:11px;color:var(--gold)"></span>
         <button class="hbtn" id="recapBtn" style="margin-left:auto;padding:3px 9px;font-size:10px" title="Copy a roster recap for the group chat">📤</button>
         <button class="hbtn" id="gradeBtn" style="margin-left:6px;padding:3px 9px;font-size:10px" title="Simulate the rest of your draft and grade the projected result">🎓 Grade</button>
         <span class="mono" id="rosCount" style="margin-left:8px"></span></h2>
@@ -147,6 +147,12 @@
 </footer>
 
 <!-- Settings modal -->
+<div id="fabs" aria-hidden="false">
+  <button class="fab" id="fabSearch" aria-label="Search">🔍</button>
+  <button class="fab" id="fabInj" aria-label="Injuries">🩺</button>
+  <button class="fab" id="fabUndo" aria-label="Undo">↩</button>
+</div>
+
 <div class="overlay" id="settingsOverlay">
   <div class="modal">
     <h3>League Settings</h3>
@@ -161,6 +167,11 @@
       <div class="frow"><label>Custom points per reception (blank = use scoring above)</label><input type="number" id="setRecPts" step="0.1" min="0" max="2" placeholder="—"></div>
       <div class="frow"><label>TE premium (extra per TE catch)</label><input type="number" id="setTePrem" step="0.25" min="0" max="1"></div>
       <div class="frow"><label>Announce picks out loud (Live mode)</label><input type="checkbox" id="setSpeak" style="width:auto"></div>
+      <div class="frow"><label>Draft date (for the countdown)</label><input type="date" id="setDraftDate"></div>
+      <div class="frow"><label>Team flair (name / emoji on your roster)</label><input class="wide" type="text" id="setFlair" placeholder="Otto's Bucks 🦌"></div>
+      <div class="frow"><label>Accent color</label><select id="setAccent"><option value="green">Field green</option><option value="blue">Ice blue</option><option value="gold">Vegas gold</option></select></div>
+      <div class="sechead">Trophy case</div>
+      <div class="note" id="trophyCase"></div>
       <div class="frow"><label>Compact rows (more players on screen)</label><input type="checkbox" id="setCompact" style="width:auto"></div>
       <div class="frow"><label>On-the-clock chime (Live mode)</label><input type="checkbox" id="setSound" style="width:auto"></div>
       <div class="frow"><label>Best Available list length</label><input type="number" id="setBaCount" min="5" max="30"></div>
@@ -275,11 +286,12 @@
       <span class="mono">Ctrl+Z</span> undo &nbsp; <span class="mono">Ctrl+Y</span> redo &nbsp; <span class="mono">Esc</span> clear/blur &nbsp; <span class="mono">?</span> this help
       <div class="sechead">About</div>
       <div style="font-size:11.5px;color:var(--dim);line-height:1.7">Draft War Room <span id="aboutVer"></span> · MIT licensed · built for Buck Breakers.<br>
-      Data: your league CSVs · Sleeper public API (players, stats, trends, headshots) · ESPN public API (injuries, news, logos) · everything stays in this browser.</div>
+      Data: your league CSVs · Sleeper public API (players, stats, trends, headshots) · ESPN public API (injuries, news, logos) · everything stays in this browser.<br>Bugs & ideas → <a href="https://github.com/JROtto5/draft-war-room/issues" target="_blank" rel="noopener" style="color:var(--green)">github.com/JROtto5/draft-war-room/issues</a></div>
       <div class="sechead">Tips</div>
       Click a projection to edit it · click a player name for a note · click the pick banner to resync the pick number · hover a team code for playoff-week matchups.
     </div>
-    <div class="foot"><button class="hbtn" id="helpClose">Close</button></div>
+    <div class="foot"><button class="hbtn" id="changelogBtn">📜 Changelog</button>
+    <button class="hbtn" id="helpClose">Close</button></div>
   </div>
 </div>
 
