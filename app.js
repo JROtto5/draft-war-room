@@ -416,13 +416,13 @@ function toast(msg, opts){
 
 let redoStack = [];
 function markTaken(id){
-  redoStack.length=0; S.taken[id]=true; S.log.push({id, who:"other"}); commit();
+  redoStack.length=0; S.taken[id]=true; S.log.push({id, who:"other", t:Date.now()}); commit();
   const p = idIndex()[id];
   if(p) toast("✕ <b>"+esc(p.name)+"</b> off the board", {undo:undoLast});
   pruneQueue();
 }
 function pickMine(id){
-  redoStack.length=0; S.mine.push(id); S.log.push({id, who:"me"}); commit();
+  redoStack.length=0; S.mine.push(id); S.log.push({id, who:"me", t:Date.now()}); commit();
   const p = idIndex()[id];
   if(p) toast("✓ Drafted <b style='color:var(--green)'>"+esc(p.name)+"</b>", {undo:undoLast});
 }
@@ -736,6 +736,12 @@ function openCard(id){
       stat("Round", rinfo[p.id]?rinfo[p.id].label:"—")+
       stat("At #"+(odds?odds.at1:"?"), odds&&odds.h1[id]!=null?odds.h1[id]+"%":"—")+
       stat(odds&&odds.at2?"At #"+odds.at2:"Later", odds&&odds.h2&&odds.h2[id]!=null?odds.h2[id]+"%":"—")+
+      ((p.pos==="TE"||p.pos==="DEF") ? (()=>{
+        const posAll = players.filter(x=>x.pos===p.pos).sort((a,b)=>b.proj-a.proj);
+        const streamer = posAll[Math.min(12, posAll.length-1)];
+        const d2 = Math.round(p.proj - streamer.proj);
+        return stat("vs streamer", (d2>0?"+":"")+d2);
+      })() : "")+
     '</div>'+
     (tbl?'<div class="cwiki">'+tbl+'</div>':'')+
     (injE?'<div class="cintel" style="color:var(--red)">🩹 <b>'+esc(injE.s)+'</b>'+(m&&m[9]?' ('+esc(m[9])+')':'')+(injE.c?' — '+esc(injE.c):'')+(injE.d?' <span class="dimtxt">('+injE.d+' · '+injE.src+')</span>':'')+'</div>':'')+
@@ -815,9 +821,16 @@ function gradeDraft(){
   if(!window._gradeBase || window._gradeBase.key!==key){
     const bak = {taken:S.taken, mine:S.mine, log:S.log};
     S.taken={}; S.mine=[]; S.log=[];                  // clean-board baseline
-    const base = [1,2,3,4,5].map(i=>runMock(STRATS[0], 777000+i*104729).startPts);
+    const runs = [1,2,3,4,5].map(i=>runMock(STRATS[0], 777000+i*104729));
+    const base = runs.map(m=>m.startPts);
+    const posSum = {};
+    runs.forEach(m=>{
+      const bs2 = bestStarters(m.mineIds, m.byId);
+      bs2.line.forEach(sl=>{ if(sl.p) posSum[sl.p.pos]=(posSum[sl.p.pos]||0)+sl.p.proj; });
+    });
+    const posAvg = {}; for(const k2 in posSum) posAvg[k2] = posSum[k2]/runs.length;
     S.taken=bak.taken; S.mine=bak.mine; S.log=bak.log;
-    window._gradeBase = {key, avg: base.reduce((a,b)=>a+b,0)/base.length};
+    window._gradeBase = {key, avg: base.reduce((a,b)=>a+b,0)/base.length, pos: posAvg};
   }
   const basePts = window._gradeBase.avg;
   const r = proj.startPts/basePts;
@@ -1117,7 +1130,7 @@ function renderPool(){
       '<td>'+posBadge(r.p.pos)+'<span class="tier t'+Math.min(tm[r.p.id],5)+'">T'+tm[r.p.id]+'</span></td>'+
       '<td class="mono" style="color:var(--dim)'+(psosFor(r.p.team)?';cursor:help':'')+'"'+(psosFor(r.p.team)?' title="'+esc(psosFor(r.p.team).txt)+'"':'')+'>'+(logoUrl(r.p.team)?'<img class="tlogo" src="'+logoUrl(r.p.team)+'" width="14" height="14" loading="lazy" decoding="async" alt=""> ':'')+r.p.team+'</td>'+
       '<td><span class="proj mono" data-edit="'+r.p.id+'">'+r.p.proj+'</span></td>'+
-      '<td class="mono" style="color:'+(r.vorp>=0?'var(--green)':'var(--faint)')+'">'+(r.vorp>0?"+":"")+Math.round(r.vorp)+'</td>'+
+      '<td class="mono" style="color:'+(r.vorp>=0?'var(--green)':'var(--faint)')+(r.vorp>0?';background:rgba(47,212,122,'+Math.min(0.22, r.vorp/700).toFixed(3)+')':'')+'">'+(r.vorp>0?"+":"")+Math.round(r.vorp)+'</td>'+
       '<td class="mono" style="color:var(--dim)">'+(r.p.adp||"—")+'</td>'+
       '<td class="mono" style="font-size:12px;color:'+(r.edge>0?'var(--green)':r.edge<0?'var(--red)':'var(--faint)')+'" title="ADP minus value rank: positive = market prices him later than his value">'+(r.edge==null?"—":(r.edge>0?"+":"")+r.edge)+'</td>'+
       '<td><span class="rd'+(curRd && !r.rd.ud && r.rd.rd<=curRd?" now":"")+'" title="'+(r.rd.est?"Estimated from projection rank (no market ADP)":"Expected round window from ADP")+'">'+r.rd.label+'</span></td>'+
@@ -1252,8 +1265,9 @@ function renderBest(){
   scored.forEach(s=>{ if(s.vorp>0) scLeft[s.p.pos]++; });
   const scarce = '<div class="scarce">'+POSITIONS.map(pos=>{
     const g = odds && odds.posGone ? odds.posGone[pos] : 0;
-    return '<span class="scpill'+(scLeft[pos]<=3?' dry':'')+'" title="Available '+pos+'s above replacement'+(g?'; sims expect ~'+g+' more gone before your pick #'+odds.at1:'')+'">'+
-      pos+' <b>'+scLeft[pos]+'</b>'+(g>=1?' <span style="color:var(--red)">−'+Math.round(g)+'</span>':'')+'</span>';
+    const runRisk = g>=2.5 && scLeft[pos]<=6;
+    return '<span class="scpill'+(scLeft[pos]<=3?' dry':'')+'" title="Available '+pos+'s above replacement'+(g?'; sims expect ~'+g+' more gone before your pick #'+odds.at1:'')+(runRisk?'; RUN RISK':'')+'">'+
+      pos+' <b>'+scLeft[pos]+'</b>'+(g>=1?' <span style="color:var(--red)">−'+Math.round(g)+'</span>':'')+(runRisk?' <b style="color:var(--red)">🔥</b>':'')+'</span>';
   }).join("")+'</div>';
   // If you take him: engine's projected plan for your next picks
   const plan = cached("plan", ()=>{
@@ -1266,8 +1280,33 @@ function renderBest(){
     return m.picks.slice(0,3).map(pk=>pk.round+"."+String(pk.idx).padStart(2,"0")+" "+pk.p.name+" ("+pk.p.pos+")");
   });
   const heroGain = S.mine.length ? Math.max(0, Math.round(bestStarters(S.mine.concat([p.id]), idIndex()).pts - bestStarters(S.mine, idIndex()).pts)) : 0;
+  // VONA: cost of waiting at the top pick's position
+  let vona = "";
+  if(odds && odds.h1){
+    const alt = scored.find(s=>s!==top && s.p.pos===p.pos && odds.h1[s.p.id]!=null && odds.h1[s.p.id]>=60);
+    if(alt){
+      const cost = Math.round(top.vorp - alt.vorp);
+      if(cost>0) vona = '<div class="planline">⏭ waiting at '+p.pos+' costs ~<b style="color:'+(cost>40?'var(--red)':'var(--gold)')+'">'+cost+' pts</b> — likely still there: '+esc(alt.p.name)+' ('+odds.h1[alt.p.id]+'%)</div>';
+    }
+  }
   const freshTop = window._lastTopId !== p.id;
   window._lastTopId = p.id;
+  // Elite shelf: T1/T2 supply per position
+  const tmB = tierMap(allPlayers());
+  const shelf = {};
+  scored.forEach(s=>{ const tr2=tmB[s.p.id]; if(tr2<=2) shelf[s.p.pos]=(shelf[s.p.pos]||0)+1; });
+  const shelfLine = '<div class="scarce" style="margin-top:-4px" title="Players left in Tier 1–2 at each position">🏔 elite shelf: '+
+    POSITIONS.map(pos=>'<span class="scpill'+((shelf[pos]||0)===0?' dry':'')+'">'+pos+' <b>'+(shelf[pos]||0)+'</b></span>').join("")+'</div>';
+  // Momentum: last five picks
+  let momentum = "";
+  const last5 = S.log.slice(-5);
+  if(last5.length===5){
+    const byIdM = idIndex(), mc = {};
+    last5.forEach(e2=>{ const pp=byIdM[e2.id]; if(pp) mc[pp.pos]=(mc[pp.pos]||0)+1; });
+    const hot = Object.entries(mc).sort((a,b)=>b[1]-a[1])[0];
+    momentum = '<div class="scarce" style="margin-top:-4px;font-size:10px;color:var(--dim)">〰 last 5 picks: '+
+      Object.entries(mc).map(([k,v])=>k+"×"+v).join(" · ")+(hot[1]>=3?' — <b style="color:var(--gold)">'+hot[0]+' heating</b>':'')+'</div>';
+  }
   // Threats: what teams picking before my next turn still need
   let threats = "";
   if(h && h.next > h.cur){
@@ -1289,12 +1328,13 @@ function renderBest(){
     if(parts.length && S.log.length>=S.settings.teams)
       threats = '<div class="scarce" style="margin-top:-4px">🎯 before your #'+h.next+': '+parts.join("")+'</div>';
   }
-  hero.innerHTML = pickline + scarce + threats +
+  hero.innerHTML = pickline + scarce + shelfLine + momentum + threats +
     '<div class="toppick'+(freshTop?' fresh':'')+'">'+
       '<div class="tag">⭐ Top Pick Right Now'+((()=>{const e=injuryOf(p); if(!e) return ""; const sv=injSeverity(e.s); return ' &nbsp;<span class="sevchip '+sv.cls+'">🩹 '+esc(sv.code==="?"?e.s:sv.label)+'</span>';})())+'</div>'+
       '<div class="heroline" data-card="'+p.id+'" title="Open player card">'+avatarImg(p,56)+'<div><div class="name">'+p.name+'</div>'+
-      '<div class="meta">'+posBadge(p.pos)+' &nbsp;'+p.team+' &nbsp;·&nbsp; <span class="mono">'+p.proj+' proj</span> &nbsp;·&nbsp; <span class="mono" style="color:var(--green)">+'+Math.round(top.vorp)+' vs replacement</span>'+(heroGain?' &nbsp;·&nbsp; <span class="mono ok">+'+heroGain+' lineup</span>':'')+(rinfo[p.id]&&!rinfo[p.id].ud?' &nbsp;·&nbsp; <span class="rd">'+rinfo[p.id].label+'</span>':'')+(odds&&odds.h1[p.id]!=null?' &nbsp;·&nbsp; <b class="'+oddsClass(odds.h1[p.id])+'" title="Simulated survival odds at your next two picks">'+odds.h1[p.id]+'% at #'+odds.at1+(odds.h2?' · '+odds.h2[p.id]+'% at #'+odds.at2:'')+'</b>':'')+'</div></div></div>'+
+      '<div class="meta">'+posBadge(p.pos)+' &nbsp;'+p.team+' &nbsp;·&nbsp; <span class="mono">'+p.proj+' proj</span> &nbsp;·&nbsp; <span class="mono" style="color:var(--green)">+'+Math.round(top.vorp)+' vs replacement</span>'+(heroGain?' &nbsp;·&nbsp; <span class="mono ok">+'+heroGain+' lineup</span>':'')+(rinfo[p.id]&&!rinfo[p.id].ud?' &nbsp;·&nbsp; <span class="rd">'+rinfo[p.id].label+'</span>':'')+(odds&&odds.h1[p.id]!=null?' &nbsp;·&nbsp; <b class="'+oddsClass(odds.h1[p.id])+'" title="Simulated survival odds at your next two picks (30 sims, ±9% at mid-range)">'+odds.h1[p.id]+'% at #'+odds.at1+(odds.h2?' · '+odds.h2[p.id]+'% at #'+odds.at2:'')+'</b>':'')+'</div></div></div>'+
       '<div class="why">'+why+'</div>'+
+      vona +
       (plan.length?'<div class="planline" title="Continuation sim: what the engine would do with your following picks">▸ then likely: '+plan.join(" · ")+'</div>':'')+
       '<div class="actions">'+
         '<button class="pick" data-pick="'+p.id+'">✓ DRAFT HIM</button>'+
@@ -1688,10 +1728,68 @@ function buildReport(){
       : '<div class="mkrow bench"><span class="rp mono">'+sl.lab+'</span><span class="mn dimtxt">— open</span></div>').join("");
     bs.line.forEach(sl=>{ if(sl.p) txt += sl.lab.padEnd(5)+" "+sl.p.name+" ("+sl.p.team+")\n"; });
   }
+  {
+    const bench2 = myIds().filter(id2=>bs && !bs.starterIds.has(id2)).map(id2=>byId[id2]).filter(Boolean);
+    if(bench2.length){
+      h += '<div class="sechead">Bench upside</div>'+bench2.map(p2=>{
+        const m2 = metaFor(p2), tags = [];
+        if(m2 && m2[1]===0) tags.push("🎓 rookie");
+        if(p2.intel && p2.intel.t!=null) tags.push("⭐ target");
+        if(buzzOf(p2)>1000) tags.push("📈 trending");
+        return '<div class="mkrow"><span class="mpos pos '+p2.pos+'">'+p2.pos+'</span><span class="mn">'+esc(p2.name)+(tags.length?' <span class="dimtxt">'+tags.join(" · ")+'</span>':'')+'</span></div>';
+      }).join("");
+    }
+  }
   h += '<div class="sechead">Stacks</div>' + (stacks.length
     ? stacks.map(([t,ps])=>'<div class="mkrow">'+(logoUrl(t)?'<img class="tlogo" src="'+logoUrl(t)+'" width="13" height="13" alt=""> ':'')+'<span class="mn">🔗 '+t+' — '+ps.map(x=>x.name.split(" ").slice(-1)[0]).join(" + ")+'</span></div>').join("")
     : '<div class="dimtxt">None yet — pair a WR/TE with one of your QBs.</div>');
   if(stacks.length) txt += "Stacks: "+stacks.map(([t,ps])=>t+" ("+ps.map(x=>x.name.split(" ").slice(-1)[0]).join("+")+")").join(", ")+"\n";
+  // round-by-round value captured
+  const rv = {};
+  let rvTotal = 0;
+  {
+    const players2 = allPlayers(), repl2 = replacementLevels(players2);
+    S.log.forEach((e,i)=>{
+      if(e.who!=="me") return;
+      const p2 = byId[e.id]; if(!p2) return;
+      const n = i+1+(S.pickOffset||0), r2 = Math.ceil(n/S.settings.teams);
+      const v = Math.round(p2.proj-(repl2[p2.pos]||0));
+      rv[r2] = (rv[r2]||0)+v; rvTotal += v;
+    });
+  }
+  if(Object.keys(rv).length){
+    h += '<div class="sechead">Value by round</div><div class="mkrow" style="flex-wrap:wrap;white-space:normal">'+
+      Object.keys(rv).sort((a,b)=>a-b).map(r2=>'<span class="mono" style="margin-right:10px">R'+r2+' <b style="color:'+(rv[r2]>=60?'var(--green)':rv[r2]>=0?'var(--dim)':'var(--red)')+'">'+(rv[r2]>0?'+':'')+rv[r2]+'</b></span>').join("")+
+      ' <span class="mono">Σ <b>'+(rvTotal>0?'+':'')+rvTotal+'</b></span></div>';
+  }
+  // per-position delta vs sim baseline
+  if(window._gradeBase && window._gradeBase.pos && S.mine.length){
+    const bsNow = bestStarters(myIds(), byId);
+    const mineByPos = {};
+    bsNow.line.forEach(sl=>{ if(sl.p) mineByPos[sl.p.pos]=(mineByPos[sl.p.pos]||0)+sl.p.proj; });
+    h += '<div class="sechead">Vs expected, by position</div><div class="mkrow" style="flex-wrap:wrap;white-space:normal">'+
+      POSITIONS.map(pos=>{
+        const d2 = Math.round((mineByPos[pos]||0)-(window._gradeBase.pos[pos]||0));
+        return '<span class="mono" style="margin-right:10px">'+pos+' <b style="color:'+(d2>=15?'var(--green)':d2<=-15?'var(--red)':'var(--dim)')+'">'+(d2>0?'+':'')+d2+'</b></span>';
+      }).join("")+'</div>';
+  }
+  // league-wide reaches & steals
+  {
+    const moves = [];
+    S.log.forEach((e,i)=>{
+      const p2 = byId[e.id]; if(!p2 || !p2.adp) return;
+      const n = i+1+(S.pickOffset||0), r2 = Math.ceil(n/S.settings.teams), idx = n-(r2-1)*S.settings.teams;
+      const slot = (r2%2===1)?idx:S.settings.teams+1-idx;
+      moves.push({p:p2, slot, d: n - p2.adp});
+    });
+    const reaches = moves.filter(m2=>m2.d<=-8).sort((a,b)=>a.d-b.d).slice(0,3);
+    const steals2 = moves.filter(m2=>m2.d>=8).sort((a,b)=>b.d-a.d).slice(0,3);
+    if(reaches.length || steals2.length){
+      h += '<div class="sechead">League reaches & steals</div>'+
+        reaches.map(m2=>'<div class="mkrow"><span class="mn">📈 '+esc(slotName(m2.slot))+' reached '+(-m2.d)+' for '+esc(m2.p.name)+'</span></div>').join("")+
+        steals2.map(m2=>'<div class="mkrow"><span class="mn">💎 '+esc(slotName(m2.slot))+' stole '+esc(m2.p.name)+' ('+m2.d+' late)</span></div>').join("");
+    }
+  }
   h += '<div class="sechead">Steals</div>' + (steals.length
     ? steals.map(s=>'<div class="mkrow"><span class="mn">💎 '+s.p.name+' — '+s.fall+' picks past ADP</span></div>').join("")
     : '<div class="dimtxt">No 10+ pick discounts landed (yet).</div>');
@@ -1741,16 +1839,37 @@ function renderBoard(){
   // projected standings from tracked rosters
   const ros = teamRosters();
   if(S.log.length >= t){
+    const curve = pickValueCurve();
+    const pv = n => curve[Math.min(curve.length-1, Math.max(0,n-1))]||0;
+    const now = pickNow();
+    const tendency = {}, timing = {};
+    S.log.forEach((e,i)=>{
+      const p2 = byId[e.id]; if(!p2) return;
+      const n = i+1+(S.pickOffset||0), r2 = Math.ceil(n/t), idx = n-(r2-1)*t, slot = (r2%2===1)?idx:t+1-idx;
+      if(p2.adp) (tendency[slot]=tendency[slot]||[]).push(n - p2.adp);
+      if(e.t && i>0 && S.log[i-1].t) (timing[slot]=timing[slot]||[]).push((e.t-S.log[i-1].t)/1000);
+    });
+    const avg = a => a && a.length ? a.reduce((x,y)=>x+y,0)/a.length : null;
+    const slowest = Object.entries(timing).filter(([,a])=>a.length>=3).sort((a,b)=>avg(b[1])-avg(a[1]))[0];
     const rows = [];
     for(let s2=1;s2<=t;s2++){
-      const ids = s2===mySlot ? S.mine : ros[s2];
-      rows.push({s:s2, pts: ids.length ? bestStarters(ids, byId).pts : 0, n: ids.length});
+      const ids = s2===mySlot ? myIds() : ros[s2];
+      const future = [];
+      for(let r2=1;r2<=S.settings.roster;r2++){
+        const n = (r2-1)*t + ((r2%2===1)?s2:t+1-s2);
+        if(n>=now) future.push(n);
+      }
+      rows.push({s:s2, pts: ids.length ? bestStarters(ids, byId).pts : 0, n: ids.length,
+                 cap: Math.round(future.reduce((a,n)=>a+pv(n),0)),
+                 tend: avg(tendency[s2])});
     }
     rows.sort((a,b)=>b.pts-a.pts);
-    h += '<div class="sechead" style="margin-top:16px">🏆 Projected standings (optimal starters so far)</div><table class="stattbl" style="max-width:420px">'+
-      '<tr><th style="text-align:left">#</th><th style="text-align:left">Team</th><th>Starters</th><th>Picks</th></tr>'+
-      rows.map((r2,i)=>'<tr'+(r2.s===mySlot?' style="color:var(--green);font-weight:700"':'')+'><td style="text-align:left">'+(i+1)+'</td><td style="text-align:left">'+esc(slotName(r2.s))+'</td><td>'+Math.round(r2.pts)+'</td><td>'+r2.n+'</td></tr>').join("")+
-      '</table>';
+    h += '<div class="sechead" style="margin-top:16px">🏆 Projected standings</div><table class="stattbl" style="max-width:560px">'+
+      '<tr><th style="text-align:left">#</th><th style="text-align:left">Team</th><th>Starters</th><th>Picks</th><th title="Value of remaining picks">Capital</th><th title="Avg picks vs ADP: negative = reaches early">Style</th></tr>'+
+      rows.map((r2,i)=>'<tr'+(r2.s===mySlot?' style="color:var(--green);font-weight:700"':'')+'><td style="text-align:left">'+(i+1)+'</td><td style="text-align:left">'+esc(slotName(r2.s))+
+        (slowest&&+slowest[0]===r2.s?' 🐢':'')+'</td><td>'+Math.round(r2.pts)+'</td><td>'+r2.n+'</td><td>'+r2.cap+'</td><td>'+
+        (r2.tend==null?'—':(r2.tend<-3?'reaches '+r2.tend.toFixed(1):r2.tend>3?'value +'+r2.tend.toFixed(1):'neutral'))+'</td></tr>').join("")+
+      '</table>'+(slowest?'<div class="dimtxt" style="margin-top:4px">🐢 slowest on the clock: '+esc(slotName(+slowest[0]))+' ('+Math.round(avg(slowest[1]))+'s avg)</div>':'');
   } else {
     h += '<div class="dimtxt" style="margin-top:12px">Standings appear after round 1 is fully logged.</div>';
   }
@@ -2036,6 +2155,13 @@ function refreshProfiles(){
   const names=Object.keys(profAll());
   sel.innerHTML = names.length ? names.map(n=>'<option>'+esc(n)+'</option>').join("") : '<option value="">(none saved)</option>';
 }
+$("#profSnap").addEventListener("click", ()=>{
+  const all = profAll();
+  const name = "📸 "+new Date().toLocaleString([], {month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"});
+  all[name] = JSON.parse(JSON.stringify(S));
+  localStorage.setItem(PROF_KEY, JSON.stringify(all));
+  refreshProfiles(); toast("Snapshot saved: "+esc(name));
+});
 $("#profSave").addEventListener("click", ()=>{
   const name=prompt("Save current board as:", S.settings.name||"Board 1");
   if(!name) return;
