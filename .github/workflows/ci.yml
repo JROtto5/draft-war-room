@@ -22,7 +22,7 @@ jobs:
           node --check sw.js
       - name: HTML sanity
         run: |
-          test "$(grep -c '<script src=' index.html)" = "2"
+          test "$(grep -c '<script src=' index.html)" = "3"
           ! grep -q '<style>' index.html
       - name: Lint & size budgets
         run: node scripts/lint.mjs
