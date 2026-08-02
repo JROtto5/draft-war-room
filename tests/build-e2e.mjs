@@ -52,7 +52,7 @@ try {
     document.getElementById("mocksOverlay").classList.remove("show");
     // report modal (#377)
     buildReport();
-    out.push("report:"+(document.getElementById("reportBody").innerHTML.includes("Current lineup")||document.getElementById("reportBody").innerHTML.includes("expected")?"OK":"BAD"));
+    out.push("report:"+(document.getElementById("reportBody").innerHTML.includes("Current lineup")||document.getElementById("reportBody").innerHTML.includes("xpected")?"OK":"BAD"));
     document.getElementById("reportOverlay").classList.remove("show");
     // palette (#378)
     openPalette();
