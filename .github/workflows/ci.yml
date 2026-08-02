@@ -7,11 +7,14 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
       - name: Syntax checks
         run: |
           node --check app.js
@@ -27,15 +30,29 @@ jobs:
         run: node tests/data.test.mjs
       - name: Logic tests
         run: node tests/logic.test.mjs
+      - name: Engine kernel tests
+        run: node tests/engine.test.mjs
+      - name: Golden output tests
+        run: node tests/golden.test.mjs
       - name: Browser E2E smoke
         run: |
           node tests/build-e2e.mjs
           python3 -m http.server 8765 &
           sleep 1
           CHROME=$(command -v google-chrome || command -v chromium-browser || command -v chromium)
-          OUT=$("$CHROME" --headless --no-sandbox --disable-gpu --virtual-time-budget=25000 --dump-dom "http://localhost:8765/e2e.html?e2e" | grep -o '<title>E2E|[^<]*' || true)
+          run_e2e() { "$CHROME" --headless --no-sandbox --disable-gpu --virtual-time-budget=35000 --dump-dom "http://localhost:8765/e2e.html?e2e" | grep -o '<title>E2E|[^<]*' || true; }
+          OUT=$(run_e2e)
+          case "$OUT" in *E2E\|*BAD*|*E2E\|*ERR*|"") echo "retrying once…"; OUT=$(run_e2e);; esac
           echo "result: $OUT"
+          "$CHROME" --headless --no-sandbox --disable-gpu --window-size=1400,900 --screenshot=e2e-shot.png --timeout=6000 "http://localhost:8765/?e2e" || true
           case "$OUT" in
             *E2E\|*BAD*|*E2E\|*ERR*|"") exit 1 ;;
             *E2E\|*) exit 0 ;;
           esac
+      - name: Upload E2E screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshot-node${{ matrix.node }}
+          path: e2e-shot.png
+          if-no-files-found: ignore

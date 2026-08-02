@@ -11,4 +11,6 @@ node scripts/lint.mjs
 node tests/data.test.mjs && node tests/logic.test.mjs
 git add -A && git commit -m "Release v$NEW"
 git tag "v$NEW" -m "Draft War Room v$NEW"
+echo "Release notes (for gh release create v$NEW --notes-file <(node scripts/release-notes.mjs)):"
+node scripts/release-notes.mjs | head -5
 echo "✅ v$NEW ready — push with: git push && git push --tags"

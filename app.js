@@ -21,6 +21,7 @@ const MIGRATIONS = {
   },
 };
 function migrate(p){
+  if(!p || typeof p !== "object" || Array.isArray(p)) p = {};
   let v = p.v || 1;
   while(v < STATE_V){
     if(MIGRATIONS[v]) p = MIGRATIONS[v](p);

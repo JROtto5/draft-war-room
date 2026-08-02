@@ -50,6 +50,16 @@ try {
   setTimeout(()=>{
     out.push("mocks:"+(document.querySelectorAll("#mockGrid .mock").length===5?"OK":"BAD"));
     document.getElementById("mocksOverlay").classList.remove("show");
+    // report modal (#377)
+    buildReport();
+    out.push("report:"+(document.getElementById("reportBody").innerHTML.includes("Current lineup")||document.getElementById("reportBody").innerHTML.includes("expected")?"OK":"BAD"));
+    document.getElementById("reportOverlay").classList.remove("show");
+    // palette (#378)
+    openPalette();
+    const pin = document.getElementById("palIn");
+    pin.value = "josh"; pin.dispatchEvent(new Event("input"));
+    out.push("palette:"+(document.querySelectorAll("#palList .palrow").length>1?"OK":"BAD"));
+    const pw = document.getElementById("palWrap"); if(pw) pw.remove();
   }, 700);
 } catch(e){ out.push("ERR:"+e.message); }
 setTimeout(()=>{ document.title="E2E|"+out.join("|"); }, 900);

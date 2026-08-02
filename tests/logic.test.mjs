@@ -180,4 +180,31 @@ const after = g("scoreBoard().scored").find(s=>s.p.id===before.p.id);
 assert.ok(after.score < before.score, "fade lowers score");
 vm.runInContext(`S.boost={};_memo={key:null};`, ctx);
 
-console.log("logic.test OK — engine, snake, saturation, mocks, odds, rounds, injuries, utils, fuzz, story");
+// corrupt-input hardening (#385)
+assert.strictEqual(g("migrate")(null).v, g("STATE_V"));
+assert.strictEqual(g("migrate")("garbage").v, g("STATE_V"));
+assert.strictEqual(g("migrate")([1,2,3]).v, g("STATE_V"));
+// settings sweep: every combo yields a legal mock (#380)
+for(const scoring of ["ppr","half"]) for(const risk of ["balanced","ceiling","floor"]) for(const ptd of [6,4]){
+  vm.runInContext(`S.settings.scoring="${scoring}";S.settings.risk="${risk}";S.settings.ptd=${ptd};S.log=[];S.taken={};S.mine=[];_memo={key:null};`, ctx);
+  const mk = g('runMock(STRATS[0], 999)');
+  assert.strictEqual(mk.mineIds.length, 16, `sweep ${scoring}/${risk}/${ptd}`);
+}
+vm.runInContext('S.settings.scoring="ppr";S.settings.risk="balanced";S.settings.ptd=6;_memo={key:null};', ctx);
+// fuzz 2: keeper/queue/plan churn (#379)
+const rnd2 = g("mulberry32(777)");
+for(let i=0;i<200;i++){
+  const pid = "p"+Math.floor(rnd2()*200);
+  const roll = rnd2();
+  if(roll<0.3) vm.runInContext(`S.keepers["${pid}"]={s:${1+Math.floor(rnd2()*12)}, r:${Math.floor(rnd2()*16)}}`, ctx);
+  else if(roll<0.5) vm.runInContext(`delete S.keepers["${pid}"]`, ctx);
+  else if(roll<0.7) vm.runInContext(`S.plan[${1+Math.floor(rnd2()*16)}]="${pid}"`, ctx);
+  else vm.runInContext(`if(!offBoard("${pid}")) toggleQueue("${pid}")`, ctx);
+}
+assert.ok(g("Object.values(S.keepers).every(k=>k && typeof k.s==='number')"), "keeper shapes survive churn");
+assert.ok(g("teamRosters()") && g("myIds()").length >= 0, "roster math survives churn");
+const remig = g("migrate")(JSON.parse(JSON.stringify(g("S"))));
+assert.strictEqual(remig.v, g("STATE_V"), "re-migration idempotent");
+vm.runInContext("S.keepers={};S.plan={};S.queue=[];_memo={key:null};", ctx);
+
+console.log("logic.test OK — engine, snake, saturation, mocks, odds, rounds, injuries, utils, fuzz, story, sweep");

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# install: ln -sf ../../scripts/hooks/pre-commit .git/hooks/pre-commit
+set -e
+cd "$(git rev-parse --show-toplevel)"
+node scripts/lint.mjs
+node tests/engine.test.mjs
+node tests/data.test.mjs
+echo "pre-commit ✓"
