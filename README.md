@@ -1,28 +1,32 @@
-# 🏈 Draft War Room — 2-QB League Edition
+# 🏈 Draft War Room — Buck Breakers Edition
 
-Live fantasy football draft assistant built for a **2-QB league with 6-point passing touchdowns**.
+Live draft assistant for a **12-team superflex (2-QB) league with 6-point passing TDs**, drafting from **slot 12**. Zero-build static site — import the repo at [vercel.com/new](https://vercel.com/new) and it deploys.
 
-**Live site:** deploy via Vercel (this is a zero-build static site — just import the repo).
+## The engine
 
-## What it does
+- **Value over replacement** scaled for superflex QB scarcity, positional-saturation aware (it knows your 4th QB is worthless and your 3rd is insurance)
+- **Roster requirement tracking** (2 QB / 3 RB / 3 WR / 1 TE / 1 DEF floors, editable) — boosts needed positions, hard-locks when picks run short
+- **Team stacks** (QB + pass-catcher) flagged 🔗 and boosted
+- **Analyst targets** ⭐ and **prop-market leans** ▲▼ folded into recommendations
+- **Tiers** auto-detected per position, with tier-cliff alerts
+- **Monte Carlo survival odds** — % chance each player is still there at your next pick (snake-aware, back-to-back turn picks handled)
+- **💎 falling-value** badges when players slide past ADP · **🚨 positional run** detector · **scarcity meter** of startable players left
 
-- **Best Available engine** — ranks every player by *value over replacement*, scaled for 2-QB scarcity (your league starts ~24 QBs, so QB replacement level is deep and QBs are gold).
-- **6-pt pass TD scoring** baked into all QB projections.
-- **Roster requirement tracking** — defaults to 2 QB / 3 RB / 3 WR / 1 TE / 1 DEF minimums (Buck Breakers: QB/2RB/2WR/TE/FLEX/SUPERFLEX/DEF, 12 teams, 16 rounds) (editable in ⚙ Settings). Recommendations boost needed positions and **hard-lock** onto them when you're running out of picks.
-- **Team stacks** — players who stack with your QB (or a QB who stacks with your pass-catchers) get flagged 🔗 and boosted.
-- **Live draft board** — one click to mark a player *taken* (eliminated) or *mine*. Undo anything (Ctrl+Z works). Full draft log.
-- **Autosaves** every action to localStorage; Export/Import JSON to move between devices.
-- **Editable projections** — click any projection number to override it. Add custom players too.
+## Tools
 
-## Keyboard
+- **🎲 Mocks** — five simulated drafts from your seat under different strategies, from the live board state
+- **⚖ Compare** — any two players head-to-head with an engine verdict
+- **🎓 Grade** — autopilots the rest of your draft and grades it vs your seat's expected outcome
+- **📋 Paste** — bulk-mark a pasted pick list as taken (fuzzy matched)
+- **🖨 Sheet** — print-ready top-200 cheat sheet
+- **My Roster** renders your actual lineup (QB/RB1/RB2/WR1/WR2/TE/FLEX/SFLX/DEF) auto-filled optimally
 
-- `/` — jump to search
-- `Ctrl+Z` — undo last board action
+## Live drafting
 
-## Deploy
+Mark every pick: **✓ MINE** for yours, **✕ taken** for everyone else's (or 📋 Paste to catch up). Everything autosaves locally; auto-backups before import/reset with restore in ⚙ Settings; Export/Import JSON to move devices.
 
-Import this repo at [vercel.com/new](https://vercel.com/new) — no framework preset, no build command, output directory = root. Done.
+**Keyboard:** `/` search (fuzzy — `cmc`, `jsn` work) · `↑↓` highlight · `M` mine · `T` taken · `Ctrl+Z` undo · `Esc` clear
 
-## Data note
+## Data
 
-Player pool ships with 2026-season projection estimates (PPR-flavored, 6-pt pass TD). Projections are editable in-app — tune them to your favorite source before draft day.
+2026 projections from league CSVs (PPR + half-PPR, 4 or 6-pt pass TDs — all toggleable), market ADP with position-aware estimates for unlisted players, analyst target notes, and prop-market edges. Click any projection to override; add custom players via **+ Player**.
