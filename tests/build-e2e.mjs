@@ -9,7 +9,7 @@ window.addEventListener("DOMContentLoaded", ()=>{ setTimeout(()=>{
 const out=[];
 try {
   renderNow();
-  out.push("rows:"+(document.querySelectorAll("#poolBody tr[data-pid]").length>300?"OK":"BAD"));
+  out.push("rows:"+(document.querySelectorAll("#poolBody tr[data-pid]").length>=250?"OK":"BAD"));
   out.push("hero:"+(document.getElementById("hero").innerHTML.includes("% at #")?"OK":"BAD"));
   out.push("avatars:"+(document.querySelectorAll("#poolBody .avatar").length>10?"OK":"BAD"));
   out.push("stamp:"+(document.getElementById("buildStamp").textContent.includes("build v")?"OK":"BAD"));

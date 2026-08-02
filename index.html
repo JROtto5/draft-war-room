@@ -62,6 +62,7 @@
 
   <!-- LEFT: Best available -->
   <div class="left">
+    <div class="panel" id="queueBox" style="display:none;margin-bottom:16px"></div>
     <div class="panel">
       <h2><span class="dot"></span> Best Available</h2>
       <div class="hero" id="hero"></div>
@@ -130,7 +131,11 @@
       <div class="stackbox" id="stackBox"></div>
     </div>
     <div class="panel">
-      <h2>Draft Log</h2>
+      <h2>Draft Log
+        <button class="hbtn" id="logMineBtn" style="margin-left:auto;padding:3px 8px;font-size:10px" title="Show only my picks">MINE</button>
+        <button class="hbtn" id="undo5Btn" style="margin-left:6px;padding:3px 8px;font-size:10px" title="Undo the last 5 board actions">↩×5</button>
+        <button class="hbtn" id="logCsvBtn" style="margin-left:6px;padding:3px 8px;font-size:10px" title="Download pick log as CSV">⇩</button>
+      </h2>
       <div class="loglist" id="logList"></div>
     </div>
   </div>
@@ -155,6 +160,7 @@
       <div class="frow"><label>Points per passing TD</label><select id="setPtd"><option value="6">6 (this league)</option><option value="4">4</option></select></div>
       <div class="frow"><label>Compact rows (more players on screen)</label><input type="checkbox" id="setCompact" style="width:auto"></div>
       <div class="frow"><label>On-the-clock chime (Live mode)</label><input type="checkbox" id="setSound" style="width:auto"></div>
+      <div class="frow"><label>Best Available list length</label><input type="number" id="setBaCount" min="5" max="30"></div>
       <div class="frow"><label>Show columns</label><span style="display:flex;gap:12px;font-size:12px;color:var(--dim)">
         <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="colADP" style="width:auto">ADP</label>
         <label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="colEdge" style="width:auto">Edge</label>
@@ -183,7 +189,8 @@
         </span></div>
     </div>
     <div class="foot">
-      <button class="hbtn" id="restoreBtn" style="margin-right:auto" title="Undo the last import or reset">↩ Restore backup</button>
+      <button class="hbtn" id="restoreBtn" title="Undo the last import or reset">↩ Restore backup</button>
+      <button class="hbtn" id="defaultsBtn" style="margin-right:auto" title="Reset settings to league defaults (board untouched)">Defaults</button>
       <button class="hbtn" id="settingsCancel">Cancel</button>
       <button class="hbtn" id="settingsSave" style="border-color:var(--green);color:var(--green)">Save</button>
     </div>
@@ -323,7 +330,9 @@
   <div class="modal wide">
     <h3>🗂 Draft Board <span style="font-weight:400;color:var(--dim);font-size:12px">(reconstructed from pick order)</span></h3>
     <div class="body"><div id="boardGrid" style="overflow-x:auto"></div></div>
-    <div class="foot"><button class="hbtn" id="boardClose">Close</button></div>
+    <div class="foot">
+      <button class="hbtn" id="boardPrint" title="Print-ready results: standings + full round-by-round board">🖨 Print results</button>
+      <button class="hbtn" id="boardClose">Close</button></div>
   </div>
 </div>
 

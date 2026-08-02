@@ -360,3 +360,13 @@ th[data-sort]:focus-visible{outline:2px solid var(--green); outline-offset:-2px}
 body.hidecol-adp th:nth-child(7),body.hidecol-adp td:nth-child(7){display:none}
 body.hidecol-edge th:nth-child(8),body.hidecol-edge td:nth-child(8){display:none}
 body.hidecol-rd th:nth-child(9),body.hidecol-rd td:nth-child(9){display:none}
+/* round 8 */
+.ptab sup{font-size:8px; margin-left:3px; opacity:.75}
+mark{background:rgba(255,201,77,.35); color:inherit; border-radius:2px; padding:0 1px}
+th.sorton[aria-sort="descending"]::after{content:" ▼"; font-size:8px}
+th.sorton[aria-sort="ascending"]::after{content:" ▲"; font-size:8px}
+#ctxMenu{position:fixed; z-index:250; background:var(--panel2); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow); display:flex; flex-direction:column; min-width:150px; overflow:hidden; animation:toastIn .15s}
+#ctxMenu button{background:none; border:none; color:var(--text); font-family:inherit; font-size:12.5px; text-align:left; padding:9px 14px; cursor:pointer}
+#ctxMenu button:hover{background:var(--bg2); color:var(--green)}
+#logMineBtn.on{border-color:var(--green); color:var(--green)}
+tr.keeperrow{opacity:.5}
