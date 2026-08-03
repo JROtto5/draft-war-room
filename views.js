@@ -764,6 +764,21 @@ function renderBest(){
     pickline += '<div class="pickline" style="margin-top:-4px;font-size:10.5px">🔮 '+slotEmoji(pred.slot)+' '+esc(slotName(pred.slot))+' likely takes: '+
       pred.cand.map(x=>'<b>'+esc(x.p.name.split(" ").slice(-1)[0])+'</b> ('+x.p.pos+')').join(" or ")+'</div>';
   }
+  { // 👻 ghost chip (#609) + 📉 ticker (#611) + 🎛 command strip (#615)
+    const gc = document.getElementById("ghostChip");
+    const gd = ghostDelta();
+    if(gc){
+      if(S.ui.live && gd && gd.n>=2){
+        gc.hidden=false;
+        gc.innerHTML = '👻 '+(gd.d>=0?'+':'')+gd.d+' vs ghost';
+        gc.style.color = gd.d>=0 ? 'var(--green)' : 'var(--red)';
+      } else gc.hidden=true;
+    }
+    renderTicker();
+    renderCmdStrip();
+    const vb = document.getElementById("voiceBtn");
+    if(vb) vb.hidden = !(S.ui.live && ("webkitSpeechRecognition" in window || "SpeechRecognition" in window));
+  }
   { // MVP belt (#569): biggest positive ADP delta so far holds the belt during live drafts
     const chipEl = document.getElementById("mvpChip");
     if(chipEl){
@@ -871,19 +886,65 @@ function renderBest(){
     if(parts.length && S.log.length>=S.settings.teams)
       threats = '<div class="scarce"><span class="striptag">🎯 BY #'+h.next+'</span>'+parts.join("")+'</div>';
   }
-  hero.innerHTML = pickline + scarce + shelfLine + momentum + threats +
+  // 🧠 Coach's Call (#605): argue the case in prose, from live engine internals
+  let coach = "";
+  {
+    const bits = [];
+    if(top.why && top.why.length) bits.push(top.why[0].charAt(0).toUpperCase()+top.why[0].slice(1));
+    const g2 = odds && odds.posGone ? odds.posGone[p.pos] : 0;
+    if(g2>=2) bits.push("sims expect ~"+Math.round(g2)+" more "+p.pos+"s gone before you pick again");
+    if((shelf[p.pos]||0)<=2) bits.push("only "+(shelf[p.pos]||0)+" Tier-1/2 "+p.pos+(shelf[p.pos]===1?"":"s")+" left on the shelf");
+    if(odds && odds.h1[p.id]!=null && odds.h1[p.id]<45) bits.push("he survives to #"+odds.at1+" just "+odds.h1[p.id]+"% of the time — waiting is a coin flip you lose");
+    const inj2 = injuryOf(p);
+    if(inj2) bits.push("the "+String(inj2.s||"injury")+" flag is priced in already");
+    if(bits.length>=2) coach = '<div class="coachbox">🧠 <b>Coach\'s call:</b> '+esc(bits.slice(0,3).join(". "))+'. Take him.</div>';
+  }
+  // 🎯 Snipe alerts (#602)
+  let snipeStrip = "";
+  try{
+    const snipes = cached("snipes", snipeScan);
+    if(snipes.length){
+      snipes.slice(0,3).forEach(sn=>{
+        const key2 = sn.p.id+"@"+sn.pk;
+        window._snipeToasted = window._snipeToasted || {};
+        if(!window._snipeToasted[key2] && S.log.length >= S.settings.teams){
+          window._snipeToasted[key2] = true;
+          toast("🎯 Snipe risk: <b>"+esc(sn.p.name)+"</b> likely taken by "+esc(slotName(sn.slot))+" ("+sn.inPicks+" pick"+(sn.inPicks>1?"s":"")+" before you)", {warn:true});
+        }
+      });
+      snipeStrip = '<div class="scarce snipes"><span class="striptag" style="color:var(--red)">🎯 SNIPE</span>'+
+        snipes.slice(0,3).map(sn=>'<span class="scpill" title="'+esc(slotName(sn.slot))+' picks at #'+sn.pk+'">'+esc(sn.p.name.split(" ").slice(-1)[0])+' → '+slotEmoji(sn.slot)+' '+esc(slotName(sn.slot))+'</span>').join("")+'</div>';
+    }
+  }catch(e){}
+  // 📜 War Plan (#604)
+  let wpHtml = "";
+  try{
+    const wp = cached("warplan", warPlan);
+    if(wp && wp.length && S.mine.length < S.settings.roster){
+      wpHtml = '<details class="warplan"><summary>📜 <b>War Plan</b> — your next '+wp.length+' pick'+(wp.length>1?"s":"")+', pre-decided</summary>'+
+        wp.map(row=>{
+          if(!row.primary) return "";
+          return '<div class="wprow"><span class="rp mono">#'+row.n+'</span> '+
+            '<b>'+esc(row.primary.p.name)+'</b> <span class="dimtxt">('+row.primary.p.pos+(row.k>0?' · '+row.po+'% there':'')+')</span>'+
+            (row.fb1?' <span class="dimtxt">→ else</span> '+esc(row.fb1.p.name)+(row.k>0&&row.fo?' <span class="dimtxt">('+row.fo+'%)</span>':''):'')+
+            (row.fb2?' <span class="dimtxt">→ else</span> '+esc(row.fb2.p.name):'')+'</div>';
+        }).join("")+'</details>';
+    }
+  }catch(e){}
+  hero.innerHTML = pickline + snipeStrip + scarce + shelfLine + momentum + threats +
     '<div class="toppick'+(freshTop?' fresh':'')+'">'+
       '<div class="tag">⭐ Top Pick Right Now'+((()=>{const e=injuryOf(p); if(!e) return ""; const sv=injSeverity(e.s); return ' &nbsp;<span class="sevchip '+sv.cls+'">🩹 '+esc(sv.code==="?"?e.s:sv.label)+'</span>';})())+'</div>'+
       '<div class="heroline" data-card="'+p.id+'" title="Open player card">'+avatarImg(p,56)+'<div><div class="name">'+p.name+'</div>'+
       '<div class="meta">'+posBadge(p.pos)+' &nbsp;'+p.team+' &nbsp;·&nbsp; <span class="mono">'+p.proj+' proj</span> &nbsp;·&nbsp; <span class="mono" style="color:var(--green)">+'+Math.round(top.vorp)+' vs replacement</span>'+(heroGain?' &nbsp;·&nbsp; <span class="mono ok">+'+heroGain+' lineup</span>':'')+(rinfo[p.id]&&!rinfo[p.id].ud?' &nbsp;·&nbsp; <span class="rd">'+rinfo[p.id].label+'</span>':'')+(odds&&odds.h1[p.id]!=null?' &nbsp;·&nbsp; <b class="'+oddsClass(odds.h1[p.id])+'" title="Simulated survival odds at your next two picks (30 sims, ±9% at mid-range)">'+odds.h1[p.id]+'% at #'+odds.at1+(odds.h2?' · '+odds.h2[p.id]+'% at #'+odds.at2:'')+'</b>':'')+'</div></div></div>'+
       '<div class="why">'+why+'</div>'+
+      coach +
       vona +
       (plan.length?'<div class="planline" title="Continuation sim: what the engine would do with your following picks">▸ then likely: '+plan.join(" · ")+'</div>':'')+
       '<div class="actions">'+
         '<button class="pick" data-pick="'+p.id+'">✓ DRAFT HIM</button>'+
         '<button class="kill" data-take="'+p.id+'">✕ someone took him</button>'+
       '</div>'+
-    '</div>';
+    '</div>' + wpHtml;
   const bl = document.querySelector(".balist"); const blScroll = bl ? bl.scrollTop : 0;
   const byIdL = idIndex();
   const baseLineup = S.mine.length ? bestStarters(S.mine, byIdL).pts : 0;
@@ -1114,6 +1175,111 @@ function exportLogCsv(){
   a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
   a.download = "draft-log.csv"; a.click(); URL.revokeObjectURL(a.href);
 }
+/* 📉 Market ticker (#611): stock-floor strip during live drafts. */
+function renderTicker(){
+  let tk = document.getElementById("ticker");
+  if(!S.ui.live || S.log.length < 3){ if(tk) tk.remove(); return; }
+  if(!tk){ tk = document.createElement("div"); tk.id = "ticker"; document.body.appendChild(tk); }
+  const items = [];
+  for(let i=Math.max(0,S.log.length-5); i<S.log.length; i++){
+    const b = boothLine(S.log[i], i);
+    if(b) items.push('<span class="tk '+b.cls+'">'+esc(b.line)+'</span>');
+  }
+  try{
+    const {scored} = scoreBoard();
+    const now = pickNow();
+    scored.filter(x=>x.p.adp && now - x.p.adp >= 10).slice(0,3)
+      .forEach(x=>items.push('<span class="tk steal">📉 '+esc(x.p.name)+' still here — '+Math.round(now-x.p.adp)+' past ADP</span>'));
+    const odds = survivalOdds();
+    if(odds && odds.posGone){
+      const hot = Object.entries(odds.posGone).sort((a,b)=>b[1]-a[1])[0];
+      if(hot && hot[1]>=3) items.push('<span class="tk run">🔥 '+hot[0]+' run in progress — ~'+Math.round(hot[1])+' more gone by your pick</span>');
+    }
+  }catch(e){}
+  if(!items.length){ tk.remove(); return; }
+  const html = items.join('<span class="tksep">◆</span>');
+  if(tk.dataset.h === String(items.length)+html.length) return;   // don't restart the marquee needlessly
+  tk.dataset.h = String(items.length)+html.length;
+  tk.innerHTML = '<div class="tkinner">'+html+'<span class="tksep">◆</span>'+html+'</div>';
+}
+
+/* 🎛 Command strip (#615): glove-mode actions during live drafts. */
+function renderCmdStrip(){
+  let cs = document.getElementById("cmdStrip");
+  const want = S.ui.live && myIds().length < S.settings.roster;
+  if(!want){ if(cs) cs.remove(); return; }
+  if(!cs){ cs = document.createElement("div"); cs.id = "cmdStrip"; document.body.appendChild(cs); }
+  let topId = null;
+  try{ const sc = scoreBoard().scored[0]; topId = sc && sc.p.id; }catch(e){}
+  pruneQueue();
+  const q0 = S.queue.length ? idIndex()[S.queue[0]] : null;
+  cs.innerHTML =
+    (topId?'<button class="cmd pick" data-pick="'+topId+'">✓ TOP PICK</button>':'')+
+    '<button class="cmd" data-simto="1">⏩ SIM TO ME</button>'+
+    (q0?'<button class="cmd" data-pick="'+q0.id+'">⭐ '+esc(q0.name.split(" ").slice(-1)[0].toUpperCase())+'</button>':'')+
+    '<button class="cmd warn" data-cmdpanic="1">🚨 PANIC</button>';
+}
+
+/* 📈 Win-probability chart (#610): the sparkline, grown up. */
+function oddsChartSvg(w, h){
+  let hist = [];
+  try{ hist = JSON.parse(localStorage.getItem(LS_KEY+"-oddshist")||"[]"); }catch(e){}
+  if(hist.length < 3) return "";
+  const os = hist.map(x=>x.o), mx = Math.max(...os, 5), mn = Math.min(...os, 0);
+  const X = i => Math.round(8 + i*((w-16)/(os.length-1)));
+  const Y = o => Math.round(h-14 - (h-26)*((o-mn)/Math.max(0.1,mx-mn)));
+  const pts = os.map((o,i)=>X(i)+","+Y(o)).join(" ");
+  let big = 0, bigI = 0;
+  os.forEach((o,i)=>{ if(i && Math.abs(o-os[i-1])>big){ big=Math.abs(o-os[i-1]); bigI=i; } });
+  const myPk = new Set(myOverallPicks());
+  const marks = hist.map((x,i)=> myPk.has(x.n+(S.pickOffset||0)) || myPk.has(x.n) ?
+    '<circle cx="'+X(i)+'" cy="'+Y(x.o)+'" r="3" fill="var(--green)"/>' : "").join("");
+  return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="max-width:100%">'+
+    '<polyline points="'+pts+'" fill="none" stroke="var(--gold)" stroke-width="2"/>'+marks+
+    (big>=3?'<text x="'+X(bigI)+'" y="'+(Y(os[bigI])-8)+'" fill="var(--dim)" font-size="9" text-anchor="middle">'+(os[bigI]>os[bigI-1]?'+':'−')+big.toFixed(0)+'%</text>':'')+
+    '<text x="8" y="12" fill="var(--dim)" font-size="10">🏆 title odds through the draft</text></svg>';
+}
+
+/* 🏁 Draft story mode (#613): the draft, replayed as a 60-second broadcast. */
+function storyMode(){
+  if(!S.log.length) return toast("No draft to replay yet", {warn:true});
+  const old = document.getElementById("storyOverlay"); if(old) old.remove();
+  const ov = document.createElement("div"); ov.id = "storyOverlay";
+  document.body.appendChild(ov);
+  const byId = idIndex(), t = S.settings.teams;
+  let i = 0, timer = null;
+  const step = ()=>{
+    if(i >= S.log.length){
+      const bs = S.mine.length ? bestStarters(myIds(), byId) : null;
+      ov.innerHTML = '<div class="storycard final"><div class="tag">🏁 THAT\'S A WRAP</div>'+
+        '<div class="name">'+esc(S.settings.flair||slotName(S.settings.slot))+'</div>'+
+        (bs?'<div class="meta">projected starters <b class="mono" style="color:var(--green)">'+fmt(bs.pts)+'</b></div>':'')+
+        '<div style="margin:14px auto;max-width:520px">'+oddsChartSvg(500,120)+'</div>'+
+        '<button class="hbtn" id="storyClose">Close</button></div>';
+      ov.querySelector("#storyClose").addEventListener("click", ()=>ov.remove());
+      return;
+    }
+    const e = S.log[i], p = byId[e.id];
+    if(!p){ i++; step(); return; }
+    const n = i+1+(S.pickOffset||0), r = Math.ceil(n/t), ix = n-(r-1)*t;
+    const b = boothLine(e, i);
+    ov.innerHTML = '<div class="storycard'+(e.who==="me"?' mine':'')+'">'+
+      '<div class="tag">PICK '+r+'.'+String(ix).padStart(2,"0")+' · '+esc(slotName(slotOfPick(n)))+'</div>'+
+      avatarImg(p,72)+'<div class="name">'+esc(p.name)+'</div>'+
+      '<div class="meta">'+posBadge(p.pos)+' '+p.team+(p.adp?' · ADP '+p.adp:'')+'</div>'+
+      (b?'<div class="boothline '+b.cls+'">'+esc(b.line)+'</div>':'')+
+      '<div class="storyprog mono">'+(i+1)+' / '+S.log.length+' · tap to skip</div></div>';
+    i++;
+    timer = setTimeout(step, b ? 1100 : 480);
+  };
+  ov.addEventListener("click", ev=>{
+    if(ev.target.id==="storyClose") return;
+    if(i >= S.log.length){ ov.remove(); return; }
+    clearTimeout(timer); step();
+  });
+  step();
+}
+
 function renderLog(){
   const byId = idIndex();
   const t = S.settings.teams;
@@ -1127,7 +1293,9 @@ function renderLog(){
       '<span class="who '+(e.who==="me"?"me":"")+'">'+(e.who==="me"?"MY PICK":"taken")+'</span>'+
       '<span class="n">'+(logoUrl(p.team)?'<img class="tlogo" src="'+logoUrl(p.team)+'" width="13" height="13" loading="lazy" alt=""> ':'')+p.name+' <span style="color:var(--faint)">'+p.pos+' · '+p.team+'</span></span>'+
       (function(){const v=Math.round(p.proj-(repl[p.pos]||0)); return '<span class="mono" style="font-size:10px;color:'+(v>25?'var(--green)':v>0?'var(--dim)':'var(--faint)')+'">'+(v>0?'+':'')+v+'</span>';})()+
-      '<span class="x undo1" data-undoentry="'+i+'" role="button" tabindex="0" aria-label="Undo this pick" style="font-size:10.5px">undo</span></div>';
+      (e.who==="me"?'<span class="x undo1" data-whatif="'+i+'" role="button" tabindex="0" title="What if you took someone else here?" style="font-size:10.5px">🔀</span>':'')+
+      '<span class="x undo1" data-undoentry="'+i+'" role="button" tabindex="0" aria-label="Undo this pick" style="font-size:10.5px">undo</span></div>'+
+      (function(){ const b=boothLine(e,i); return b?'<div class="boothrow '+b.cls+'">'+esc(b.line)+'</div>':""; })();
   }).reverse().join("") : '<div class="empty">Nothing yet. Mark players as they come off the board.</div>';
 }
 

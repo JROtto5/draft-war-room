@@ -10,6 +10,8 @@ The full draft-day cockpit for **any league shape** (built for a 12-team superfl
 **House key to enter:** the classic. 🔑
 
 ## Draft day
+When your pick arrives, the screen becomes the **⚡ On-the-Clock Takeover** — top three choices with the argument for each, survival odds if you wait, one-tap draft. Before that: 🎯 **snipe alerts** warn you who's about to steal your targets, the 📜 **War Plan** pre-decides your next three picks with fallbacks, 🧠 **Coach's Call** argues the case in plain English, and a 🎙 voice toggle lets you say "taken Gibbs" / "mine Bowers" hands-free. A 📺 booth ticker narrates steals, reaches and runs; a 👻 ghost drafter races you; afterwards, watch the 🏁 60-second story replay or settle regrets with the 🔀 what-if time machine.
+
 Flip **🔴 Live** on when the draft starts: pace clock + ETA, a chime and a panic banner with a one-tap `TAKE <TOP PICK>` when you're on the clock, and confetti + auto-report when your 16th pick lands. Mark every pick (`✓ MINE` / `✕ taken`, `📋 Paste` to catch up, click the pick banner to resync). Keyboard: `/` search · `↑↓` highlight · `M` mine · `T` taken · `D` never · `N` note · `C` compare · `Ctrl+Z/Y` undo/redo · `?` help.
 
 ## The engine

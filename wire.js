@@ -3,7 +3,7 @@
 /* ---------- Events (delegated) ---------- */
 document.addEventListener("click", e=>{
   window._acts = window._acts || [];
-  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-preset],[data-presetsave],[data-tiersort],[data-runseed],[data-abseed],[data-card],[data-cardtab],[data-boost],[data-fade],[data-adpedit],[data-tierup],[data-tierdn],[data-onepager],[data-cardpng],[data-unpickpre],[data-cmpfrom],[data-pin],[data-slotname],[data-cellpick],[data-voicenote],[data-notetpl],[data-keeper],[data-queue],[data-qup],[data-qfill],[data-plan],[data-unplan],[data-plantoggle],[data-planqueue],[data-qround],[data-qdn],[data-showall],[data-simto],[data-horn],[data-siren],#tradeGo,#matrixCopy,#nickGen,#logMineBtn,#logCsvBtn,#undo5Btn,th[data-sort]");
+  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-preset],[data-presetsave],[data-tiersort],[data-runseed],[data-abseed],[data-whatif],[data-cmdpanic],[data-card],[data-cardtab],[data-boost],[data-fade],[data-adpedit],[data-tierup],[data-tierdn],[data-onepager],[data-cardpng],[data-unpickpre],[data-cmpfrom],[data-pin],[data-slotname],[data-cellpick],[data-voicenote],[data-notetpl],[data-keeper],[data-queue],[data-qup],[data-qfill],[data-plan],[data-unplan],[data-plantoggle],[data-planqueue],[data-qround],[data-qdn],[data-showall],[data-simto],[data-horn],[data-siren],#tradeGo,#matrixCopy,#nickGen,#logMineBtn,#logCsvBtn,#undo5Btn,th[data-sort]");
   if(!t){
     const rowEl = e.target.closest("#poolBody tr[data-pid]");
     if(rowEl){
@@ -279,6 +279,40 @@ document.addEventListener("click", e=>{
     $("#fTargets").checked=!!pz.targetsOnly; $("#fStacks").checked=!!pz.stacksOnly;
     $("#fSurvive").checked=!!pz.survivors; $("#fFallers").checked=!!pz.fallers; $("#fHideHurt").checked=!!pz.hideHurt;
     save(); renderTabs(); renderPool(); return;
+  }
+  if(t.dataset.whatif != null){
+    const i2 = +t.dataset.whatif;
+    const e2 = S.log[i2]; if(!e2) return;
+    const cur = idIndex()[e2.id];
+    const nm2 = prompt("What if, instead of "+(cur?cur.name:"that pick")+", you had taken:", "");
+    if(!nm2) return;
+    const alt = allPlayers().find(p2=>nq(p2.name)===nq(nm2)) || (nm2.length>=4 ? allPlayers().find(p2=>nq(p2.name).includes(nq(nm2))) : null);
+    if(!alt) return toast("Couldn't find \""+esc(nm2)+"\"", {warn:true});
+    if(alt.id===e2.id) return toast("That's the pick you made", {warn:true});
+    toast("🔀 Re-simulating the draft…");
+    setTimeout(()=>{
+      const w = whatIf(i2, alt.id);
+      const byId2 = idIndex();
+      const col = ids => ids.map(id2=>{const p2=byId2[id2]; return p2?'<div class="mkrow"><span class="mpos pos '+p2.pos+'">'+p2.pos+'</span><span class="mn">'+esc(p2.name)+'</span><span class="mono dimtxt">'+p2.proj+'</span></div>':"";}).join("");
+      const d2 = w.altPts - w.realPts;
+      $("#reportBody").innerHTML =
+        '<div class="sechead">🔀 What-if: '+esc(alt.name)+' instead of '+esc(cur?cur.name:"?")+'</div>'+
+        '<div class="mkrow"><span class="mn">Timeline points: <b class="mono">'+w.realPts+'</b> (reality) vs <b class="mono" style="color:'+(d2>0?'var(--green)':'var(--red)')+'">'+w.altPts+'</b> (what-if) — '+
+        '<b style="color:'+(d2>0?'var(--green)':'var(--red)')+'">'+(d2>0?'you left '+d2+' pts on the table':d2<0?'your pick was '+(-d2)+' pts better. Vindicated.':'dead even')+'</b></span></div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px">'+
+        '<div><div class="sechead">Reality</div>'+col(w.realIds)+'</div>'+
+        '<div><div class="sechead">What-if timeline</div>'+col(w.altIds)+'</div></div>'+
+        '<div class="dimtxt" style="margin-top:8px">Rest of the room re-simulated with the same CPU brains (seed fixed). One timeline of many — but a fair one.</div>';
+      $("#reportOverlay").classList.add("show");
+    }, 30);
+    return;
+  }
+  if(t.dataset.cmdpanic){
+    window._tkoDismissed = null; window._panicDismissed = null;
+    const hz2 = nextPickHorizon();
+    if(hz2 && hz2.onClock){ render(); }
+    else toast("Not on the clock yet — panic saved for pick #"+(hz2?hz2.mine0:"?"));
+    return;
   }
   if(t.dataset.runseed){
     const v2 = document.getElementById("mockSeedIn").value.trim();
@@ -675,6 +709,31 @@ function buildReport(){
       }
     }
   }
+  { // ⚔️ rivalry radar (#614)
+    const gr = Object.entries(S.grudges||{}).filter(([,v])=>v.length).sort((a,b)=>b[1].length-a[1].length);
+    if(gr.length){
+      h += '<div class="sechead">⚔️ Rivalry radar — who sniped you</div>' + gr.map(([sl2,names])=>
+        '<div class="mkrow"><span class="mn">'+slotEmoji(+sl2)+' <b>'+esc(slotName(+sl2))+'</b> ×'+names.length+' <span class="dimtxt">('+esc(names.slice(-3).join(", "))+')</span></span></div>').join("");
+      txt += "Sniped by: "+gr.map(([sl2,names])=>slotName(+sl2)+" x"+names.length).join(", ")+"\n";
+    }
+  }
+  { // 👻 ghost showdown (#609)
+    const gd = ghostDelta();
+    if(gd && gd.n>=3){
+      const byIdG = idIndex();
+      h += '<div class="sechead">👻 vs the ghost drafter</div>'+
+        '<div class="mkrow"><span class="mn">You <b class="mono">'+gd.me+'</b> · ghost <b class="mono">'+gd.ghost+'</b> — <b style="color:'+(gd.d>=0?'var(--green)':'var(--red)')+'">'+(gd.d>=0?'you beat the machine by '+gd.d:'the machine is up '+(-gd.d))+' pts</b> over '+gd.n+' picks</span></div>'+
+        S.ghost.filter(g2=>g2.mine!==g2.ghost).slice(0,5).map(g2=>{
+          const a2=byIdG[g2.mine], b2=byIdG[g2.ghost];
+          return a2&&b2?'<div class="mkrow"><span class="rp mono">#'+g2.pick+'</span><span class="mn dimtxt">you: '+esc(a2.name)+' · ghost: '+esc(b2.name)+'</span></div>':"";
+        }).join("");
+      txt += "Ghost drafter: me "+gd.me+" vs ghost "+gd.ghost+"\n";
+    }
+  }
+  { // 📈 win-probability graph (#610)
+    const chart = oddsChartSvg(560, 130);
+    if(chart) h += '<div class="sechead">📈 Title odds through the draft</div><div style="padding:4px 0">'+chart+'</div>';
+  }
   h += '<div class="sechead">Steals</div>' + (steals.length
     ? steals.map(s=>'<div class="mkrow"><span class="mn">💎 '+s.p.name+' — '+s.fall+' picks past ADP</span></div>').join("")
     : '<div class="dimtxt">No 10+ pick discounts landed (yet).</div>');
@@ -747,6 +806,57 @@ $("#reportPng").addEventListener("click", ()=>{
   });
 });
 $("#gradeBtn").addEventListener("click", buildReport);
+$("#storyBtn").addEventListener("click", ()=>{ $("#reportOverlay").classList.remove("show"); storyMode(); });
+$("#pocketBtn").addEventListener("click", ()=>{   // 📱 pocket cheat card (#612)
+  const byId = idIndex();
+  const c = document.createElement("canvas"); c.width = 1080; c.height = 1920;
+  const x = c.getContext("2d");
+  x.fillStyle = "#0b0f14"; x.fillRect(0,0,1080,1920);
+  x.fillStyle = "#2fd47a"; x.font = "bold 56px sans-serif"; x.fillText("WAR ROOM · POCKET CARD", 60, 110);
+  x.fillStyle = "#8ba0bc"; x.font = "28px sans-serif";
+  x.fillText(new Date().toLocaleDateString()+" · slot "+S.settings.slot+" of "+S.settings.teams, 60, 160);
+  const posC = {QB:"#ff6b6b", RB:"#4dd88a", WR:"#5aa9ff", TE:"#ffa94d", DEF:"#b78cff"};
+  let y = 260;
+  x.fillStyle = "#ffc94d"; x.font = "bold 40px sans-serif"; x.fillText("⭐ QUEUE", 60, y); y += 24;
+  pruneQueue();
+  (S.queue.slice(0,14).length?S.queue.slice(0,14):[]).forEach((id2,i2)=>{
+    const p2 = byId[id2]; if(!p2) return;
+    y += 62;
+    x.fillStyle = "#5a6d87"; x.font = "30px monospace"; x.fillText(String(i2+1).padStart(2," "), 60, y);
+    x.fillStyle = posC[p2.pos]||"#9aa7b5"; x.font = "bold 30px sans-serif"; x.fillText(p2.pos, 130, y);
+    x.fillStyle = "#e8eef7"; x.font = "34px sans-serif"; x.fillText(p2.name, 230, y);
+    x.fillStyle = "#8ba0bc"; x.font = "28px monospace"; x.fillText(String(p2.proj), 900, y);
+  });
+  if(!S.queue.length){ y += 50; x.fillStyle = "#5a6d87"; x.font = "30px sans-serif"; x.fillText("(queue empty — queue guys before draft day!)", 60, y); }
+  y += 90;
+  const planEnts = Object.entries(S.plan).sort((a,b)=>+a[0]-+b[0]).slice(0,8);
+  if(planEnts.length){
+    x.fillStyle = "#ffc94d"; x.font = "bold 40px sans-serif"; x.fillText("📌 PLAN", 60, y);
+    planEnts.forEach(([r2,id2])=>{
+      const p2 = byId[id2]; if(!p2) return;
+      y += 58;
+      x.fillStyle = "#5a6d87"; x.font = "30px monospace"; x.fillText("R"+r2, 60, y);
+      x.fillStyle = posC[p2.pos]||"#9aa7b5"; x.font = "bold 30px sans-serif"; x.fillText(p2.pos, 160, y);
+      x.fillStyle = "#e8eef7"; x.font = "34px sans-serif"; x.fillText(p2.name, 260, y);
+    });
+    y += 80;
+  }
+  try{
+    const tm2 = tierMap(allPlayers());
+    const shelf2 = {};
+    allPlayers().forEach(p2=>{ if(!offBoard(p2.id) && tm2[p2.id]<=2) shelf2[p2.pos]=(shelf2[p2.pos]||0)+1; });
+    x.fillStyle = "#ffc94d"; x.font = "bold 40px sans-serif"; x.fillText("🏔 TIER 1–2 LEFT", 60, y); y += 60;
+    x.font = "bold 34px sans-serif";
+    let xx = 60;
+    POSITIONS.forEach(pos=>{
+      x.fillStyle = posC[pos]||"#9aa7b5"; x.fillText(pos+" "+(shelf2[pos]||0), xx, y); xx += 200;
+    });
+  }catch(e){}
+  x.fillStyle = "#5a6d87"; x.font = "26px sans-serif";
+  x.fillText("minimums: 2QB · 3RB · 3WR · 1TE · 1DEF — draft-war-room", 60, 1860);
+  c.toBlob(b=>{ const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download="pocket-card.png"; a.click(); URL.revokeObjectURL(a.href); });
+  toast("📱 Pocket card saved — set it as your phone wallpaper for draft night");
+});
 $("#reportClose").addEventListener("click", ()=>$("#reportOverlay").classList.remove("show"));
 $("#reportCopy").addEventListener("click", ()=>{
   navigator.clipboard.writeText(_reportText).then(()=>toast("📤 Report copied"), ()=>toast("Copy failed", {warn:true}));

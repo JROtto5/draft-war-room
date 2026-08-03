@@ -8,10 +8,12 @@ const POSITIONS = ["QB","RB","WR","TE","DEF"];
 const LS_KEY = "draft-war-room-v2";
 
 /* ---------- State ---------- */
-const STATE_V = 4;
+const STATE_V = 5;
 const MIGRATIONS = {
   // 1 -> 2: keepers/queue introduced (defaults suffice); stamp only
   1: s => { s.keepers = s.keepers||{}; s.queue = s.queue||[]; return s; },
+  // 4 -> 5: ghost drafter + rivalry grudges
+  4: s => { s.ghost = s.ghost||[]; s.grudges = s.grudges||{}; return s; },
   // 3 -> 4: configurable roster slots + auction prices
   3: s => {
     s.settings = s.settings || {};
@@ -62,6 +64,8 @@ const defaultState = () => ({
   settings: { teams:12, roster:16, slot:12, scoring:"ppr", ptd:6, min:{QB:2,RB:3,WR:3,TE:1,DEF:1},
               slots:{QB:1,RB:2,WR:2,TE:1,FLEX:1,SF:1,DEF:1,K:0,BN:7}, budget:200 },
   prices: {},           // id -> auction price paid (auction mode)
+  ghost: [],            // {pick, mine, ghost} — what the engine would've taken at each of my turns
+  grudges: {},          // slot -> [player names sniped from my queue/plan]
   slotNames: {"1":"adamslanding","2":"NoahSchindler","3":"schinbad91","4":"DNSchindler","5":"DiddyPartay","6":"SPIDEYxSENSEZ","7":"picklerick10","8":"Cards0407","9":"nbachman","10":"JSchindler5","11":"schindler","12":"Otto5"},
   ui: { pos:"ALL", showTaken:false, sort:"vorp", dir:-1, round:"ALL", targetsOnly:false, stacksOnly:false, survivors:false }
 });
@@ -390,6 +394,137 @@ function simToMyPick(){
   const lostQ = S.queue.filter(id=>offBoard(id)).map(id=>idIndex()[id]).filter(Boolean);
   toast("⏩ Simmed "+made+" CPU picks — you're up"+(lostQ.length?". 🎯 Lost from queue: "+lostQ.map(p=>esc(p.name.split(" ").slice(-1)[0])).join(", "):""), lostQ.length?{warn:true}:undefined);
 }
+/* Predict a given slot's likeliest take at pick number pk (#602/#603). */
+function predictFor(slot, pk){
+  const players = allPlayers(), rinfo = roundInfo(players);
+  const t = S.settings.teams, r = Math.ceil(pk/t);
+  const ros = teamRosters(), byId = idIndex();
+  const c = {QB:0,RB:0,WR:0,TE:0,DEF:0};
+  (ros[slot]||[]).forEach(id=>{ const p=byId[id]; if(p) c[p.pos]++; });
+  const qbT = (ros[slot]||[]).map(id=>byId[id]).filter(Boolean).find(p=>p.pos==="QB");
+  return players.filter(p=>!offBoard(p.id) && !(p.pos==="DEF" && r<12))
+    .map(p=>({p, e: rinfo[p.id].eadp * injAdpFactor(p) * (p.pos==="QB" ? (c.QB<1?0.7:0.95) : 1) *
+      (qbT && (p.pos==="WR"||p.pos==="TE") && p.team===qbT.team ? 0.93 : 1)}))
+    .sort((a,b)=>a.e-b.e).slice(0,3);
+}
+
+/* 🎯 Snipe alerts (#602): who's about to steal one of MY targets before my next pick? */
+function snipeScan(){
+  const hz = nextPickHorizon();
+  if(!hz || hz.onClock) return [];
+  const targets = new Set(S.queue);
+  Object.values(S.plan).forEach(id=>targets.add(id));
+  try{ scoreBoard().scored.slice(0,5).forEach(x=>targets.add(x.p.id)); }catch(e){}
+  const out = [];
+  for(let pk=hz.cur; pk<hz.mine0 && pk<hz.cur+S.settings.teams; pk++){
+    const slot = slotOfPick(pk);
+    if(slot === Math.min(S.settings.slot, S.settings.teams)) continue;
+    for(const cand of predictFor(slot, pk)){
+      if(targets.has(cand.p.id)){ out.push({slot, pk, p:cand.p, inPicks:pk-hz.cur+1}); break; }
+    }
+  }
+  return out;
+}
+
+/* 📺 Broadcast booth (#607): one dramatic line per pick, from the numbers. */
+function boothLine(e, i){
+  const byId = idIndex(), p = byId[e.id];
+  if(!p) return null;
+  const n = i+1+(S.pickOffset||0), t = S.settings.teams;
+  const d = p.adp ? n - p.adp : 0;
+  const last4 = S.log.slice(Math.max(0,i-3), i+1).map(x=>{const q=byId[x.id]; return q&&q.pos;});
+  const run = last4.length===4 && last4.every(x=>x===p.pos);
+  const slot = slotOfPick(n);
+  const ros = teamRosters(), qb = (ros[slot]||[]).map(id=>byId[id]).filter(Boolean).find(q=>q.pos==="QB");
+  const stack = qb && (p.pos==="WR"||p.pos==="TE") && p.team===qb.team;
+  if(d >= 15) return {cls:"steal", line:"💎 STEAL — "+p.name+" falls "+Math.round(d)+" past ADP to "+slotName(slot)};
+  if(d <= -12) return {cls:"reach", line:"🚨 REACH ALERT — "+slotName(slot)+" jumps "+Math.round(-d)+" picks early for "+p.name};
+  if(run) return {cls:"run", line:"🔥 "+p.pos+" RUN — four straight off the board, "+p.name+" the latest"};
+  if(stack) return {cls:"stack", line:"🔗 STACK — "+slotName(slot)+" pairs "+p.name+" with his QB "+qb.name.split(" ").slice(-1)[0]};
+  if(p.pos==="DEF" && Math.ceil(n/t) < 12) return {cls:"reach", line:"🤨 "+slotName(slot)+" takes a DEFENSE in round "+Math.ceil(n/t)};
+  return null;
+}
+
+/* 📜 War Plan (#604): if/then playbook for my next three picks. */
+function warPlan(){
+  const odds = survivalOdds(), sc = scoreBoard().scored;
+  const picks = myOverallPicks().filter(n=>n>=pickNow()).slice(0,3);
+  if(!picks.length || !sc.length) return null;
+  const oddsAt = (id, k) => (k===0 ? odds.h1[id] : odds.h2[id]);
+  const usable = sc.filter(x=>x.score > -200);
+  return picks.map((n,k)=>{
+    const pool = usable.filter(x=> k===0 ? true : (oddsAt(x.p.id, Math.min(k,1))||0) >= 25);
+    const primary = pool[0], fb1 = pool.find(x=>x!==primary && x.p.pos===primary?.p.pos) || pool[1],
+          fb2 = pool.find(x=>x!==primary && x!==fb1);
+    return {n, k, primary, fb1, fb2,
+      po: primary ? (k===0 ? 100 : (oddsAt(primary.p.id, Math.min(k,1))||0)) : 0,
+      fo: fb1 ? (k===0 ? 100 : (oddsAt(fb1.p.id, Math.min(k,1))||0)) : 0};
+  });
+}
+
+/* 🔀 What-if time machine (#608): swap one of my past picks, re-sim the rest. */
+function whatIf(idx, altId){
+  const byId = idIndex(), players = allPlayers();
+  const t = S.settings.teams, R = S.settings.roster, total = t*R;
+  const rng = mulberry32(20260803), rinfo = roundInfo(players);
+  const repl = replacementLevels(players);
+  const min = S.settings.min, mySlot = Math.min(S.settings.slot, t);
+  const realIds = S.mine.slice();
+  const taken = new Set(), mineB = [];
+  const cpu = {}; for(let s2=1;s2<=t;s2++) cpu[s2]={QB:0,RB:0,WR:0,TE:0,DEF:0,qbGreed:1+(rng()*0.2-0.1),bias:0};
+  S.log.slice(0, idx).forEach((e,i2)=>{
+    taken.add(e.id);
+    const p = byId[e.id]; if(!p) return;
+    if(e.who==="me"){ mineB.push(e.id); }
+    else { const sl = slotOfPick(i2+1+(S.pickOffset||0)); if(cpu[sl]) cpu[sl][p.pos]++; }
+  });
+  taken.add(altId); mineB.push(altId);
+  const counts = {QB:0,RB:0,WR:0,TE:0,DEF:0};
+  mineB.forEach(id=>{ const p=byId[id]; if(p) counts[p.pos]++; });
+  let run=0, lastPos=null;
+  for(let n = idx+2+(S.pickOffset||0); n<=total; n++){
+    const r = Math.ceil(n/t), slot = slotOfPick(n);
+    const avail = players.filter(p=>!taken.has(p.id));
+    if(!avail.length) break;
+    let chosen;
+    if(slot===mySlot){
+      if(mineB.length >= R) continue;
+      const left = R - mineB.length;
+      let needed=0; for(const pos of POSITIONS) needed+=Math.max(0,(min[pos]||0)-counts[pos]);
+      const mustFill = needed>=left && left>0;
+      let bestSc=-1e9;
+      for(const p of avail){
+        const need=(min[p.pos]||0)-counts[p.pos];
+        if(mustFill && need<=0) continue;
+        let sc2 = satAdjust(p.pos, counts[p.pos], p.proj-(repl[p.pos]||0)).score;
+        if(need>0) sc2 *= 1+0.35*Math.min(1, needed/Math.max(1,left));
+        if(p.pos==="DEF" && r<12 && !mustFill) sc2 -= 40;
+        if(sc2>bestSc){ bestSc=sc2; chosen=p; }
+      }
+      if(!chosen) chosen = avail[0];
+      counts[chosen.pos]++; mineB.push(chosen.id);
+    } else {
+      chosen = cpuPick(avail, cpu[slot], r, rng, rinfo, R, run>=2?lastPos:null, n);
+      if(!chosen) break;
+      cpu[slot][chosen.pos]++;
+    }
+    taken.add(chosen.id);
+    if(chosen.pos===lastPos) run++; else { run=1; lastPos=chosen.pos; }
+  }
+  const A = bestStarters(realIds, byId), B = bestStarters(mineB, byId);
+  return {realIds, altIds: mineB, realPts: A.pts, altPts: B.pts};
+}
+
+/* 👻 Ghost delta (#609): projected starter pts, me vs the engine's parallel picks. */
+function ghostDelta(){
+  if(!S.ghost.length) return null;
+  const byId = idIndex();
+  const mineNow = S.ghost.map(g=>g.mine), ghostNow = S.ghost.map(g=>g.ghost);
+  const a = mineNow.reduce((x,id)=>x+((byId[id]||{}).proj||0),0);
+  const b = ghostNow.reduce((x,id)=>x+((byId[id]||{}).proj||0),0);
+  return {me:Math.round(a), ghost:Math.round(b), d:Math.round(a-b), n:S.ghost.length};
+}
+
 function predictNextPicks(){
   const h = nextPickHorizon();
   if(!h || h.onClock) return null;
@@ -666,7 +801,11 @@ function markTaken(id){
     const n = S.log.length+(S.pickOffset||0), t2 = S.settings.teams;
     const r2 = Math.ceil(n/t2), idx2 = n-(r2-1)*t2, slot2 = (r2%2===1)?idx2:t2+1-idx2;
     if(+S.settings.rivalSlot===slot2 && p) toast("😤 Rival <b>"+esc(slotName(slot2))+"</b> took "+esc(p.name), {warn:true});
-    if(S.queue.includes(id) && p) toast("🎯 SNIPED — <b>"+esc(p.name)+"</b> was in your queue", {warn:true});
+    if(p && (S.queue.includes(id) || Object.values(S.plan).includes(id))){
+      toast("🎯 SNIPED — <b>"+esc(p.name)+"</b> was on your board", {warn:true});
+      (S.grudges[slot2] = S.grudges[slot2]||[]).push(p.name);   // ⚔️ rivalry radar (#614)
+      if(S.grudges[slot2].length>16) S.grudges[slot2] = S.grudges[slot2].slice(-16);
+    }
   }
   if(p) announce(p.name+", off the board.");
   blip();
@@ -687,6 +826,11 @@ function pickMine(id){
       const g = ratio>=0.92 ? "A" : ratio>=0.75 ? "B" : ratio>=0.5 ? "C" : "D";
       gradeChip = ' <b class="'+(g==="A"?"ok":g==="B"?"mid":"low")+'">['+g+']</b>';
     }
+  }catch(e){}
+  try{ // 👻 ghost drafter (#609): remember what the engine would've taken here
+    const g0 = scoreBoard().scored[0];
+    if(g0) S.ghost.push({pick:pickNow(), mine:id, ghost:g0.p.id});
+    if(S.ghost.length > S.settings.roster) S.ghost = S.ghost.slice(-S.settings.roster);
   }catch(e){}
   redoStack.length=0; S.mine.push(id); S.log.push({id, who:"me", t:Date.now()});
   patchRow(id, "mine-row");

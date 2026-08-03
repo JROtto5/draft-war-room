@@ -1,5 +1,18 @@
 # Changelog — Draft War Room
 
+## v10.0 (2026-08-03) — The Bold Update (#601–#615)
+⚡ **On-the-Clock Takeover**: your pick arrives and the screen becomes a
+decision cockpit — top 3 with the case for each, survival odds if you wait,
+one-tap draft · 🎯 **Snipe alerts** predict who's stealing your targets before
+your turn · 🧠 **Coach's Call** argues the top pick in plain English · 📜
+**War Plan** pre-decides your next three picks with fallbacks · 🎙 **voice
+control** ("taken Gibbs", "mine Bowers") · 📺 broadcast-booth commentary +
+live market ticker · 🔀 **what-if time machine** re-simulates any of your
+picks · 👻 **ghost drafter** races the engine in parallel · 📈 annotated
+win-probability chart · ⚔️ rivalry radar (grudge tracking) · 📱 pocket
+cheat-card wallpaper · 🏁 60-second cinematic draft story · 🎛 glove-mode
+command strip. E2E grows to 27 checks.
+
 ## v9.0 (2026-08-03) — The sixth hundred (#501–#600)
 Table superpowers: query operators (`pos:` `team:` `bye:` `tier:` `rookie:`),
 saveable filter presets, multi-select mass actions, pinned rows · sim realism:

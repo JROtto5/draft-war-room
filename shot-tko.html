@@ -18,7 +18,7 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#0b0f14">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://sleepercdn.com https://a.espncdn.com; connect-src 'self' https://site.api.espn.com https://api.sleeper.app; font-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'">
+
 <link rel="preconnect" href="https://sleepercdn.com">
 <link rel="preconnect" href="https://a.espncdn.com">
 <link rel="dns-prefetch" href="https://site.api.espn.com">
@@ -450,5 +450,5 @@
 <script src="views.js" defer></script>
 <script src="wire.js" defer></script>
 <script src="boot.js" defer></script>
-</body>
+<script>setTimeout(()=>{ S.ui.live=true; S.pickOffset=11; window._tkoDismissed=null; renderNow(); }, 600);</script></body>
 </html>

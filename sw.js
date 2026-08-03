@@ -1,6 +1,6 @@
 /* Draft War Room — service worker.
    MIT License — see LICENSE. © 2026 JROtto5 / Draft War Room. */
-const CACHE = "war-room-v16";
+const CACHE = "war-room-v17";
 const CORE = ["./", "./index.html", "./styles.css", "./data.js", "./engine.js", "./core.js", "./views.js", "./wire.js", "./boot.js", "./manifest.json", "./icon.svg", "./icon-192.png", "./icon-512.png", "./fonts/Sora-400.woff2", "./fonts/JetBrainsMono-400.woff2"];
 
 self.addEventListener("install", e => {

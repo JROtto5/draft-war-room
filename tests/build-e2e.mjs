@@ -51,7 +51,8 @@ try {
   toggleQueue(allPlayers()[3].id); renderQueue();
   out.push("queue:"+(document.getElementById("queueBox").style.display!=="none"?"OK":"BAD"));
   S.ui.live = true; S.pickOffset = 11; renderNow();
-  out.push("panic:"+(document.getElementById("panicBar")?"OK":"BAD"));
+  out.push("panic:"+((document.getElementById("clockTakeover")||document.getElementById("panicBar"))?"OK":"BAD"));  // #601: takeover replaces the bar
+  const tko0 = document.getElementById("clockTakeover"); if(tko0) tko0.remove();
   S.ui.live = false; S.pickOffset = 0; toggleQueue(allPlayers()[3].id); renderNow();
   // perf budget (#170)
   const t0 = performance.now(); renderPool(); const dt = performance.now()-t0;
@@ -62,6 +63,11 @@ try {
   window._cardTab="hist"; openCard(allPlayers().find(p=>p.name==="Josh Allen").id);
   out.push("hist3:"+(document.querySelectorAll("#cardBody .h3row").length>=3?"OK":"BAD"));
   window._cardTab="ov"; document.getElementById("cardOverlay").classList.remove("show");
+  // bold round (#601-615): ghost drafter, war plan, booth, story mode
+  out.push("ghost2:"+((()=>{try{ const n0=S.ghost.length; pickMine(allPlayers()[8].id); const ok=S.ghost.length===n0+1; undoLast(); return ok; }catch(e){ return false; }})()?"OK":"BAD"));
+  out.push("wp:"+((()=>{try{ const w=warPlan(); return w===null||Array.isArray(w); }catch(e){ return false; }})()?"OK":"BAD"));
+  out.push("booth2:"+((()=>{try{ if(S.log.length) boothLine(S.log[0],0); return snipeScan().constructor===Array; }catch(e){ return false; }})()?"OK":"BAD"));
+  out.push("cine:"+((()=>{try{ markTaken(allPlayers()[9].id); storyMode(); const o=document.getElementById("storyOverlay"); const ok=!!o; if(o) o.remove(); undoLast(); return ok; }catch(e){ return false; }})()?"OK":"BAD"));
   // chunked mocks complete with progress (#312/#313)
   renderMocks();
   setTimeout(()=>{

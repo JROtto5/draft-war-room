@@ -342,10 +342,79 @@ function renderQueue(){
         '<button class="kill" data-queue="'+id+'" aria-label="Remove from queue">✕</button></div>';
     }).join("")+'</div>';
 }
+/* 🎙 Voice control (#606): hands-free board marking during live drafts. */
+let _vrec = null;
+function voiceToggle(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR) return toast("Voice control needs Chrome", {warn:true});
+  const btn = document.getElementById("voiceBtn");
+  if(_vrec){ try{ _vrec.stop(); }catch(e){} _vrec = null; btn.classList.remove("liveon"); return toast("🎙 Voice off"); }
+  _vrec = new SR();
+  _vrec.continuous = true; _vrec.interimResults = false; _vrec.lang = "en-US";
+  _vrec.onresult = ev => {
+    const said = ev.results[ev.results.length-1][0].transcript.trim().toLowerCase();
+    const find = q => allPlayers().find(p=>!offBoard(p.id) && nq(p.name)===nq(q)) ||
+                      (q.length>=4 ? allPlayers().find(p=>!offBoard(p.id) && nq(p.name).includes(nq(q))) : null);
+    let m;
+    if((m = said.match(/^(?:taken|gone) (.+)$/))){
+      const p = find(m[1]);
+      if(p){ markTaken(p.id); } else toast("🎙 Couldn't find \""+esc(m[1])+"\"", {warn:true});
+    } else if((m = said.match(/^(?:mine|draft) (.+)$/))){
+      const p = find(m[1]);
+      if(p){ pickMine(p.id); } else toast("🎙 Couldn't find \""+esc(m[1])+"\"", {warn:true});
+    } else if((m = said.match(/^(?:search|find) (.+)$/))){
+      const q = document.getElementById("q");
+      if(q){ q.value = m[1]; q.dispatchEvent(new Event("input")); toast("🎙 Searching "+esc(m[1])); }
+    } else if(said.includes("panic")){
+      window._tkoDismissed = null; window._panicDismissed = null; render(); toast("🎙 Panic mode");
+    } else {
+      toast("🎙 Heard: \""+esc(said)+"\" — try \"taken <name>\", \"mine <name>\", \"search <name>\"");
+    }
+  };
+  _vrec.onerror = ev => { if(ev.error!=="no-speech") toast("🎙 "+esc(ev.error), {warn:true}); };
+  _vrec.onend = () => { if(_vrec) try{ _vrec.start(); }catch(e){} };   // keep listening
+  try{ _vrec.start(); btn.classList.add("liveon"); toast("🎙 Voice ON — \"taken Gibbs\" · \"mine Bowers\" · \"search Chase\" · \"panic\""); }
+  catch(e){ _vrec=null; toast("🎙 "+esc(e.message), {warn:true}); }
+}
+document.getElementById("voiceBtn").addEventListener("click", voiceToggle);
+
 function updatePanic(hz, top){
   let bar = document.getElementById("panicBar");
-  const want = hz && hz.onClock && S.ui.live && window._panicDismissed!==hz.cur && top;
-  if(!want){ if(bar) bar.remove(); return; }
+  let tko = document.getElementById("clockTakeover");
+  const want = hz && hz.onClock && S.ui.live && top;
+  if(!want){ if(bar) bar.remove(); if(tko) tko.remove(); return; }
+  // ⚡ On-the-Clock Takeover (#601): full-screen decision cockpit, top 3 with the case for each
+  if(window._panicDismissed !== hz.cur && window._tkoDismissed !== hz.cur){
+    if(bar) bar.remove();
+    if(!tko){ tko = document.createElement("div"); tko.id = "clockTakeover"; document.body.appendChild(tko); }
+    let cards = "";
+    try{
+      const {scored} = scoreBoard();
+      const odds = survivalOdds();
+      pruneQueue();
+      const qTop = S.queue.length ? idIndex()[S.queue[0]] : null;
+      const cand = [];
+      scored.slice(0,4).forEach(x=>{ if(cand.length<3 && (!qTop || x.p.id!==qTop.id)) cand.push(x); });
+      if(qTop){ const qs = scored.find(x=>x.p.id===qTop.id); cand.unshift(qs || {p:qTop, why:["top of your queue"], vorp:0}); cand.length = Math.min(cand.length,3); }
+      cards = cand.map((x,i)=>{
+        const o1 = odds && odds.h1 && odds.h1[x.p.id]!=null ? odds.h1[x.p.id] : null;
+        return '<div class="tkocard'+(i===0?' lead':'')+'">'+
+          avatarImg(x.p, 64)+
+          '<div class="tkoname">'+esc(x.p.name)+(qTop&&x.p.id===qTop.id?' <span class="dimtxt">⭐ queued</span>':'')+'</div>'+
+          '<div class="tkometa">'+posBadge(x.p.pos)+' '+x.p.team+' · <span class="mono">'+x.p.proj+' proj</span>'+(x.vorp?' · <span class="mono" style="color:var(--green)">+'+Math.round(x.vorp)+' VORP</span>':'')+'</div>'+
+          ((x.why&&x.why.length)?'<div class="tkowhy">'+x.why.slice(0,3).map(w=>'▸ '+esc(w)).join('<br>')+'</div>':'')+
+          (o1!=null?'<div class="tkoodds">if you wait: <b class="'+oddsClass(o1)+'">'+o1+'%</b> he survives to #'+odds.at1+'</div>':'')+
+          '<button class="pick tkopick" data-pick="'+x.p.id+'">✓ DRAFT '+esc(x.p.name.split(" ").slice(-1)[0].toUpperCase())+'</button></div>';
+      }).join("");
+    }catch(e){ cards = '<div class="empty">'+esc(e.message)+'</div>'; }
+    tko.innerHTML = '<div class="tkohead">🚨 PICK #'+hz.cur+' — <b>YOU ARE ON THE CLOCK</b>'+
+      '<button class="undo1" id="tkoMin" title="Shrink to the small banner">▁ minimize</button></div>'+
+      '<div class="tkogrid">'+cards+'</div>';
+    tko.querySelector("#tkoMin").addEventListener("click", ()=>{ window._tkoDismissed = hz.cur; tko.remove(); render(); });
+    return;
+  }
+  if(tko) tko.remove();
+  if(window._panicDismissed === hz.cur){ if(bar) bar.remove(); return; }
   if(!bar){ bar = document.createElement("div"); bar.id="panicBar"; document.body.appendChild(bar); }
   pruneQueue();
   const qTop = S.queue.length ? idIndex()[S.queue[0]] : null;
