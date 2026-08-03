@@ -2,7 +2,7 @@
 /* ---------- Events (delegated) ---------- */
 document.addEventListener("click", e=>{
   window._acts = window._acts || [];
-  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-preset],[data-presetsave],[data-tiersort],[data-card],[data-cardtab],[data-boost],[data-fade],[data-adpedit],[data-tierup],[data-tierdn],[data-onepager],[data-cardpng],[data-unpickpre],[data-cmpfrom],[data-pin],[data-slotname],[data-cellpick],[data-voicenote],[data-notetpl],[data-keeper],[data-queue],[data-qup],[data-qfill],[data-plan],[data-unplan],[data-plantoggle],[data-planqueue],[data-qround],[data-qdn],[data-showall],[data-simto],[data-horn],[data-siren],#tradeGo,#matrixCopy,#nickGen,#logMineBtn,#logCsvBtn,#undo5Btn,th[data-sort]");
+  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-preset],[data-presetsave],[data-tiersort],[data-runseed],[data-abseed],[data-card],[data-cardtab],[data-boost],[data-fade],[data-adpedit],[data-tierup],[data-tierdn],[data-onepager],[data-cardpng],[data-unpickpre],[data-cmpfrom],[data-pin],[data-slotname],[data-cellpick],[data-voicenote],[data-notetpl],[data-keeper],[data-queue],[data-qup],[data-qfill],[data-plan],[data-unplan],[data-plantoggle],[data-planqueue],[data-qround],[data-qdn],[data-showall],[data-simto],[data-horn],[data-siren],#tradeGo,#matrixCopy,#nickGen,#logMineBtn,#logCsvBtn,#undo5Btn,th[data-sort]");
   if(!t){
     const rowEl = e.target.closest("#poolBody tr[data-pid]");
     if(rowEl){
@@ -278,6 +278,19 @@ document.addEventListener("click", e=>{
     $("#fTargets").checked=!!pz.targetsOnly; $("#fStacks").checked=!!pz.stacksOnly;
     $("#fSurvive").checked=!!pz.survivors; $("#fFallers").checked=!!pz.fallers; $("#fHideHurt").checked=!!pz.hideHurt;
     save(); renderTabs(); renderPool(); return;
+  }
+  if(t.dataset.runseed){
+    const v2 = document.getElementById("mockSeedIn").value.trim();
+    renderMocks(v2 ? +v2 : window._mockSeed);
+    return;
+  }
+  if(t.dataset.abseed){
+    const v2 = +document.getElementById("mockSeedIn").value.trim();
+    if(!v2) return toast("Enter a seed to compare against", {warn:true});
+    const A2 = runMock(STRATS[0], window._mockSeed), B2 = runMock(STRATS[0], v2);
+    const diff = A2.picks.filter((pk,i2)=>!B2.picks[i2] || B2.picks[i2].p.id!==pk.p.id).length;
+    toast("🧪 A/B: seed "+window._mockSeed+" → "+A2.startPts+" pts vs seed "+v2+" → "+B2.startPts+" pts · "+diff+" picks differ");
+    return;
   }
   if(t.dataset.tiersort){ S.ui.sort="tiergroup"; S.ui.dir=1; save(); renderPool(); return; }
   if(t.dataset.clearfilters){
@@ -975,6 +988,7 @@ $("#settingsBtn").addEventListener("click", ()=>{
   const kk = S.settings.keys||{};
   $("#keyMine").value=kk.mine||"m"; $("#keyTaken").value=kk.taken||"t"; $("#keyQueue").value=kk.queue||"q";
   $("#setTierSense").value=S.settings.tierSense||0.045;
+  $("#setContagion").value=S.settings.contagion||0.92;
   $("#setNotify").checked=!!S.settings.notifyInj;
   $("#setPoll").value=S.settings.pollMins||5;
   const hw = S.settings.hqWidgets||{radar:true,news:true,ir:true,drops:true};
@@ -1056,6 +1070,7 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.vol = +$("#setVol").value;
   S.settings.keys = {mine:($("#keyMine").value||"m").toLowerCase(), taken:($("#keyTaken").value||"t").toLowerCase(), queue:($("#keyQueue").value||"q").toLowerCase()};
   S.settings.tierSense = +$("#setTierSense").value || 0.045;
+  S.settings.contagion = +$("#setContagion").value || 0.92;
   const wantNotify = $("#setNotify").checked;
   if(wantNotify && !S.settings.notifyInj && "Notification" in window && Notification.permission==="default"){
     Notification.requestPermission();

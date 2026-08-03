@@ -310,9 +310,11 @@ function survivalOddsRaw(){
       if(myPicks.has(pk)) continue;
       const r = Math.ceil(pk/t), idx = pk-(r-1)*t, slot = (r%2===1)?idx:t+1-idx;
       const avail = players.filter(p=>!taken.has(p.id));
-      const best = cpuPick(avail, cpu[slot], r, rng, rinfo, R, runP2>=2?lastP2:null);
+      const best = cpuPick(avail, cpu[slot], r, rng, rinfo, R, runP2>=2?lastP2:null, pk);
       if(best){
         taken.add(best.id); cpu[slot][best.pos]++; if(pk<at1) gone[best.pos]++;
+        if(best.pos==="QB" && !cpu[slot].qbTeam) cpu[slot].qbTeam = best.team;
+        if(best.pos==="RB" && !cpu[slot].rbTeam) cpu[slot].rbTeam = best.team;
         if(best.pos===lastP2) runP2++; else { lastP2=best.pos; runP2=1; }
       }
     }
@@ -352,7 +354,7 @@ function simToMyPick(){
       const pk = pickNow(), r0 = Math.ceil(pk/S.settings.teams);
       const slot0 = slotOfPick(pk);
       const avail0 = players0.filter(p=>!offBoard(p.id));
-      const best0 = cpuPick(avail0, cpu0[slot0], r0, rng0, rinfo0, S.settings.roster);
+      const best0 = cpuPick(avail0, cpu0[slot0], r0, rng0, rinfo0, S.settings.roster, null, pk);
       if(!best0) break;
       redoStack.length=0;
       S.taken[best0.id]=true; S.log.push({id:best0.id, who:"other", t:Date.now()});
@@ -369,11 +371,12 @@ function simToMyPick(){
   while(!nextPickHorizon().onClock && made < t){
     const pk = pickNow(), r = Math.ceil(pk/t), idx = pk-(r-1)*t, slot = (r%2===1)?idx:t+1-idx;
     const avail = players.filter(p=>!offBoard(p.id));
-    const best = cpuPick(avail, cpu[slot], r, rng, rinfo, R);
+    const best = cpuPick(avail, cpu[slot], r, rng, rinfo, R, null, pk);
     if(!best) break;
     redoStack.length=0;
     S.taken[best.id]=true; S.log.push({id:best.id, who:"other", t:Date.now()});
     cpu[slot][best.pos]++;
+    if(best.pos==="QB" && !cpu[slot].qbTeam) cpu[slot].qbTeam = best.team;
     made++;
   }
   pruneQueue(); commit();
@@ -389,8 +392,10 @@ function predictNextPicks(){
   const ros = teamRosters(), byId = idIndex();
   const c = {QB:0,RB:0,WR:0,TE:0,DEF:0};
   (ros[slot]||[]).forEach(id=>{ const p=byId[id]; if(p) c[p.pos]++; });
+  const qbT = (ros[slot]||[]).map(id=>byId[id]).filter(Boolean).find(p=>p.pos==="QB");
   const cand = players.filter(p=>!offBoard(p.id) && !(p.pos==="DEF" && r<12))
-    .map(p=>({p, e: rinfo[p.id].eadp * injAdpFactor(p) * (p.pos==="QB" ? (c.QB<1?0.7:0.95) : 1)}))
+    .map(p=>({p, e: rinfo[p.id].eadp * injAdpFactor(p) * (p.pos==="QB" ? (c.QB<1?0.7:0.95) : 1) *
+      (qbT && (p.pos==="WR"||p.pos==="TE") && p.team===qbT.team ? 0.93 : 1)}))
     .sort((a,b)=>a.e-b.e).slice(0,3);
   return {slot, cand};
 }
@@ -776,7 +781,7 @@ function seedCpuTeams(rng){
   });
   return cpu;
 }
-function cpuPick(avail, st, r, rng, rinfo, R, runPos){
+function cpuPick(avail, st, r, rng, rinfo, R, runPos, pk){
   const caps = {QB:3,RB:7,WR:8,TE:3,DEF:2};
   let pool = avail.filter(p=>st[p.pos]<caps[p.pos]);
   const missing = []; if(st.QB<1)missing.push("QB"); if(st.TE<1)missing.push("TE"); if(st.DEF<1)missing.push("DEF");
@@ -786,8 +791,11 @@ function cpuPick(avail, st, r, rng, rinfo, R, runPos){
   let best=null, bk=1e9;
   for(const p of pool){
     let e = rinfo[p.id].eadp * injAdpFactor(p);
+    if(pk && e < pk-10) e = pk - 5 + rng()*10;   // ADP drift: fallers join the best-available cluster
     if(p.pos==="QB") e *= st.qbGreed;
-    if(runPos && p.pos===runPos) e *= 0.92;      // run contagion: the room panics
+    if(st.qbTeam && (p.pos==="WR"||p.pos==="TE") && p.team===st.qbTeam && r>=4 && r<=10) e *= 0.93;  // stack lean
+    if(st.rbTeam && p.pos==="RB" && p.team===st.rbTeam && r>=9 && rng()<0.3) e *= 0.9;              // handcuff lean
+    if(runPos && p.pos===runPos) e *= (S.settings.contagion || 0.92);
     e += (rng()*2-1)*_mockNoise + (st.bias||0);
     if(e<bk){bk=e; best=p;}
   }
@@ -860,7 +868,7 @@ function runMock(strat, seed){
       const mustFill = needed>=left && left>0;
       const myQBt=new Set(), myPCt=new Set();
       mineIds.forEach(id=>{const p=byId[id]; if(!p)return; if(p.pos==="QB")myQBt.add(p.team); if(p.pos==="WR"||p.pos==="TE")myPCt.add(p.team);});
-      let bestScore=-1e9;
+      let bestScore=-1e9, chosenWhy="V";
       for(const p of avail){
         if(S.dnd[p.id]) continue;
         const need=(min[p.pos]||0)-counts[p.pos];
@@ -873,17 +881,23 @@ function runMock(strat, seed){
         if(p.intel){ if(p.intel.t!=null)sc*=1.04; if(p.intel.lean>0)sc*=1.03; if(p.intel.lean<0)sc*=0.97; }
         if(p.pos==="DEF" && r<12 && need>=0 && !mustFill) sc-=40;         // no early DEF
         sc = satAdjust(p.pos, counts[p.pos], sc, startableNow()).score;    // don't hoard
+        if(r >= R-4){                                            // late rounds: chase upside, not floors
+          if(breakoutTag(p) || spikeRate(p)>=0.35) sc *= 1.08;
+          if(ageCliff(p)) sc *= 0.94;
+        }
         sc *= strat.mod(p,{counts, round:r, stacks});
         sc *= 0.97+rng()*0.06;
-        if(sc>bestScore){bestScore=sc; chosen=p;}
+        if(sc>bestScore){bestScore=sc; chosen=p; chosenWhy = strat.force&&strat.force[picks.length] ? "F" : need>0 ? "N" : stacks ? "S" : "V";}
       }
       if(!chosen) chosen=avail[0];
       mineIds.push(chosen.id);
-      picks.push({pick, round:r, idx, p:chosen});
+      picks.push({pick, round:r, idx, p:chosen, why:chosenWhy});
     } else {
       const st = cpu[slot];
-      chosen = cpuPick(avail, st, r, rng, rinfo, R, mockRun>=2?mockLast:null);
+      chosen = cpuPick(avail, st, r, rng, rinfo, R, mockRun>=2?mockLast:null, pick);
       st[chosen.pos]++;
+      if(chosen.pos==="QB" && !st.qbTeam) st.qbTeam = chosen.team;
+      if(chosen.pos==="RB" && !st.rbTeam) st.rbTeam = chosen.team;
     }
     if(chosen){ if(chosen.pos===mockLast) mockRun++; else { mockLast=chosen.pos; mockRun=1; } }
     taken.add(chosen.id);
@@ -893,8 +907,9 @@ function runMock(strat, seed){
   return {strat, picks, mineIds, starterIds, startPts:Math.round(pts), totalPts:Math.round(totalPts), byId};
 }
 
-function renderMocks(){
-  const base = Math.floor(Math.random()*1e9);
+function renderMocks(forcedSeed){
+  const base = forcedSeed!=null ? +forcedSeed : Math.floor(Math.random()*1e9);
+  window._mockSeed = base;
   const already = S.mine.length;
   $("#mockCtx").textContent = already ? "(continuing from your "+already+" real pick"+(already>1?"s":"")+")" : "(from a clean board)";
   $("#mockGrid").innerHTML = '<div class="empty" id="mockProg">Simulating… 0/'+STRATS.length+'</div>';
@@ -921,8 +936,9 @@ function finishMocks(results, already){
     const rows = m.picks.map(pk=>{
       const isStart = m.starterIds.has(pk.p.id);
       const tag = (pk.p.intel&&pk.p.intel.t!=null?" ⭐":"");
+      const whyTag = pk.why ? '<span class="dimtxt" style="font-size:8px" title="'+({N:"filled a need",S:"stack",V:"best value",F:"forced opening"})[pk.why]+'">'+pk.why+'</span>' : '';
       return '<div class="mkrow '+(isStart?"strt":"bench")+'">'+
-        '<span class="rp mono">'+pk.round+'.'+String(pk.idx).padStart(2,"0")+'</span>'+
+        '<span class="rp mono">'+pk.round+'.'+String(pk.idx).padStart(2,"0")+'</span>'+whyTag+
         '<span class="mpos pos '+pk.p.pos+'">'+pk.p.pos+'</span>'+
         '<span class="mn">'+pk.p.name+tag+'</span></div>';
     }).join("");
@@ -949,7 +965,10 @@ function finishMocks(results, already){
     const names = [...new Set(pks.map(pk=>pk.p.name.split(" ").slice(-1)[0]))].slice(0,3).join("/");
     return '<span class="mono">'+pks[0].round+'.'+String(pks[0].idx).padStart(2,"0")+'</span> <b>'+topPos[0]+'</b> ('+topPos[1]+'/5: '+esc(names)+')';
   }).join(" &nbsp;·&nbsp; ");
-  $("#mockConsensus").innerHTML = '<div style="margin-bottom:8px">📋 <b>Strategy brief</b> — '+brief+'</div>' + "";
+  $("#mockConsensus").innerHTML = '<div style="margin-bottom:8px">📋 <b>Strategy brief</b> — '+brief+'</div>'+
+    '<div class="dimtxt" style="margin-bottom:8px">🎲 seed <span class="mono">'+window._mockSeed+'</span> · '+
+    '<input id="mockSeedIn" class="fsel" style="width:110px;font-size:10px" placeholder="seed…"> '+
+    '<button class="undo1" data-runseed="1">re-run</button> <button class="undo1" data-abseed="1" title="Compare Balanced runs across two seeds">A/B vs seed</button></div>';
   $("#mockConsensus").innerHTML += guys.length
     ? '🎯 <b>Your guys</b> — landed on your team in 3+ of 5 sims: ' + guys.map(x=>'<b>'+x.p.name+'</b> ('+x.n+'/5)').join(" · ")
     : "No strong consensus across strategies — your seat has options.";

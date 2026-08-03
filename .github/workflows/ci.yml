@@ -30,6 +30,8 @@ jobs:
         run: |
           node --experimental-test-coverage --test tests/runner.node.mjs 2>/dev/null || true
           ./scripts/test-all.sh
+      - name: Benchmark smoke (engine must beat pure-ADP drafter)
+        run: node scripts/benchmark.mjs 20
       - name: Marathon (full 192-pick draft)
         run: |
           node tests/build-marathon.mjs

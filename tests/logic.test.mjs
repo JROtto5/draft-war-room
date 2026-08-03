@@ -247,4 +247,21 @@ assert.ok(q25 < q100 - 50, "0.25 PPR strips reception points: "+q25+" vs "+q100)
 const aAllen = g('auctionOf(allPlayers().find(p=>p.name==="Josh Allen"))');
 assert.ok(aAllen >= 30 && aAllen <= 90, "Allen auction $"+aAllen);
 
-console.log("logic.test OK — engine, snake, saturation, mocks, odds, rounds, injuries, utils, fuzz, story, sweep, sync, leagues");
+// tiny-roster guardrail (#559): 5-man rosters must still produce a legal mock, no hang
+vm.runInContext('S.settings.slots={QB:1,RB:1,WR:1,TE:0,FLEX:1,SF:0,DEF:1,K:0,BN:0};S.settings.min={QB:1,RB:1,WR:1,TE:0,DEF:1};S.settings.roster=5;S.log=[];S.taken={};S.mine=[];_memo={key:null};', ctx);
+const tiny = g('runMock(STRATS[0], 777)');
+assert.strictEqual(tiny.mineIds.length, 5, "tiny roster fills exactly 5");
+const tinyPos = g('runMock(STRATS[0], 777).mineIds.map(id=>idIndex()[id].pos)');
+assert.ok(tinyPos.includes("QB") && tinyPos.includes("RB") && tinyPos.includes("WR") && tinyPos.includes("DEF"), "tiny roster hits all minimums: "+tinyPos.join(","));
+vm.runInContext('S.settings.slots={QB:1,RB:2,WR:2,TE:1,FLEX:1,SF:1,DEF:1,K:0,BN:7};S.settings.min={QB:2,RB:3,WR:3,TE:1,DEF:1};S.settings.roster=16;_memo={key:null};', ctx);
+
+// reason tags (#557): every mock pick carries a why letter
+const whyMk = g('runMock(STRATS[0], 4242)');
+assert.ok(whyMk.picks.every(pk=>["N","S","V","F"].includes(pk.why)), "every pick tagged with a reason");
+
+// seeded reproducibility (#555/#556): same seed → same draft
+const mA = g('runMock(STRATS[0], 31337).mineIds.join(",")');
+const mB = g('runMock(STRATS[0], 31337).mineIds.join(",")');
+assert.strictEqual(mA, mB, "same seed reproduces the mock");
+
+console.log("logic.test OK — engine, snake, saturation, mocks, odds, rounds, injuries, utils, fuzz, story, sweep, sync, leagues, tiny-roster, seeds");
