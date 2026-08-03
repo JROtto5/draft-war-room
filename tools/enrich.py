@@ -267,6 +267,59 @@ def main():
         if any([rz, snap, opp, pp.get("pts_ppr"), sp[0]]):
             usage[k] = [rz, snap, opp, round(pp.get("pts_ppr",0) or 0,1), sp[0], sp[1]]
 
+    # ---------- physical percentiles + snap trend + target share + stadiums (#516-#524) ----------
+    # percentiles vs ALL active players at the position
+    import bisect
+    pos_h, pos_w = {}, {}
+    for v in sleeper.values():
+        pp = v.get("position")
+        if pp not in ("QB","RB","WR","TE") or not v.get("active"): continue
+        try: pos_h.setdefault(pp, []).append(int(v.get("height") or 0))
+        except (ValueError, TypeError): pass
+        try: pos_w.setdefault(pp, []).append(int(v.get("weight") or 0))
+        except (ValueError, TypeError): pass
+    for pp in pos_h: pos_h[pp] = sorted(x for x in pos_h[pp] if x)
+    for pp in pos_w: pos_w[pp] = sorted(x for x in pos_w[pp] if x)
+    def pct(arr, val):
+        if not arr or not val: return 0
+        return round(100*bisect.bisect_left(arr, val)/len(arr))
+    phys = {}
+    snap_trend = {}
+    for p in players:
+        if p["pos"]=="DEF": continue
+        k = norm(p["name"])
+        pid = str(heads.get(k) or "")
+        v = sleeper.get(pid) or {}
+        try: hh = int(v.get("height") or 0)
+        except (ValueError, TypeError): hh = 0
+        try: ww = int(v.get("weight") or 0)
+        except (ValueError, TypeError): ww = 0
+        if hh or ww:
+            phys[k] = [pct(pos_h.get(p["pos"],[]), hh), pct(pos_w.get(p["pos"],[]), ww)]
+        snaps = []
+        for y in seasons:
+            sy = stats_by[y].get(pid) or {}
+            tm_snp = sy.get("tm_off_snp") or 0
+            snaps.append(round(100*(sy.get("off_snp") or 0)/tm_snp) if tm_snp else 0)
+        if any(snaps): snap_trend[k] = snaps
+    # projected target share from CSV team pass volume
+    team_tgts = {}
+    for k2, pr in proj26.items():
+        pass
+    tt = {}
+    for p in players:
+        pr = proj26.get(norm(p["name"]))
+        if pr: tt[p["team"]] = tt.get(p["team"], 0) + (pr[6] or 0)
+    tshare = {}
+    for p in players:
+        pr = proj26.get(norm(p["name"]))
+        if pr and pr[6] and tt.get(p["team"]):
+            tshare[norm(p["name"])] = round(100*pr[6]/tt[p["team"]])
+    STADIUM = {  # dome/retractable = safe; outdoor cold-region = playoff weather risk
+      "dome": ["ATL","NOS","DAL","DET","MIN","LVR","LAR","LAC","ARI","IND","HOU"],
+      "cold": ["BUF","GBP","CHI","CLE","PIT","NEP","NYG","NYJ","PHI","WAS","BAL","CIN","KCC","DEN","SEA"],
+    }
+
     # ---------- ESPN injuries snapshot (baked offline baseline) ----------
     injbase = {}
     try:
@@ -362,6 +415,10 @@ def main():
     out.append("const INJBASE = " + json.dumps(injbase, ensure_ascii=False, separators=(',',':')) + ";")
     out.append("const BYES = " + json.dumps(byes, separators=(',',':')) + ";")
     out.append("const USAGE = " + json.dumps(usage, separators=(',',':')) + ";")
+    out.append("const PHYS = " + json.dumps(phys, separators=(',',':')) + ";")
+    out.append("const SNAPTREND = " + json.dumps(snap_trend, separators=(',',':')) + ";")
+    out.append("const TSHARE = " + json.dumps(tshare, separators=(',',':')) + ";")
+    out.append("const STADIUM = " + json.dumps(STADIUM, separators=(',',':')) + ";")
     out.append("const SCHED = " + json.dumps(sched, separators=(',',':')) + ";")
     out.append('const LAST_SEASON = "' + args.season + '";')
     out.append('const DATA_STAMP = "' + datetime.date.today().isoformat() + '";')

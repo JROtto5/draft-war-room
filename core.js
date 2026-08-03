@@ -1263,6 +1263,12 @@ function openCard(id){
   if(myCollegeMate) ovChips.push('<span class="chip">🎓 '+esc(ci.name)+' with '+esc(myCollegeMate)+'</span>');
   const u = usageFor(p);
   if(u && u[3] >= 35) ovChips.push('<span class="chip" style="color:var(--gold)">❄️ January performer ('+u[3]+' playoff pts)</span>');
+  const ph2 = physFor(p);
+  if(ph2 && (ph2[0]>=85 || ph2[1]>=85)) ovChips.push('<span class="chip">📏 '+(ph2[0]>=ph2[1]?ph2[0]+'th pct height':ph2[1]+'th pct weight')+' for '+p.pos+'</span>');
+  if(ph2 && p.pos==="WR" && ph2[0]<=15) ovChips.push('<span class="chip">🐜 small for the position</span>');
+  const ts2 = tshareOf(p);
+  if(ts2 >= 22 && (p.pos==="WR"||p.pos==="TE")) ovChips.push('<span class="chip" style="color:var(--green)">🎯 '+ts2+'% projected target share</span>');
+  if(weatherRisk(p.team)) ovChips.push('<span class="chip" title="Outdoor cold-weather home in fantasy playoff weeks">🥶 playoff weather</span>');
   const uprof = usageProfile(p);
   if(uprof) ovChips.push('<span class="chip">'+esc(uprof)+'</span>');
   const bioLine2 = bio + (m&&m[13]?' · b. '+m[13].slice(0,10):'');
@@ -1285,6 +1291,9 @@ function openCard(id){
   const history =
     '<div class="cintel"><b>Season points</b></div><div style="padding:0 20px 8px">'+histBars+'</div>'+
     (trendLine?'<div class="cintel dim">'+trendLine+'</div>':'')+
+    ((()=>{ const st3 = snapTrendOf(p); if(!st3 || !st3.some(x=>x)) return "";
+      const arrow = st3[2]>st3[0]+5 ? " ↗" : st3[2]<st3[0]-5 ? " ↘" : " →";
+      return '<div class="cintel dim">Snap share: '+st3.map(x=>x?x+"%":"—").join(" → ")+arrow+'</div>'; })())+
     (effLine?'<div class="cintel dim">'+effLine+'</div>':'')+
     ((()=>{ const u4 = usageFor(p), L4 = lastFor(p);
       if(!u4 || !L4 || !L4[0]) return "";
@@ -1296,7 +1305,7 @@ function openCard(id){
     (p.intel&&p.intel.p?'<div class="cintel dim">'+esc(p.intel.p)+'</div>':'')+
     ((()=>{const n=newsFor(p); return n?'<div class="cintel dim">📰 '+(n.u?'<a href="'+esc(n.u)+'" target="_blank" rel="noopener" style="color:var(--green)">':'')+esc(n.h)+(n.u?'</a>':'')+' <span class="dimtxt">'+n.d+'</span></div>':"";})())+
     (buzzOf(p)>500?'<div class="cintel dim">📈 '+buzzOf(p).toLocaleString()+' Sleeper adds in 24h</div>':'')+
-    (ps?'<div class="cintel dim">🗓 '+ps.short+' · playoff softness '+"★".repeat(stars)+"☆".repeat(5-stars)+'</div>':'')+
+    (ps?'<div class="cintel dim" title="'+(weatherRisk(p.team)?"Cold-weather outdoor home in W15-17 — game scripts get run-heavy":"")+'">🗓 '+ps.short+' · playoff softness '+"★".repeat(stars)+"☆".repeat(5-stars)+(weatherRisk(p.team)?' 🥶':'')+'</div>':'')+
     '<div class="cintel dim">Market: <button class="undo1" data-adpedit="'+id+'">ADP '+(p.adp||"—")+' ✎</button> '+
     '<button class="undo1" data-tierup="'+id+'">tier ▲</button><button class="undo1" data-tierdn="'+id+'">tier ▼</button> '+
     '<button class="undo1" data-boost="'+id+'">'+((S.boost||{})[id]===1?"▲ boosted":"▲ boost")+'</button>'+

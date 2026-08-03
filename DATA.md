@@ -1,6 +1,6 @@
 # Shipped dataset (generated — do not edit; `node scripts/gen-data-doc.mjs`)
 
-Stamped **2026-08-02**, last completed season **2025**.
+Stamped **2026-08-03**, last completed season **2025**.
 
 | const | entries | shape |
 |---|---|---|
@@ -14,8 +14,8 @@ Stamped **2026-08-02**, last completed season **2025**.
 | PSOS | 32 | playoff W15–17 opponents + matchup ranks |
 | TEAMQB | 32 | team → starting QB |
 | HEADSHOT | 355 | normName → Sleeper photo id |
-| USAGE | see gen script | [rzTouches, snapPct, opportunities, playoffPts, top12Weeks, weeksPlayed] |
-| BYES / SCHED | 32 | real 2026 bye weeks + week→opponent maps |
+| PHYS / SNAPTREND / TSHARE | — | [heightPct, weightPct] · [snap%23,24,25] · projected target share % |
+| STADIUM | 2 lists | dome teams · cold-region outdoor teams (playoff weather) |
 | COLLEGE | 63 | program → [conference, color] |
 
 All keys are `normName(name)` — lowercase, punctuation stripped, suffixes dropped.

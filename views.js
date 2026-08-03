@@ -126,6 +126,13 @@ function newsFor(p){
   return NEWS.list.find(n=>n.h.includes(p.name) || (last.length>4 && n.h.includes(last)));
 }
 
+function physFor(p){ return (typeof PHYS!=="undefined" && PHYS[normName(p.name)]) || null; }
+function tshareOf(p){ return (typeof TSHARE!=="undefined" && TSHARE[normName(p.name)]) || 0; }
+function snapTrendOf(p){ return (typeof SNAPTREND!=="undefined" && SNAPTREND[normName(p.name)]) || null; }
+function weatherRisk(team){
+  if(typeof STADIUM==="undefined") return false;
+  return STADIUM.cold.includes(team) && !STADIUM.dome.includes(team);
+}
 function usageFor(p){ return (typeof USAGE!=="undefined" && USAGE[normName(p.name)]) || null; }
 function spikeRate(p){
   const u = usageFor(p);
