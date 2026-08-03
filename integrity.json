@@ -1,7 +1,7 @@
 {
-  "generated": "2026-08-03T13:08:46.546Z",
+  "generated": "2026-08-03T13:10:23.819Z",
   "files": {
-    "index.html": "e5afdeef4c40c4b18284fbaa5ae3913fe5f196d45a98d23ea51a10f57de778f5",
+    "index.html": "c02e622bc177334eb4a4320ed53bd740aaf7460292ea2788fefa47fe6f140d52",
     "styles.css": "a12a04caa84884d9c35038d8d437cee7fc935444a093fb7673e7053c9697f7df",
     "engine.js": "b577f8fa7e66ec8a37d2e402b404ef4edbfe2fec00889a4f432eb884365ef72b",
     "core.js": "3ddad9d87366be340ca1322bfc124c3f2c8c8ae1372313dfb25a1ed4d6368d32",
@@ -9,7 +9,7 @@
     "wire.js": "c78b27e8fa1b5060b736362e699c656e95d620ab74eee4d01bb572fb370a4d33",
     "boot.js": "f00c22119e9a2bcecfc7395040821be6765109716a496f326f6ac26b2ef7b57a",
     "data.js": "d7270f4caf9eb49cf5b4fd1344bf0ad2f071eceb9be9009d001f06de086cf008",
-    "sw.js": "40e55b10eb3f398c4526ba60c70ec8f03e783c87f0b57551e8d63a24c369e60a",
+    "sw.js": "18a97ae81a9dcf455d31e151c19a1aefd8402454785a35932e986d3357329776",
     "manifest.json": "d0582c00c488ad9d1a4095ee547089eefe09bd4de13f616aff1863db54cdd1b1",
     "404.html": "3e07b402220b3082ec6efa53380e03d8238b2891af3ba19bfa82f992c6f00bc0"
   }

@@ -56,10 +56,13 @@ jobs:
           python3 -m http.server 8765 &
           sleep 1
           CHROME=$(command -v google-chrome || command -v chromium-browser || command -v chromium)
-          run_e2e() { "$CHROME" --headless --no-sandbox --disable-gpu --disable-background-networking --disable-sync --disable-component-update --virtual-time-budget=50000 --dump-dom "http://localhost:8765/e2e.html?e2e" | grep -o '<title>E2E|[^<]*' || true; }
+          FLAGS="--headless --no-sandbox --disable-gpu --disable-background-networking --disable-sync --disable-component-update"
+          run_e2e() { "$CHROME" $FLAGS --virtual-time-budget=50000 --dump-dom "http://localhost:8765/e2e.html?e2e" | grep -o '<title>E2E|[^<]*' || true; }
+          # some runners exit virtual-time mode instantly with an empty DOM; real-time is the fallback
+          run_e2e_rt() { "$CHROME" $FLAGS --timeout=20000 --dump-dom "http://localhost:8765/e2e.html?e2e" | grep -o '<title>E2E|[^<]*' || true; }
           OUT=""
-          for a in 1 2 3; do
-            OUT=$(run_e2e)
+          for a in 1 2 rt1 rt2; do
+            case "$a" in rt*) OUT=$(run_e2e_rt);; *) OUT=$(run_e2e);; esac
             case "$OUT" in *E2E\|*BOOTING*|*E2E\|*BAD*|*E2E\|*ERR*|"") echo "attempt $a: '$OUT' — retrying"; sleep 2;; *E2E\|*) break;; esac
           done
           echo "result: $OUT"
