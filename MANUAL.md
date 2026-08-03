@@ -37,3 +37,16 @@ Season HQ takes over the hero: 📡 waiver radar, 📰 your players' headlines,
 `./tools/refresh.sh new-projections.csv new-board.csv` then push. Done.
 
 Any-league setup: LEAGUES.md · Live sync: SYNC.md · In-season: SEASONS.md · Full docs: README · PREP · ENGINE · PERF · DATA · ARCHITECTURE · BESTPRACTICES · PRIVACY · CHANGELOG.
+
+## Sim lab extras (v9)
+
+- Mock picks carry a tiny letter: **N**eed, **S**tack, **V**alue, **F**orced opening.
+- The 🎲 seed under the strategy brief reproduces any mock exactly — paste a
+  seed and **re-run**, or **A/B vs seed** to see how many picks are room noise.
+- Settings → 🌊 **Run contagion** tunes how hard sim rooms panic during a
+  position run (lower = harder panic).
+- Settings → 🔊 **Sound theme** picks the draft-day soundscape; 💬 add your own
+  lock-screen quips (one per line). If a draft date is set, the lock screen
+  counts down to it.
+- During live drafts the header shows the 🏆 **MVP belt** — the best-value pick
+  of the draft so far. Milestone toasts fire at 25/50/75/90% with the room's pace.

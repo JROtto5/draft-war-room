@@ -27,8 +27,10 @@ if (JSON.stringify(order) !== JSON.stringify(["data.js","engine.js","core.js","v
 if (!html.includes('rel="stylesheet" href="styles.css"')) fail("styles.css link missing");
 // Re-baselined after the v6 personalization data (LAST3 histories, hometowns,
 // college map): app 215K, data 450K leave ~20% headroom over current sizes.
-const budgets = { "core.js": 110000, "views.js": 90000, "wire.js": 95000,   // rebased post-R29: sync+board tools live here "boot.js": 30000,
-  "engine.js": 40000, "data.js": 450000, "styles.css": 70000, "index.html": 37000 };  // rebased: settings grew 5 sections across R24-R29
+// rebased post-R37: wire/index got ~25% fresh headroom; boot budget was
+// silently dead (swallowed by a line comment) — restored.
+const budgets = { "core.js": 110000, "views.js": 95000, "wire.js": 110000, "boot.js": 32000,
+  "engine.js": 40000, "data.js": 450000, "styles.css": 70000, "index.html": 42000 };
 for (const [f, cap] of Object.entries(budgets)) {
   const size = statSync(f).size;
   if (size > cap) fail(`${f} is ${size}B > budget ${cap}B`);

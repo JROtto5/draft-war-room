@@ -14,8 +14,6 @@ Stamped **2026-08-03**, last completed season **2025**.
 | PSOS | 32 | playoff W15–17 opponents + matchup ranks |
 | TEAMQB | 32 | team → starting QB |
 | HEADSHOT | 355 | normName → Sleeper photo id |
-| PHYS / SNAPTREND / TSHARE | — | [heightPct, weightPct] · [snap%23,24,25] · projected target share % |
-| STADIUM | 2 lists | dome teams · cold-region outdoor teams (playoff weather) |
 | COLLEGE | 63 | program → [conference, color] |
 
 All keys are `normName(name)` — lowercase, punctuation stripped, suffixes dropped.

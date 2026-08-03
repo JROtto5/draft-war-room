@@ -1,6 +1,6 @@
 # 🏈 Draft War Room — Buck Breakers Edition
 
-![player card](assets/player-card.png)
+![the war room](assets/hero.png)
 
 
 The full draft-day cockpit for **any league shape** (built for a 12-team superflex, 6-pt pass TD, slot 12). Live Sleeper draft sync, real 2026 byes and schedules, three seasons of usage-grade stats on every player. Static site — pushes to `main` auto-deploy on Vercel. Installable PWA, works offline once loaded.
@@ -11,9 +11,11 @@ The full draft-day cockpit for **any league shape** (built for a 12-team superfl
 Flip **🔴 Live** on when the draft starts: pace clock + ETA, a chime and a panic banner with a one-tap `TAKE <TOP PICK>` when you're on the clock, and confetti + auto-report when your 16th pick lands. Mark every pick (`✓ MINE` / `✕ taken`, `📋 Paste` to catch up, click the pick banner to resync). Keyboard: `/` search · `↑↓` highlight · `M` mine · `T` taken · `D` never · `N` note · `C` compare · `Ctrl+Z/Y` undo/redo · `?` help.
 
 ## The engine
-Value-over-replacement scaled for superflex scarcity, positional saturation (your 4th QB is worthless, your 3rd is insurance), requirement floors with hard locks, tier cliffs, team-stack boosts with stack-opportunity alerts, analyst targets ⭐, prop-market leans ▲▼, market Edge column, 💎 fallers, and **Monte Carlo survival odds at both of your turn picks** — with CPU teams seeded from the actual pick log and injury-discounted ADP.
+Value-over-replacement scaled for superflex scarcity, positional saturation (your 4th QB is worthless, your 3rd is insurance), requirement floors with hard locks, tier cliffs, team-stack boosts with stack-opportunity alerts, analyst targets ⭐, prop-market leans ▲▼, market Edge column, 💎 fallers, and **Monte Carlo survival odds at both of your turn picks** — with CPU teams seeded from the actual pick log, injury-discounted ADP, live ADP drift, QB-stack and handcuff tendencies, and a tunable run-contagion dial. Benchmarked: the engine out-drafts a pure-ADP bot **100/100 rooms (+363 projected starter points)** — `node scripts/benchmark.mjs`, gated in CI. See [BENCHMARK.md](BENCHMARK.md).
 
 ## Every player has a story
+
+![player card](assets/player-card.png)
 Hometown (with 💖 favorite-state/college mode — set OH and feel it), college in
 school colors, high school, rookie class, three seasons of points and positional
 finishes with trend bars, breakout/bust/prime-year tags, and an auto-written
@@ -23,7 +25,7 @@ Wizard, PlayerProfiler, Sleeper and RotoWire — see BESTPRACTICES.md.
 ## Intelligence
 - **🩺 Injury Center** — live ESPN reports (auto-refresh every 5 min) graded Q/D/O/IR, mid-draft change toasts, roster-health warnings, ESPN headlines, Sleeper trending buzz 📈
 - **Player cards** — photo, bio (age / seasons / college / size), 2025 actuals vs 2026 projected stat table, positional finish, PPG, depth chart, his QB, playoff-week slate
-- **🎲 Mocks** (5 strategies + consensus) · **🎓 Draft Report** (grade, steals, stacks, standings) · **🗂 Board** with real league-mate names, projected standings and a pick-trade calculator · threat board ("4 QB-needy teams before your pick")
+- **🎲 Mocks** (5 strategies + consensus) — every pick reason-tagged (Need/Stack/Value/Forced), reproducible by seed with A/B seed compare · **🎓 Draft Report** (grade, steals, stacks, superlatives, standings) · **🗂 Board** with real league-mate names (each with an emoji identity), projected standings and a pick-trade calculator · threat board ("4 QB-needy teams before your pick")
 
 ## Every-summer data swap
 ```
@@ -36,4 +38,4 @@ That regenerates everything (projections, ADP, playoff slates, headshots, bios, 
 [MANUAL](MANUAL.md) — how to use it · [PREP](PREP.md) — before draft day · [ENGINE](ENGINE.md) — how it thinks · [PERF](PERF.md) · [DATA](DATA.md) · [ARCHITECTURE](ARCHITECTURE.md) · [BESTPRACTICES](BESTPRACTICES.md) · [PRIVACY](PRIVACY.md) · [CONTRIBUTING](CONTRIBUTING.md) · [CHANGELOG](CHANGELOG.md)
 
 ## Development
-`index.html` + `styles.css` + `app.js` + `data.js`, no build step. `python3 -m http.server` to run locally. CI (GitHub Actions) runs syntax checks, data-sanity tests, engine logic tests in a VM, and a headless-Chrome E2E on every push. The repo's 105 closed issues are the changelog.
+`index.html` + `styles.css` + `engine/core/views/wire/boot.js` + `data.js`, no build step. `python3 -m http.server` to run locally. CI (GitHub Actions) runs syntax checks, a tsc type gate on the engine kernel, data-sanity tests, engine logic tests in a VM, a benchmark smoke (engine must beat ADP), a full 192-pick marathon and a 23-check headless-Chrome E2E on every push. Releases ship a sha256 `integrity.json`. The repo's 600 closed issues are the changelog.

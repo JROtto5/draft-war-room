@@ -1,5 +1,17 @@
 # Changelog — Draft War Room
 
+## v9.0 (2026-08-03) — The sixth hundred (#501–#600)
+Table superpowers: query operators (`pos:` `team:` `bye:` `tier:` `rookie:`),
+saveable filter presets, multi-select mass actions, pinned rows · sim realism:
+live ADP drift, CPU teams that stack their QB and handcuff their RB1, tunable
+run contagion, late-round upside autopilot, reason-tagged mock picks,
+reproducible seeds with A/B compare · **benchmark: the engine beats a pure-ADP
+drafter 100/100 rooms (+363 starter pts), enforced by a CI smoke gate** ·
+personality: sound themes, heart confetti, superlatives, MVP belt, milestone
+toasts, emoji rivals, editable quips, og-image · trust: @ts-check'd kernel with
+tsc in CI, sha256 integrity manifest per release, CODEOWNERS, issue forms,
+SECURITY.md, dependabot, least-privilege CI.
+
 ## v8.0 (2026-08-02) — The fifth hundred (#401–#500)
 🔄 Live Sleeper draft sync (picks mark themselves) · real 2026 byes + season
 SOS from ESPN schedules · red-zone/snap/playoff/spike-week usage layer ·
