@@ -1,5 +1,7 @@
 # 🏈 Draft War Room — Buck Breakers Edition
 
+**Live:** [draft-war-room-chi.vercel.app](https://draft-war-room-chi.vercel.app/)
+
 ![the war room](assets/hero.png)
 
 
