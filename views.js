@@ -772,6 +772,9 @@ function renderBest(){
         gc.hidden=false;
         gc.innerHTML = '👻 '+(gd.d>=0?'+':'')+gd.d+' vs ghost';
         gc.style.color = gd.d>=0 ? 'var(--green)' : 'var(--red)';
+        gc.style.cursor = 'pointer';
+        gc.onclick = ()=>{ document.getElementById("gradeBtn").click(); };   // opens the showdown (#628)
+        gc.title = "You vs the ghost drafter — click for the full showdown";
       } else gc.hidden=true;
     }
     renderTicker();
@@ -913,7 +916,7 @@ function renderBest(){
         }
       });
       snipeStrip = '<div class="scarce snipes"><span class="striptag" style="color:var(--red)">🎯 SNIPE</span>'+
-        snipes.slice(0,3).map(sn=>'<span class="scpill" title="'+esc(slotName(sn.slot))+' picks at #'+sn.pk+'">'+esc(sn.p.name.split(" ").slice(-1)[0])+' → '+slotEmoji(sn.slot)+' '+esc(slotName(sn.slot))+'</span>').join("")+'</div>';
+        snipes.slice(0,3).map(sn=>'<span class="scpill snipepill" data-teampage="'+sn.slot+'" role="button" tabindex="0" title="Open '+esc(slotName(sn.slot))+'\'s dossier — picks at #'+sn.pk+'">'+esc(sn.p.name.split(" ").slice(-1)[0])+' → '+slotEmoji(sn.slot)+' '+esc(slotName(sn.slot))+'</span>').join("")+'</div>';
     }
   }catch(e){}
   // 📜 War Plan (#604)
@@ -921,7 +924,8 @@ function renderBest(){
   try{
     const wp = cached("warplan", warPlan);
     if(wp && wp.length && S.mine.length < S.settings.roster){
-      wpHtml = '<details class="warplan"><summary>📜 <b>War Plan</b> — your next '+wp.length+' pick'+(wp.length>1?"s":"")+', pre-decided</summary>'+
+      let wpOpen = false; try{ wpOpen = localStorage.getItem(LS_KEY+"-wpopen")==="1"; }catch(e){}
+      wpHtml = '<details class="warplan"'+(wpOpen?' open':'')+'><summary>📜 <b>War Plan</b> — your next '+wp.length+' pick'+(wp.length>1?"s":"")+', pre-decided</summary>'+
         wp.map(row=>{
           if(!row.primary) return "";
           return '<div class="wprow"><span class="rp mono">#'+row.n+'</span> '+
@@ -945,6 +949,8 @@ function renderBest(){
         '<button class="kill" data-take="'+p.id+'">✕ someone took him</button>'+
       '</div>'+
     '</div>' + wpHtml;
+  const wpEl = hero.querySelector(".warplan");
+  if(wpEl) wpEl.addEventListener("toggle", ()=>{ try{ localStorage.setItem(LS_KEY+"-wpopen", wpEl.open?"1":"0"); }catch(e){} });
   const bl = document.querySelector(".balist"); const blScroll = bl ? bl.scrollTop : 0;
   const byIdL = idIndex();
   const baseLineup = S.mine.length ? bestStarters(S.mine, byIdL).pts : 0;
@@ -1201,6 +1207,8 @@ function renderTicker(){
   if(tk.dataset.h === String(items.length)+html.length) return;   // don't restart the marquee needlessly
   tk.dataset.h = String(items.length)+html.length;
   tk.innerHTML = '<div class="tkinner">'+html+'<span class="tksep">◆</span>'+html+'</div>';
+  const inner = tk.firstChild;   // speed scales with content so it always crawls readably (#622)
+  requestAnimationFrame(()=>{ try{ inner.style.animationDuration = Math.max(16, Math.round(inner.scrollWidth/2/75))+"s"; }catch(e){} });
 }
 
 /* 🎛 Command strip (#615): glove-mode actions during live drafts. */
@@ -1263,7 +1271,9 @@ function storyMode(){
     if(!p){ i++; step(); return; }
     const n = i+1+(S.pickOffset||0), r = Math.ceil(n/t), ix = n-(r-1)*t;
     const b = boothLine(e, i);
-    ov.innerHTML = '<div class="storycard'+(e.who==="me"?' mine':'')+'">'+
+    if(b && S.settings.sound!==false && (b.cls==="steal"||b.cls==="reach")){ try{ chime(); }catch(e2){} }
+    ov.innerHTML = '<div class="storybar"><span style="width:'+Math.round(100*(i+1)/S.log.length)+'%"></span></div>'+
+      '<div class="storycard'+(e.who==="me"?' mine':'')+'">'+
       '<div class="tag">PICK '+r+'.'+String(ix).padStart(2,"0")+' · '+esc(slotName(slotOfPick(n)))+'</div>'+
       avatarImg(p,72)+'<div class="name">'+esc(p.name)+'</div>'+
       '<div class="meta">'+posBadge(p.pos)+' '+p.team+(p.adp?' · ADP '+p.adp:'')+'</div>'+

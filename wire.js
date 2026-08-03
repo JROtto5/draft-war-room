@@ -27,6 +27,7 @@ document.addEventListener("click", e=>{
   {
     const dk = Object.keys(t.dataset||{})[0] || t.id || "";
     if(dk){ window._acts.push(dk+"@"+new Date().toISOString().slice(11,19)); if(window._acts.length>50) window._acts.shift(); }
+    if(navigator.vibrate && (t.closest("#cmdStrip .cmd")||t.closest(".tkopick"))) try{ navigator.vibrate(t.closest(".tkopick")?15:8); }catch(e2){}
   }
   if(t.dataset.picksync){
     const v = prompt("Which overall pick is on the clock right now? (board thinks it's #"+pickNow()+")", pickNow());
@@ -823,9 +824,12 @@ $("#pocketBtn").addEventListener("click", ()=>{   // 📱 pocket cheat card (#61
     const p2 = byId[id2]; if(!p2) return;
     y += 62;
     x.fillStyle = "#5a6d87"; x.font = "30px monospace"; x.fillText(String(i2+1).padStart(2," "), 60, y);
-    x.fillStyle = posC[p2.pos]||"#9aa7b5"; x.font = "bold 30px sans-serif"; x.fillText(p2.pos, 130, y);
-    x.fillStyle = "#e8eef7"; x.font = "34px sans-serif"; x.fillText(p2.name, 230, y);
-    x.fillStyle = "#8ba0bc"; x.font = "28px monospace"; x.fillText(String(p2.proj), 900, y);
+    x.beginPath(); x.arc(140, y-10, 9, 0, 7); x.fillStyle = posC[p2.pos]||"#9aa7b5"; x.fill();
+    x.font = "bold 26px sans-serif"; x.fillText(p2.pos, 165, y);
+    x.fillStyle = "#e8eef7"; x.font = "34px sans-serif"; x.fillText(p2.name, 250, y);
+    const bye2 = (typeof byeOf==="function") ? byeOf(p2.team) : null;
+    x.fillStyle = "#5a6d87"; x.font = "24px monospace"; if(bye2) x.fillText("bye "+bye2, 800, y);
+    x.fillStyle = "#8ba0bc"; x.font = "28px monospace"; x.fillText(String(p2.proj), 940, y);
   });
   if(!S.queue.length){ y += 50; x.fillStyle = "#5a6d87"; x.font = "30px sans-serif"; x.fillText("(queue empty — queue guys before draft day!)", 60, y); }
   y += 90;

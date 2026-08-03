@@ -351,8 +351,16 @@ function voiceToggle(){
   if(_vrec){ try{ _vrec.stop(); }catch(e){} _vrec = null; btn.classList.remove("liveon"); return toast("🎙 Voice off"); }
   _vrec = new SR();
   _vrec.continuous = true; _vrec.interimResults = false; _vrec.lang = "en-US";
+  const voiceChip = said => {   // live transcript chip (#630)
+    let vc = document.getElementById("voiceChip");
+    if(!vc){ vc = document.createElement("div"); vc.id = "voiceChip"; document.body.appendChild(vc); }
+    vc.textContent = "🎙 "+said;
+    vc.classList.remove("fade"); void vc.offsetWidth; vc.classList.add("fade");
+    clearTimeout(vc._t); vc._t = setTimeout(()=>vc.remove(), 4000);
+  };
   _vrec.onresult = ev => {
     const said = ev.results[ev.results.length-1][0].transcript.trim().toLowerCase();
+    voiceChip(said);
     const find = q => allPlayers().find(p=>!offBoard(p.id) && nq(p.name)===nq(q)) ||
                       (q.length>=4 ? allPlayers().find(p=>!offBoard(p.id) && nq(p.name).includes(nq(q))) : null);
     let m;
@@ -377,6 +385,17 @@ function voiceToggle(){
   catch(e){ _vrec=null; toast("🎙 "+esc(e.message), {warn:true}); }
 }
 document.getElementById("voiceBtn").addEventListener("click", voiceToggle);
+document.addEventListener("keydown", ev=>{   // takeover keyboard control (#619)
+  const tko2 = document.getElementById("clockTakeover");
+  if(!tko2) return;
+  if(ev.key==="Escape"){ const m2 = tko2.querySelector("#tkoMin"); if(m2) m2.click(); return; }
+  if(["1","2","3"].includes(ev.key) && !ev.ctrlKey && !ev.metaKey && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement&&document.activeElement.tagName||"")){
+    const btns = tko2.querySelectorAll(".tkopick");
+    const b2 = btns[+ev.key-1];
+    if(b2){ ev.preventDefault(); b2.click(); }
+  }
+});
+
 
 function updatePanic(hz, top){
   let bar = document.getElementById("panicBar");
@@ -407,10 +426,15 @@ function updatePanic(hz, top){
           '<button class="pick tkopick" data-pick="'+x.p.id+'">✓ DRAFT '+esc(x.p.name.split(" ").slice(-1)[0].toUpperCase())+'</button></div>';
       }).join("");
     }catch(e){ cards = '<div class="empty">'+esc(e.message)+'</div>'; }
+    tko.setAttribute("role","dialog"); tko.setAttribute("aria-modal","true"); tko.setAttribute("aria-label","You are on the clock");
     tko.innerHTML = '<div class="tkohead">🚨 PICK #'+hz.cur+' — <b>YOU ARE ON THE CLOCK</b>'+
-      '<button class="undo1" id="tkoMin" title="Shrink to the small banner">▁ minimize</button></div>'+
-      '<div class="tkogrid">'+cards+'</div>';
+      '<button class="undo1" id="tkoMin" title="Shrink to the small banner (Esc)">▁ minimize</button></div>'+
+      '<div class="tkogrid">'+cards+'</div>'+
+      '<div class="tkohint dimtxt">press <b>1</b>/<b>2</b>/<b>3</b> to draft · <b>Esc</b> to minimize</div>';
+    tko.querySelectorAll(".tkocard").forEach((c2,i2)=>{ c2.style.animationDelay = (i2*0.07)+"s"; });
     tko.querySelector("#tkoMin").addEventListener("click", ()=>{ window._tkoDismissed = hz.cur; tko.remove(); render(); });
+    const lead = tko.querySelector(".tkocard.lead .tkopick") || tko.querySelector(".tkopick");
+    if(lead) setTimeout(()=>{ try{ lead.focus({preventScroll:true}); }catch(e){} }, 250);
     return;
   }
   if(tko) tko.remove();
