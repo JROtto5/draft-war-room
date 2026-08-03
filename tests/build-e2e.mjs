@@ -98,6 +98,7 @@ try {
     });
   }, 700);
 } catch(e){ out.push("ERR:"+e.message); }
+document.title = "E2E|BOOTING";   // provisional: distinguishes "timers never fired" from "page never loaded"
 setTimeout(()=>{ document.title="E2E|"+out.join("|"); }, 900);
 }, 100); });
 </scr` + `ipt>`;

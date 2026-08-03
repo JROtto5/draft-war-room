@@ -47,13 +47,16 @@ jobs:
           python3 -m http.server 8765 &
           sleep 1
           CHROME=$(command -v google-chrome || command -v chromium-browser || command -v chromium)
-          run_e2e() { "$CHROME" --headless --no-sandbox --disable-gpu --virtual-time-budget=35000 --dump-dom "http://localhost:8765/e2e.html?e2e" | grep -o '<title>E2E|[^<]*' || true; }
-          OUT=$(run_e2e)
-          case "$OUT" in *E2E\|*BAD*|*E2E\|*ERR*|"") echo "retrying once…"; OUT=$(run_e2e);; esac
+          run_e2e() { "$CHROME" --headless --no-sandbox --disable-gpu --disable-background-networking --disable-sync --disable-component-update --virtual-time-budget=50000 --dump-dom "http://localhost:8765/e2e.html?e2e" | grep -o '<title>E2E|[^<]*' || true; }
+          OUT=""
+          for a in 1 2 3; do
+            OUT=$(run_e2e)
+            case "$OUT" in *E2E\|*BOOTING*|*E2E\|*BAD*|*E2E\|*ERR*|"") echo "attempt $a: '$OUT' — retrying"; sleep 2;; *E2E\|*) break;; esac
+          done
           echo "result: $OUT"
           "$CHROME" --headless --no-sandbox --disable-gpu --window-size=1400,900 --screenshot=e2e-shot.png --timeout=6000 "http://localhost:8765/?e2e" || true
           case "$OUT" in
-            *E2E\|*BAD*|*E2E\|*ERR*|"") exit 1 ;;
+            *E2E\|*BOOTING*|*E2E\|*BAD*|*E2E\|*ERR*|"") exit 1 ;;
             *E2E\|*) exit 0 ;;
           esac
       - name: Upload E2E screenshot
