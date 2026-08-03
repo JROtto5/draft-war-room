@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# MIT License — see LICENSE. © 2026 JROtto5 / Draft War Room.
 # Annual data swap — run this every summer with the new CSVs.
 #
 #   ./tools/refresh.sh <projections.csv> <team-board.csv> [last-season]

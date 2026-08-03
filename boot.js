@@ -1,4 +1,5 @@
-/* Draft War Room · boot: lock screen, boot sequence, service worker, sentinels. */
+/* Draft War Room · boot: lock screen, boot sequence, service worker, sentinels.
+   MIT License — see LICENSE. © 2026 JROtto5 / Draft War Room. */
 /* ---------- Lock screen ---------- */
 const LOCK_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"; // sha256("1234")
 async function sha256hex(s){
@@ -64,6 +65,19 @@ try{
     localStorage.removeItem(LS_KEY+"-crumb");
   }
 }catch(e){}
+if(location.search.indexOf("debug")>=0 && window.crypto && crypto.subtle && location.protocol!=="file:"){
+  // soft integrity self-check (#579): compares two shipped files against integrity.json, console-only
+  setTimeout(async ()=>{
+    try{
+      const man = await (await fetch("integrity.json", {cache:"no-store"})).json();
+      for(const f of ["engine.js","sw.js"]){
+        const buf = await (await fetch(f, {cache:"no-store"})).arrayBuffer();
+        const hex = [...new Uint8Array(await crypto.subtle.digest("SHA-256", buf))].map(x=>x.toString(16).padStart(2,"0")).join("");
+        console.warn("integrity "+f+": "+(man.files && man.files[f]===hex ? "PASS" : "FAIL (dev build or tampered)"));
+      }
+    }catch(e){ console.warn("integrity check skipped:", e.message); }
+  }, 3000);
+}
 if(location.search.indexOf("wall")>=0){
   document.addEventListener("DOMContentLoaded", ()=>{});
   setTimeout(()=>{

@@ -1,0 +1,29 @@
+name: Bug report
+description: Something in the war room is broken
+labels: [bug]
+body:
+  - type: input
+    id: build
+    attributes:
+      label: Build number
+      description: Bottom of Settings (e.g. v8.0), or the BUILD constant in boot.js
+      placeholder: "8.0"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: Console errors
+      description: F12 → Console — paste anything red
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Where?
+      options: [Normal, Live draft, Sleeper sync, Wall mode (?wall), Spectate (?demo), Season HQ]

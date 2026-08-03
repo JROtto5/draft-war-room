@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# MIT License — see LICENSE. © 2026 JROtto5 / Draft War Room.
 """Regenerate data.js for Draft War Room.
 
 Inputs:

@@ -1,4 +1,5 @@
-/* Draft War Room · wire: delegated events, buttons, settings, palette, sync, IO. */
+/* Draft War Room · wire: delegated events, buttons, settings, palette, sync, IO.
+   MIT License — see LICENSE. © 2026 JROtto5 / Draft War Room. */
 /* ---------- Events (delegated) ---------- */
 document.addEventListener("click", e=>{
   window._acts = window._acts || [];

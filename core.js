@@ -1,6 +1,7 @@
 "use strict";
 /* Draft War Room · core: state, engine bindings, sims, injuries, analytics helpers.
-   Loads after data.js + engine.js; exposes globals consumed by views/wire/boot. */
+   Loads after data.js + engine.js; exposes globals consumed by views/wire/boot.
+   MIT License — see LICENSE. © 2026 JROtto5 / Draft War Room. */
 "use strict";
 
 const POSITIONS = ["QB","RB","WR","TE","DEF"];

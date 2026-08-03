@@ -1,4 +1,5 @@
-/* Draft War Room · views: every render function, cards, modals content. */
+/* Draft War Room · views: every render function, cards, modals content.
+   MIT License — see LICENSE. © 2026 JROtto5 / Draft War Room. */
 /* ---------- Rendering ---------- */
 const $ = s => document.querySelector(s);
 
