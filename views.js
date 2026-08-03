@@ -438,7 +438,13 @@ function renderPool(){
   let prevTier = null;
   const tw = document.querySelector(".tablewrap");
   const scrollSave = tw ? tw.scrollTop : 0;
+  window._rowCache = window._rowCache || {key:null, m:{}};
+  const rcKey = stateKey()+"|"+key+dir+q+(S.ui.pos||"");
+  if(window._rowCache.key !== rcKey){ window._rowCache = {key:rcKey, m:{}}; }
+  const rowCache = window._rowCache.m;
   $("#poolBody").innerHTML = rows.map((r,i)=>{
+    const ck = r.p.id+"|"+i;
+    if(rowCache[ck]) return rowCache[ck];
     const cls = r.mine ? "mine-row" : (r.taken ? "taken" : (S.dnd[r.p.id] ? "dndrow" : ""));
     const act = r.mine
       ? '<button class="undo1" data-drop="'+r.p.id+'">↩ un-pick</button>'

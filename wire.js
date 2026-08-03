@@ -1033,6 +1033,19 @@ $("#settingsSave").addEventListener("click", ()=>{
   commit();
 });
 
+document.getElementById("drillBtn").addEventListener("click", ()=>{
+  window._drill = !window._drill;
+  if(window._drill){
+    window._realFetch = window.fetch;
+    window.fetch = ()=>Promise.reject(new Error("offline drill"));
+    setOnlineUI(); document.body.classList.add("offline");
+    toast("🧯 OFFLINE DRILL — all network blocked. Everything should still work. Click again to restore.", {warn:true});
+  } else {
+    if(window._realFetch) window.fetch = window._realFetch;
+    document.body.classList.remove("offline"); setOnlineUI();
+    toast("📡 Drill over — network restored");
+  }
+});
 $("#debugBtn").addEventListener("click", ()=>{
   const info = {
     build: BUILD, data: typeof DATA_STAMP!=="undefined"?DATA_STAMP:"?",

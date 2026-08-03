@@ -45,6 +45,18 @@ initLock();
 
 /* ---------- Boot ---------- */
 load();
+window.addEventListener("beforeunload", ()=>{
+  if(S.ui.live) try{ localStorage.setItem(LS_KEY+"-crumb", JSON.stringify({t:Date.now(), pick:pickNow(), log:S.log.length})); }catch(e){}
+});
+try{
+  const crumb = JSON.parse(localStorage.getItem(LS_KEY+"-crumb")||"null");
+  if(crumb && S.ui.live && Date.now()-crumb.t < 3*3600e3){
+    setTimeout(()=>{
+      toast("🔴 You reloaded mid-draft (pick #"+crumb.pick+"). Live mode is still armed.", {action:{label:"PAUSE LIVE", fn:()=>setLive(false)}});
+    }, 1200);
+    localStorage.removeItem(LS_KEY+"-crumb");
+  }
+}catch(e){}
 if(location.search.indexOf("wall")>=0){
   document.addEventListener("DOMContentLoaded", ()=>{});
   setTimeout(()=>{
@@ -147,7 +159,17 @@ async function holdWake(on){
   }catch(e){}
 }
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible" && S.ui.live) holdWake(true); });
+let _bc = null;
+try{
+  _bc = new BroadcastChannel("war-room");
+  _bc.onmessage = ev=>{
+    if(ev.data==="live-on" && S.ui.live){
+      toast("⚠️ Another tab just went LIVE — run one cockpit to avoid double-marking.", {warn:true});
+    }
+  };
+}catch(e){}
 function setLive(on){
+  if(on && _bc) try{ _bc.postMessage("live-on"); }catch(e){}
   S.ui.live = on;
   holdWake(on);
   if(on){ S.ui.liveStart = Date.now(); S.ui.liveLen0 = S.log.length; }

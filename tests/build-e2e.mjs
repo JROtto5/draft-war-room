@@ -73,9 +73,11 @@ try {
       return Promise.reject(new Error("e2e: no network"));
     };
     S.settings.sleeperDraftId = "TEST";
-    SYNC.on = true; SYNC.draftId = "TEST"; SYNC.seen = 0;
+    SYNC.on = true; SYNC.draftId = "TEST"; SYNC.seen = 0; SYNC.myRoster = "u1";
     syncPoll().then(()=>{
-      out.push("sync:"+(S.taken[allPlayers().find(p=>p.name==="Jahmyr Gibbs").id]?"OK":"BAD"));
+      const gibbs2 = allPlayers().find(p=>p.name==="Jahmyr Gibbs").id;
+      out.push("sync:"+(S.mine.includes(gibbs2)?"OK":"BAD"));   // picked_by u1 = MINE (#513)
+      out.push("sync2:"+(S.taken[allPlayers().find(p=>p.name==="Bijan Robinson").id]?"OK":"BAD"));
       window.fetch = realFetch; SYNC.on = false; undoLast(); undoLast();
     });
   }, 700);

@@ -30,6 +30,15 @@ jobs:
         run: |
           node --experimental-test-coverage --test tests/runner.node.mjs 2>/dev/null || true
           ./scripts/test-all.sh
+      - name: Marathon (full 192-pick draft)
+        run: |
+          node tests/build-marathon.mjs
+          python3 -m http.server 8766 &
+          sleep 1
+          CHROME=$(command -v google-chrome || command -v chromium-browser || command -v chromium)
+          OUT=$("$CHROME" --headless --no-sandbox --disable-gpu --virtual-time-budget=60000 --dump-dom "http://localhost:8766/marathon.html?e2e" | grep -o '<title>MARA|[^<]*' || true)
+          echo "marathon: $OUT"
+          case "$OUT" in *MARA\|*BAD*|*MARA\|*ERR*|"") exit 1 ;; *) exit 0 ;; esac
       - name: Browser E2E smoke
         run: |
           node tests/build-e2e.mjs

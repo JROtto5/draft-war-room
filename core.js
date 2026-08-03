@@ -341,7 +341,27 @@ function oddsClass(v){ return v>=70 ? "ok" : v>=35 ? "mid" : "low"; }
 
 function simToMyPick(){
   const h = nextPickHorizon();
-  if(!h || h.onClock){ toast("You're already on the clock"); return; }
+  if(h && h.onClock){ toast("You're already on the clock"); return; }
+  const total = S.settings.teams*S.settings.roster;
+  if(!h){
+    if(pickNow() > total){ toast("Draft is complete"); return; }
+    const players0 = allPlayers(), rinfo0 = roundInfo(players0), rng0 = mulberry32(pickNow()*7919);
+    const cpu0 = seedCpuTeams(rng0);
+    let made0 = 0;
+    while(pickNow() <= total && made0 < 30){
+      const pk = pickNow(), r0 = Math.ceil(pk/S.settings.teams);
+      const slot0 = slotOfPick(pk);
+      const avail0 = players0.filter(p=>!offBoard(p.id));
+      const best0 = cpuPick(avail0, cpu0[slot0], r0, rng0, rinfo0, S.settings.roster);
+      if(!best0) break;
+      redoStack.length=0;
+      S.taken[best0.id]=true; S.log.push({id:best0.id, who:"other", t:Date.now()});
+      cpu0[slot0][best0.pos]++; made0++;
+    }
+    pruneQueue(); _memo={key:null}; commit();
+    toast("🏁 Finished the room: +"+made0+" picks");
+    return;
+  }
   const players = allPlayers(), rinfo = roundInfo(players), t = S.settings.teams, R = S.settings.roster;
   const rng = mulberry32(Date.now() % 100000);
   const cpu = seedCpuTeams(rng);
@@ -357,7 +377,8 @@ function simToMyPick(){
     made++;
   }
   pruneQueue(); commit();
-  toast("⏩ Simmed "+made+" CPU picks — you're up");
+  const lostQ = S.queue.filter(id=>offBoard(id)).map(id=>idIndex()[id]).filter(Boolean);
+  toast("⏩ Simmed "+made+" CPU picks — you're up"+(lostQ.length?". 🎯 Lost from queue: "+lostQ.map(p=>esc(p.name.split(" ").slice(-1)[0])).join(", "):""), lostQ.length?{warn:true}:undefined);
 }
 function predictNextPicks(){
   const h = nextPickHorizon();
@@ -659,6 +680,21 @@ function pickMine(id){
   const p = idIndex()[id];
   const who = S.settings.flair ? esc(S.settings.flair) : "you";
   if(p) toast("✓ "+who+" drafted <b style='color:var(--green)'>"+esc(p.name)+"</b>"+gradeChip, {undo:undoLast});
+  if(p && S.log.length >= S.settings.teams){
+    try{
+      const st2 = quickStandings();
+      const rank2 = st2.rows.findIndex(r=>r.s===st2.mySlot)+1;
+      const prev2 = window._lastRank;
+      window._lastRank = rank2;
+      if(prev2 && rank2 < prev2) toast("📈 That pick moved you to <b>"+ordinal(rank2)+"</b> in projected standings");
+    }catch(e){}
+  }
+  if(p){
+    const lines2 = p.adp && (S.log.length+(S.pickOffset||0)) - p.adp >= 12 ? ["Absolute heist. 💎","The room let him fall. Their loss.","Market said no — you said yes."] :
+      isFav(p) ? ["The homeland approves. 💖","Scouting via birth certificate — respect."] :
+      breakoutTag(p) ? ["Buying the breakout before it breaks. 🚀"] : null;
+    if(lines2 && S.ui.live) toast(lines2[Math.floor(Math.random()*lines2.length)]);
+  }
   if(p && isFav(p)) toast("💖 A "+((S.settings.favState||"").toUpperCase()||"favorite")+" kid joins the squad. This is the way.");
   if(p) emojiBurst(p.pos);
   if(p) announce("Pick "+pickNow()+". You drafted "+p.name+".");
@@ -963,6 +999,18 @@ async function syncPoll(){
         const dr = await (await fetch(SYNC.base+"/draft/"+SYNC.draftId)).json();
         const order = dr.draft_order || {};
         for(const uid in order) if(+order[uid]===+S.settings.slot) SYNC.myRoster = uid;
+        // traded picks → pickOwner (#507): slot_to_roster_id inversion
+        const s2r = dr.slot_to_roster_id || {};
+        const r2s = {}; for(const sl2 in s2r) r2s[s2r[sl2]] = +sl2;
+        const tp = await (await fetch(SYNC.base+"/draft/"+SYNC.draftId+"/traded_picks")).json().catch(()=>[]);
+        if(Array.isArray(tp)) tp.forEach(x=>{
+          const origSlot = r2s[x.roster_id], newSlot = r2s[x.owner_id];
+          if(origSlot && newSlot && x.round){
+            const t2 = S.settings.teams;
+            const n2 = (x.round-1)*t2 + (x.round%2===1 ? origSlot : t2+1-origSlot);
+            S.pickOwner[n2] = newSlot;
+          }
+        });
       }catch(e){}
     }
     const map = sleeperToOurs();
@@ -978,7 +1026,7 @@ async function syncPoll(){
     });
     SYNC.seen = picks.length;
     const chip = document.getElementById("syncChip");
-    if(chip) chip.textContent = "🔄 synced "+picks.length+" picks";
+    if(chip) chip.textContent = "🔄 "+picks.length+" picks · on the clock: "+slotName(slotOfPick(picks.length+1));
     if(applied){ redoStack.length=0; pruneQueue(); _memo={key:null}; commit(); toast("🔄 Sleeper sync: +"+applied+" picks"); }
   }catch(e){
     const chip = document.getElementById("syncChip");
