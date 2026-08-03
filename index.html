@@ -8,8 +8,11 @@
 <meta property="og:title" content="Draft War Room">
 <meta property="og:description" content="Superflex draft cockpit: sims, live injuries, tiers, standings — Buck Breakers edition.">
 <meta property="og:type" content="website">
-<meta property="og:image" content="icon-512.png">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="https://draft-war-room.vercel.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://draft-war-room.vercel.app/og.png">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -54,6 +57,7 @@
   <button class="hbtn" id="csvBtn" title="Download the evaluated board as CSV">⇩ CSV</button>
   <button class="hbtn" id="shareBtn" title="Copy a link that restores this exact board anywhere">🔗</button>
   <button class="hbtn" id="liveBtn" aria-label="Toggle Draft Day live mode" title="Draft Day mode: pace clock, pick chime, panic button">⚪ Live</button>
+  <span id="mvpChip" class="mvpchip" hidden title="Best value pick of the draft so far"></span>
   <button class="hbtn" id="syncBtn" aria-label="Toggle Sleeper live sync" title="Auto-mark picks from a Sleeper draft (Settings → draft ID)">🔄 Sync</button>
   <span class="savebadge" id="syncChip" style="display:none"></span>
   <button class="hbtn" id="injBtn" title="Injury Center — live ESPN reports">🩺</button>
@@ -201,6 +205,9 @@
         <input type="text" id="keyMine" maxlength="1" style="width:40px;text-align:center"><input type="text" id="keyTaken" maxlength="1" style="width:40px;text-align:center"><input type="text" id="keyQueue" maxlength="1" style="width:40px;text-align:center"></span></div>
       <div class="frow"><label>🏔 Tier sensitivity (higher = fewer, bigger tiers)</label><input type="range" id="setTierSense" min="0.03" max="0.07" step="0.005" style="width:120px"></div>
       <div class="frow"><label>🌊 Run contagion (lower = rooms panic harder)</label><input type="range" id="setContagion" min="0.85" max="1" step="0.01" style="width:120px"></div>
+      <div class="frow"><label>🔊 Sound theme</label><select id="setSoundTheme"><option value="classic">Classic</option><option value="arcade">Arcade</option><option value="calm">Calm</option></select></div>
+      <div class="frow"><label>💬 Your lock-screen quips (one per line)</label><textarea id="setQuips" class="wide" rows="2" placeholder="Fear the 12 spot.&#10;In Otto we trust."></textarea></div>
+      <div id="footCredit" class="dimtxt" style="font-size:10px;text-align:center;padding-top:6px"></div>
       <div class="frow"><label>📶 Low-data mode (no photos/logos)</label><input type="checkbox" id="setLowData" style="width:auto"></div>
       <div class="frow"><label>🔔 Notify me when MY players' status changes (tab in background)</label><input type="checkbox" id="setNotify" style="width:auto"></div>
       <div class="frow"><label>Poll cadence, minutes (injuries/news)</label><input type="number" id="setPoll" min="2" max="30" step="1"></div>

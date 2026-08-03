@@ -6,12 +6,16 @@ if (/\bdebugger\b/.test(app)) fail("debugger statement in app.js");
 if (/console\.log\(/.test(app)) fail("console.log left in modules (use warn/error)");
 // contrast audit (#423): key text/bg pairs must clear 4.5:1
 const cssTxt = readFileSync("styles.css","utf8");
-const getVar = n => { const m = cssTxt.match(new RegExp("--"+n+":(#[0-9a-fA-F]{6})")); return m && m[1]; };
+const getVar = (n, i=0) => { const ms = [...cssTxt.matchAll(new RegExp("--"+n+":(#[0-9a-fA-F]{6})","g"))]; return ms[i] && ms[i][1]; };
 const lum = hex => { const c=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4)); return 0.2126*c[0]+0.7152*c[1]+0.0722*c[2]; };
 const ratio = (a,b)=>{ const l1=lum(a), l2=lum(b); return (Math.max(l1,l2)+0.05)/(Math.min(l1,l2)+0.05); };
 const bg = getVar("bg"), text = getVar("text"), dim = getVar("dim");
 if (bg && text && ratio(text,bg) < 4.5) fail("text/bg contrast "+ratio(text,bg).toFixed(2));
 if (bg && dim && ratio(dim,bg) < 3.5) fail("dim/bg contrast "+ratio(dim,bg).toFixed(2));
+const lbg = getVar("bg",1), ltext = getVar("text",1), ldim = getVar("dim",1), lpanel = getVar("panel",1);
+if (lbg && ltext && ratio(ltext,lbg) < 4.5) fail("LIGHT text/bg contrast "+ratio(ltext,lbg).toFixed(2));
+if (lbg && ldim && ratio(ldim,lbg) < 3.5) fail("LIGHT dim/bg contrast "+ratio(ldim,lbg).toFixed(2));
+if (lpanel && ldim && ratio(ldim,lpanel) < 3.5) fail("LIGHT dim/panel contrast "+ratio(ldim,lpanel).toFixed(2));
 if (/\b(TODO|FIXME)\b/.test(app)) fail("TODO/FIXME left in app.js");
 const overlays = (html.match(/class="overlay"/g) || []).length;
 const modals = (html.match(/class="modal[" ]/g) || []).length;

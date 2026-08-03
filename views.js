@@ -672,11 +672,25 @@ function renderBest(){
       '<div class="name">'+esc(S.settings.flair||slotName(S.settings.slot))+'</div>'+
       '<div class="meta">Draft complete · optimal starters <b class="mono" style="color:var(--green)">'+fmt(bsH.pts)+'</b> · projected <b>'+ordinal(myRank)+'</b> of '+st.rows.length+
       (hurtN?' · 🩹 '+hurtN+' with injury flags':' · roster healthy ✓')+
-      ((()=>{ // title odds: softmax over projected starters
+      ((()=>{ // title odds: softmax over projected starters, with draft-long history (#564)
         const temps = st.rows.map(r2=>Math.exp(r2.pts/120));
         const z = temps.reduce((a,b)=>a+b,0);
         const mine2 = temps[st.rows.findIndex(r2=>r2.s===st.mySlot)]/z;
-        return ' · 🏆 title odds ~<b>'+Math.round(mine2*100)+'%</b>';
+        let spark = "";
+        try{
+          const hk = LS_KEY+"-oddshist";
+          const hist = JSON.parse(localStorage.getItem(hk)||"[]");
+          if(!hist.length || hist[hist.length-1].n !== S.log.length){
+            hist.push({n:S.log.length, o:Math.round(mine2*1000)/10});
+            localStorage.setItem(hk, JSON.stringify(hist.slice(-60)));
+          }
+          if(hist.length>=3){
+            const os = hist.map(x2=>x2.o), mx = Math.max(...os, 1), mn = Math.min(...os);
+            const pts2 = os.map((o2,i2)=>Math.round(i2*(64/(os.length-1)))+","+Math.round(13-11*((o2-mn)/Math.max(0.1,mx-mn)))).join(" ");
+            spark = ' <svg width="66" height="15" viewBox="0 0 66 15" style="vertical-align:-2px" aria-label="title odds trend"><polyline points="'+pts2+'" fill="none" stroke="var(--gold)" stroke-width="1.5"/></svg>';
+          }
+        }catch(e){}
+        return ' · 🏆 title odds ~<b>'+Math.round(mine2*100)+'%</b>'+spark;
       })())+'</div>'+
       '<div class="actions">'+
         '<button class="hbtn" onclick="document.getElementById(\'gradeBtn\').click()">🎓 Report</button>'+
@@ -746,8 +760,22 @@ function renderBest(){
   }
   const pred = predictNextPicks();
   if(pred){
-    pickline += '<div class="pickline" style="margin-top:-4px;font-size:10.5px">🔮 '+esc(slotName(pred.slot))+' likely takes: '+
+    pickline += '<div class="pickline" style="margin-top:-4px;font-size:10.5px">🔮 '+slotEmoji(pred.slot)+' '+esc(slotName(pred.slot))+' likely takes: '+
       pred.cand.map(x=>'<b>'+esc(x.p.name.split(" ").slice(-1)[0])+'</b> ('+x.p.pos+')').join(" or ")+'</div>';
+  }
+  { // MVP belt (#569): biggest positive ADP delta so far holds the belt during live drafts
+    const chipEl = document.getElementById("mvpChip");
+    if(chipEl){
+      let belt=null, bd=9;
+      const byIdM = idIndex();
+      S.log.forEach((e2,i2)=>{ const p2=byIdM[e2.id]; const d2=p2&&p2.adp ? (i2+1+(S.pickOffset||0))-p2.adp : 0; if(d2>bd){ bd=d2; belt={p:p2, who:e2.who, d:d2}; } });
+      if(S.ui.live && belt){
+        chipEl.hidden = false;
+        chipEl.innerHTML = '🏆 '+esc(belt.p.name.split(" ").slice(-1)[0])+' +'+Math.round(belt.d);
+        if(window._mvpId && window._mvpId!==belt.p.id) toast("🏆 MVP belt changes hands: <b>"+esc(belt.p.name)+"</b> at +"+Math.round(belt.d)+" past ADP");
+        window._mvpId = belt.p.id;
+      } else chipEl.hidden = true;
+    }
   }
   document.title = (h && h.onClock ? "🟢 YOUR PICK — " : "") + "Draft War Room — 2QB";
   if(h && h.onClock && !window._wasOnClock && S.ui.live) chime();

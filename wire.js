@@ -655,6 +655,25 @@ function buildReport(){
         (fs && states[fs] ? ' — <b style="color:#ff7bac">'+states[fs]+' '+fs+' kid'+(states[fs]>1?"s":"")+' on YOUR team</b>' : '')+'</span></div>';
     }
   }
+  { // preseason superlatives (#563)
+    const myPk = S.log.map((e2,i2)=>({e:e2, n:i2+1+(S.pickOffset||0)})).filter(x=>x.e.who==="me")
+      .map(x=>({p:byId[x.e.id], n:x.n})).filter(x=>x.p && x.p.adp);
+    if(myPk.length>=2){
+      const byD = [...myPk].sort((a,b)=>(a.n-a.p.adp)-(b.n-b.p.adp));
+      const reach2 = byD[0], value2 = byD[byD.length-1];
+      const bold2 = myPk.find(x=>breakoutTag(x.p) || spikeRate(x.p)>=0.4);
+      const homer2 = myPk.find(x=>isFav(x.p));
+      const sup = [];
+      if(reach2.n-reach2.p.adp < -3) sup.push("🙋 <b>Biggest Reach</b>: "+esc(reach2.p.name)+" ("+Math.round(reach2.p.adp-reach2.n)+" early)");
+      if(value2.n-value2.p.adp > 3) sup.push("💎 <b>Best Value</b>: "+esc(value2.p.name)+" (+"+Math.round(value2.n-value2.p.adp)+" past ADP)");
+      if(bold2) sup.push("🚀 <b>Boldest Pick</b>: "+esc(bold2.p.name));
+      if(homer2) sup.push("💖 <b>Homer Pick</b>: "+esc(homer2.p.name));
+      if(sup.length){
+        h += '<div class="sechead">🏅 Superlatives</div>' + sup.map(s3=>'<div class="mkrow"><span class="mn">'+s3+'</span></div>').join("");
+        txt += "Superlatives: "+sup.map(s3=>s3.replace(/<[^>]+>/g,"")).join(" | ")+"\n";
+      }
+    }
+  }
   h += '<div class="sechead">Steals</div>' + (steals.length
     ? steals.map(s=>'<div class="mkrow"><span class="mn">💎 '+s.p.name+' — '+s.fall+' picks past ADP</span></div>').join("")
     : '<div class="dimtxt">No 10+ pick discounts landed (yet).</div>');
@@ -701,7 +720,7 @@ $("#tauntBtn").addEventListener("click", ()=>{
   const last = rows[rows.length-1], top = rows[0];
   const lines = [
     "Projections have me "+ordinal(my)+" of "+rows.length+". "+(my===1?"Start engraving the trophy. 🏆":"And I drafted half-asleep."),
-    esc(slotName(last.s))+" projects dead last at "+Math.round(last.pts)+" pts. Thoughts and prayers. 🙏",
+    slotEmoji(last.s)+" "+esc(slotName(last.s))+" projects dead last at "+Math.round(last.pts)+" pts. Thoughts and prayers. 🙏",
     my===1 ? "Otto "+Math.round(rows[0].pts)+" — the field: cope." : esc(slotName(top.s))+" leads at "+Math.round(top.pts)+" — enjoy it while the injuries settle. 😈",
     "My optimal starters project "+Math.round(rows[my-1].pts)+". The math is not on your side, "+esc(slotName(last.s))+".",
   ];
@@ -748,7 +767,7 @@ function renderBoard(limit){
     if(p){ cells[r+"-"+slot] = {p, mine:e.who==="me", n}; maxR = Math.max(maxR, r); }
   });
   let h = '<table style="border-collapse:collapse;font-size:10.5px;min-width:'+(t*92)+'px"><tr><th style="padding:4px 6px"></th>';
-  for(let s2=1;s2<=t;s2++) h += '<th data-slotname="'+s2+'" title="Click to rename" style="cursor:pointer;padding:4px 6px;color:'+(s2===mySlot?'var(--green)':'var(--faint)')+';font-size:9px;max-width:90px;overflow:hidden;text-overflow:ellipsis">'+esc(slotName(s2))+(s2===mySlot?' ★':'')+'</th>';
+  for(let s2=1;s2<=t;s2++) h += '<th data-slotname="'+s2+'" title="Click to rename" style="cursor:pointer;padding:4px 6px;color:'+(s2===mySlot?'var(--green)':'var(--faint)')+';font-size:9px;max-width:90px;overflow:hidden;text-overflow:ellipsis">'+slotEmoji(s2)+' '+esc(slotName(s2))+(s2===mySlot?' ★':'')+'</th>';
   h += '</tr>';
   for(let r=1;r<=Math.min(maxR+1,S.settings.roster);r++){
     h += '<tr><td class="mono" style="color:var(--faint);padding:3px 6px">R'+r+'</td>';
@@ -989,6 +1008,11 @@ $("#settingsBtn").addEventListener("click", ()=>{
   $("#keyMine").value=kk.mine||"m"; $("#keyTaken").value=kk.taken||"t"; $("#keyQueue").value=kk.queue||"q";
   $("#setTierSense").value=S.settings.tierSense||0.045;
   $("#setContagion").value=S.settings.contagion||0.92;
+  $("#setSoundTheme").value=S.settings.soundTheme||"classic";
+  $("#setQuips").value=S.settings.quips||"";
+  const fc = document.getElementById("footCredit");
+  if(fc) fc.innerHTML = 'v'+(typeof BUILD!=="undefined"?BUILD:"?")+' · data '+(typeof DATA_STAMP!=="undefined"?DATA_STAMP:"?")+
+    ' · made with Claude · <a href="https://github.com/JROtto5/draft-war-room/blob/main/CHANGELOG.md" target="_blank" rel="noopener">changelog</a>';
   $("#setNotify").checked=!!S.settings.notifyInj;
   $("#setPoll").value=S.settings.pollMins||5;
   const hw = S.settings.hqWidgets||{radar:true,news:true,ir:true,drops:true};
@@ -1071,6 +1095,8 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.keys = {mine:($("#keyMine").value||"m").toLowerCase(), taken:($("#keyTaken").value||"t").toLowerCase(), queue:($("#keyQueue").value||"q").toLowerCase()};
   S.settings.tierSense = +$("#setTierSense").value || 0.045;
   S.settings.contagion = +$("#setContagion").value || 0.92;
+  S.settings.soundTheme = $("#setSoundTheme").value || "classic";
+  S.settings.quips = $("#setQuips").value || "";
   const wantNotify = $("#setNotify").checked;
   if(wantNotify && !S.settings.notifyInj && "Notification" in window && Notification.permission==="default"){
     Notification.requestPermission();

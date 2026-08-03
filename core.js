@@ -87,6 +87,12 @@ function slotOfPick(n){
   return (r%2===1) ? idx : t+1-idx;
 }
 function slotName(s){ return (S.slotNames && S.slotNames[s]) || ("T"+s); }
+const SLOT_EMOJI = ["🦌","🦈","🐺","🦅","🐻","🐗","🦂","🐍","🦬","🐊","🦁","🐢","🦉","🐎","🦊","🐙","🦖","🐉","🦍","🐝","🦄","🐬","🦇","🐫"];
+function slotEmoji(s){
+  const nm = slotName(s); let h2 = 0;
+  for(let i=0;i<nm.length;i++) h2 = (h2*31 + nm.charCodeAt(i)) >>> 0;
+  return SLOT_EMOJI[h2 % SLOT_EMOJI.length];
+}
 function slotCfg(){ return (S.settings.slots) || {QB:1,RB:2,WR:2,TE:1,FLEX:1,SF:1,DEF:1,K:0,BN:7}; }
 function startableNow(){
   const sl = slotCfg();
@@ -580,14 +586,16 @@ function emojiBurst(pos){
     setTimeout(()=>s.remove(), 3600);
   }
 }
-function confetti(){
+function confetti(kind){
+  const hearts = kind==="hearts";
   const acc = getComputedStyle(document.documentElement).getPropertyValue("--green").trim() || "#2fd47a";
-  const colors = [acc,"#ffc94d","#5aa9ff","#ff6b6b","#b78cff","#ffffff"].sort(()=>Math.random()-0.5);
-  for(let i=0;i<48;i++){
+  const colors = hearts ? ["#ff7bac","#ff9ec4","#ff5d8f","#ffc2d6"] : [acc,"#ffc94d","#5aa9ff","#ff6b6b","#b78cff","#ffffff"].sort(()=>Math.random()-0.5);
+  for(let i=0;i<(hearts?28:48);i++){
     const s = document.createElement("span");
-    s.className = "cf";
+    s.className = hearts ? "cf cfh" : "cf";
     s.style.left = Math.random()*100+"vw";
-    s.style.background = colors[i%colors.length];
+    if(hearts){ s.textContent="♥"; s.style.color=colors[i%colors.length]; s.style.background="transparent"; }
+    else s.style.background = colors[i%colors.length];
     s.style.animationDelay = (Math.random()*0.9)+"s";
     s.style.transform = "rotate("+Math.random()*360+"deg)";
     document.body.appendChild(s);
@@ -700,7 +708,7 @@ function pickMine(id){
       breakoutTag(p) ? ["Buying the breakout before it breaks. 🚀"] : null;
     if(lines2 && S.ui.live) toast(lines2[Math.floor(Math.random()*lines2.length)]);
   }
-  if(p && isFav(p)) toast("💖 A "+((S.settings.favState||"").toUpperCase()||"favorite")+" kid joins the squad. This is the way.");
+  if(p && isFav(p)){ toast("💖 A "+((S.settings.favState||"").toUpperCase()||"favorite")+" kid joins the squad. This is the way."); confetti("hearts"); }
   if(p) emojiBurst(p.pos);
   if(p) announce("Pick "+pickNow()+". You drafted "+p.name+".");
   blip();
@@ -749,9 +757,25 @@ function editProj(id){
   const n = parseFloat(v);
   if(!isNaN(n) && n>=0){ S.overrides[id]=n; commit(); }
 }
+function milestoneCheck(){
+  const total = S.settings.teams*S.settings.roster;
+  const done = S.log.length + (S.pickOffset||0);
+  if(!done || !S.ui.live) return;
+  window._miles = window._miles || {};
+  for(const m of [25,50,75,90]){
+    if(done >= total*m/100 && !window._miles[m]){
+      window._miles[m] = true;
+      const mins = S.ui.liveStart ? (Date.now()-S.ui.liveStart)/60000 : 0;
+      const pace = mins>1 ? (done/mins).toFixed(1)+" picks/min · ~"+Math.round((total-done)/(done/mins))+" min left" : "";
+      toast("🚩 Draft "+m+"% complete ("+done+"/"+total+")"+(pace?" · "+pace:""));
+      break;
+    }
+  }
+}
 function commit(){
   save(); render();
   checkAchievements();
+  milestoneCheck();
   if(window.requestIdleCallback) requestIdleCallback(()=>{ try{ survivalOdds(); }catch(e){} }, {timeout:2000});
 }
 

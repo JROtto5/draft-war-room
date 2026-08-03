@@ -17,7 +17,14 @@ function initLock(){
   if(q){
     const m = new Date().getMonth();
     const seasonal = m===7 ? "It's draft szn. " : m>=8&&m<=11 ? "Season's live. " : "";
-    q.textContent = seasonal + LOCK_QUIPS[Math.floor(Math.random()*LOCK_QUIPS.length)];
+    const mine = (typeof S!=="undefined" && S.settings.quips ? S.settings.quips.split("\n").map(x=>x.trim()).filter(Boolean) : []);
+    const pool = LOCK_QUIPS.concat(mine);
+    let line = seasonal + pool[Math.floor(Math.random()*pool.length)];
+    try{
+      const dd = (typeof S!=="undefined") && S.settings.draftDate;
+      if(dd){ const days = Math.ceil((new Date(dd+"T20:00")-Date.now())/86400000); if(days>0 && days<200) line += " · "+days+" day"+(days>1?"s":"")+" until the draft."; }
+    }catch(e){}
+    q.textContent = line;
   }
   const scr = document.getElementById("lockScreen");
   const e2e = location.search.indexOf("e2e") >= 0;
@@ -60,7 +67,8 @@ try{
 if(location.search.indexOf("wall")>=0){
   document.addEventListener("DOMContentLoaded", ()=>{});
   setTimeout(()=>{
-    document.body.innerHTML = '<div id="wallWrap"><h1 style="color:var(--green);letter-spacing:2px">'+esc(S.settings.name||"DRAFT")+' — LIVE BOARD</h1><div id="boardGrid"></div></div>';
+    document.body.innerHTML = '<div id="wallWrap"><h1 style="color:var(--green);letter-spacing:2px">'+esc(S.settings.name||"DRAFT")+' — LIVE BOARD</h1><div id="boardGrid"></div>'+
+      '<div class="wallmark">'+esc((S.settings.name||"DRAFT WAR ROOM").toUpperCase())+' · WAR ROOM · v'+BUILD+'</div></div>';
     document.body.className = "wall";
     const draw = ()=>{ try{ renderBoard(); }catch(e){} };
     draw();
@@ -200,12 +208,15 @@ function announce(text){
     speechSynthesis.speak(u);
   }catch(e){}
 }
+function sndT(){ return S.settings.soundTheme || "classic"; }
 function blip(){
   if(S.settings.sound===false || !S.ui.live) return;
   try{
+    const th = sndT();
     const ac = new (window.AudioContext||window.webkitAudioContext)();
     const o = ac.createOscillator(), g2 = ac.createGain();
-    o.type = "square"; o.frequency.value = 520;
+    o.type = th==="calm" ? "sine" : "square";
+    o.frequency.value = th==="arcade" ? 880 : th==="calm" ? 440 : 520;
     o.connect(g2); g2.connect(ac.destination);
     g2.gain.setValueAtTime(0.05, ac.currentTime);
     g2.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+0.07);
@@ -243,9 +254,11 @@ function chime(){
   if(S.settings.sound===false) return;
   try{
     const ac = new (window.AudioContext||window.webkitAudioContext)();
-    [[880,0],[1174.7,0.18]].forEach(([f,at])=>{
+    const th = sndT();
+    const duo = th==="arcade" ? [[660,0],[990,0.12]] : th==="calm" ? [[523.25,0],[659.25,0.25]] : [[880,0],[1174.7,0.18]];
+    duo.forEach(([f,at])=>{
       const o=ac.createOscillator(), g=ac.createGain();
-      o.frequency.value=f; o.type="sine"; o.connect(g); g.connect(ac.destination);
+      o.frequency.value=f; o.type=th==="arcade"?"square":"sine"; o.connect(g); g.connect(ac.destination);
       const vol = (S.settings.vol!=null?S.settings.vol:1);
       g.gain.setValueAtTime(0.001, ac.currentTime+at);
       g.gain.exponentialRampToValueAtTime(0.22*vol+0.001, ac.currentTime+at+0.02);
