@@ -2,11 +2,23 @@
 /* ---------- Events (delegated) ---------- */
 document.addEventListener("click", e=>{
   window._acts = window._acts || [];
-  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-card],[data-cardtab],[data-boost],[data-fade],[data-adpedit],[data-tierup],[data-tierdn],[data-onepager],[data-cardpng],[data-unpickpre],[data-cmpfrom],[data-slotname],[data-cellpick],[data-voicenote],[data-notetpl],[data-keeper],[data-queue],[data-qup],[data-qfill],[data-plan],[data-unplan],[data-plantoggle],[data-planqueue],[data-qround],[data-qdn],[data-showall],[data-simto],[data-horn],[data-siren],#tradeGo,#matrixCopy,#nickGen,#logMineBtn,#logCsvBtn,#undo5Btn,th[data-sort]");
+  const t = e.target.closest("[data-pick],[data-take],[data-drop],[data-untake],[data-edit],[data-pos],[data-undoentry],[data-picksync],[data-note],[data-dnd],[data-clearfilters],[data-preset],[data-presetsave],[data-tiersort],[data-card],[data-cardtab],[data-boost],[data-fade],[data-adpedit],[data-tierup],[data-tierdn],[data-onepager],[data-cardpng],[data-unpickpre],[data-cmpfrom],[data-pin],[data-slotname],[data-cellpick],[data-voicenote],[data-notetpl],[data-keeper],[data-queue],[data-qup],[data-qfill],[data-plan],[data-unplan],[data-plantoggle],[data-planqueue],[data-qround],[data-qdn],[data-showall],[data-simto],[data-horn],[data-siren],#tradeGo,#matrixCopy,#nickGen,#logMineBtn,#logCsvBtn,#undo5Btn,th[data-sort]");
   if(!t){
     const rowEl = e.target.closest("#poolBody tr[data-pid]");
     if(rowEl){
-      kbSel = [...document.querySelectorAll("#poolBody tr[data-pid]")].indexOf(rowEl);
+      const all2 = [...document.querySelectorAll("#poolBody tr[data-pid]")];
+      const idx2 = all2.indexOf(rowEl);
+      if(e.shiftKey && kbSel>=0 && idx2!==kbSel){
+        const [a2,b2] = [Math.min(kbSel,idx2), Math.max(kbSel,idx2)];
+        const ids2 = all2.slice(a2,b2+1).map(x=>x.dataset.pid).filter(id2=>!offBoard(id2));
+        if(ids2.length && confirm("Mark "+ids2.length+" players as TAKEN?")){
+          ids2.forEach(id2=>{ redoStack.length=0; S.taken[id2]=true; S.log.push({id:id2, who:"other", t:Date.now()}); });
+          pruneQueue(); _memo={key:null}; commit();
+          toast("✕ Bulk: "+ids2.length+" marked taken");
+        }
+        return;
+      }
+      kbSel = idx2;
       applyKbSel();
     }
     return;
@@ -206,6 +218,12 @@ document.addEventListener("click", e=>{
     toast("Without "+esc(byId2[id].name)+": lineup drops <b>"+Math.round(with2-without)+"</b> pts");
     return;
   }
+  if(t.dataset.pin){
+    window._pinned = window._pinned===t.dataset.pin ? null : t.dataset.pin;
+    toast(window._pinned ? "📌 Pinned "+esc(idIndex()[window._pinned].name)+" — hover any player for the delta" : "Pin cleared");
+    $("#cardOverlay").classList.remove("show");
+    return;
+  }
   if(t.dataset.cmpfrom){
     const p = idIndex()[t.dataset.cmpfrom]; if(!p) return;
     $("#cardOverlay").classList.remove("show");
@@ -242,6 +260,26 @@ document.addEventListener("click", e=>{
     return;
   }
   if(t.dataset.dnd){ S.dnd[t.dataset.dnd] ? delete S.dnd[t.dataset.dnd] : S.dnd[t.dataset.dnd]=true; return commit(); }
+  if(t.dataset.presetsave){
+    const nm2 = prompt("Preset name:", "my view");
+    if(!nm2) return;
+    S.filterPresets = S.filterPresets || {};
+    S.filterPresets[nm2] = {pos:S.ui.pos, round:S.ui.round, targetsOnly:S.ui.targetsOnly, stacksOnly:S.ui.stacksOnly,
+      survivors:S.ui.survivors, fallers:S.ui.fallers, hideHurt:S.ui.hideHurt, q:$("#search").value};
+    return commit();
+  }
+  if(t.dataset.preset){
+    const pz = (S.filterPresets||{})[t.dataset.preset];
+    if(!pz) return;
+    Object.assign(S.ui, {pos:pz.pos, round:pz.round, targetsOnly:pz.targetsOnly, stacksOnly:pz.stacksOnly,
+      survivors:pz.survivors, fallers:pz.fallers, hideHurt:pz.hideHurt});
+    $("#search").value = pz.q||"";
+    $("#roundFilter").value = pz.round||"ALL";
+    $("#fTargets").checked=!!pz.targetsOnly; $("#fStacks").checked=!!pz.stacksOnly;
+    $("#fSurvive").checked=!!pz.survivors; $("#fFallers").checked=!!pz.fallers; $("#fHideHurt").checked=!!pz.hideHurt;
+    save(); renderTabs(); renderPool(); return;
+  }
+  if(t.dataset.tiersort){ S.ui.sort="tiergroup"; S.ui.dir=1; save(); renderPool(); return; }
   if(t.dataset.clearfilters){
     S.ui.pos="ALL"; S.ui.round="ALL"; S.ui.targetsOnly=false; S.ui.stacksOnly=false; S.ui.survivors=false; S.ui.fallers=false; S.ui.showTaken=false;
     $("#search").value=""; $("#roundFilter").value="ALL";
@@ -255,7 +293,14 @@ document.addEventListener("click", e=>{
   if(t.dataset.drop) return dropMine(t.dataset.drop);
   if(t.dataset.edit) return editProj(t.dataset.edit);
   if(t.dataset.undoentry!=null) return undoEntry(+t.dataset.undoentry);
-  if(t.dataset.pos){ S.ui.pos=t.dataset.pos; save(); renderTabs(); renderPool(); return; }
+  if(t.dataset.pos){
+    S.ui.sortByTab = S.ui.sortByTab || {};
+    S.ui.sortByTab[S.ui.pos] = {key:S.ui.sort, dir:S.ui.dir};
+    S.ui.pos = t.dataset.pos;
+    const remembered = S.ui.sortByTab[S.ui.pos];
+    if(remembered){ S.ui.sort = remembered.key; S.ui.dir = remembered.dir; }
+    save(); renderTabs(); renderPool(); return;
+  }
   if(t.dataset.sort){
     if(S.ui.sort===t.dataset.sort) S.ui.dir*=-1; else { S.ui.sort=t.dataset.sort; S.ui.dir = (["name","team","pos","adp"].includes(t.dataset.sort))?1:-1; }
     save(); renderPool();
@@ -286,7 +331,7 @@ document.addEventListener("keydown", e=>{
   if((e.ctrlKey||e.metaKey) && e.key==="z"){ e.preventDefault(); undoLast(); return; }
   if(e.key==="Enter"){
     const ae = document.activeElement;
-    if(ae && ae.dataset && (ae.dataset.drop!=null || ae.dataset.undoentry!=null || (ae.tagName==="TH" && ae.dataset.sort))){ e.preventDefault(); ae.click(); return; }
+    if(ae && ae.dataset && (ae.dataset.drop!=null || ae.dataset.undoentry!=null || ae.dataset.cellpick!=null || (ae.tagName==="TH" && ae.dataset.sort))){ e.preventDefault(); ae.click(); return; }
   }
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
   if(e.key==="/" && !typing){ e.preventDefault(); $("#search").focus(); return; }
@@ -696,7 +741,7 @@ function renderBoard(limit){
     h += '<tr><td class="mono" style="color:var(--faint);padding:3px 6px">R'+r+'</td>';
     for(let s2=1;s2<=t;s2++){
       const c = cells[r+"-"+s2];
-      h += '<td '+(c?'data-cellpick="'+c.n+'" style="cursor:pointer;':'style="')+'padding:3px 5px;border:1px solid var(--line);'+(s2===mySlot?'background:rgba(47,212,122,.06);':'')+'" title="'+(c?'Pick '+c.n+' — click to correct or trade':'')+'">'+
+      h += '<td '+(c?'data-cellpick="'+c.n+'" tabindex="0" style="cursor:pointer;':'style="')+'padding:3px 5px;border:1px solid var(--line);'+(s2===mySlot?'background:rgba(47,212,122,.06);':'')+'" title="'+(c?'Pick '+c.n+' — click to correct or trade':'')+'">'+
         (c ? (logoUrl(c.p.team)?'<img class="tlogo" src="'+logoUrl(c.p.team)+'" width="12" height="12" loading="lazy" alt=""> ':'')+'<span class="pos '+c.p.pos+'" style="width:26px;font-size:8px;padding:2px 0">'+c.p.pos+'</span> '+c.p.name.split(" ").slice(-1)[0] : '<span style="color:var(--line)">·</span>')+'</td>';
     }
     h += '</tr>';
@@ -911,7 +956,8 @@ $("#settingsBtn").addEventListener("click", ()=>{
   $("#setTeams").value=S.settings.teams; $("#setRoster").value=S.settings.roster;
   $("#setSlot").value=S.settings.slot; $("#setScoring").value=S.settings.scoring;
   $("#setName").value=S.settings.name||"Buck Breakers";
-  $("#setCompact").checked=!!S.settings.compact;
+  $("#setDensity").value = S.settings.compact==="ultra" ? "ultra" : S.settings.compact ? "compact" : "normal";
+  $("#setShowBye").checked=!!S.settings.showBye;
   const cols=S.settings.cols||{};
   $("#colADP").checked=cols.adp!==false; $("#colEdge").checked=cols.edge!==false; $("#colRd").checked=cols.rd!==false;
   $("#setSound").checked=S.settings.sound!==false;
@@ -995,7 +1041,9 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.recPts = rp==="" ? null : Math.min(2, Math.max(0, parseFloat(rp)||0));
   S.settings.tePrem = Math.min(1, Math.max(0, parseFloat($("#setTePrem").value)||0));
   S.settings.name = $("#setName").value.trim() || "Buck Breakers";
-  S.settings.compact = $("#setCompact").checked;
+  const dens = $("#setDensity").value;
+  S.settings.compact = dens==="normal" ? false : dens;
+  S.settings.showBye = $("#setShowBye").checked;
   S.settings.sound = $("#setSound").checked;
   S.settings.speak = $("#setSpeak").checked;
   S.settings.draftDate = $("#setDraftDate").value || null;

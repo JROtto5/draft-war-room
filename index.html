@@ -53,8 +53,8 @@
   <button class="hbtn" id="sheetBtn" title="Printable cheat sheet (Ctrl+P → PDF)">🖨 Sheet</button>
   <button class="hbtn" id="csvBtn" title="Download the evaluated board as CSV">⇩ CSV</button>
   <button class="hbtn" id="shareBtn" title="Copy a link that restores this exact board anywhere">🔗</button>
-  <button class="hbtn" id="liveBtn" title="Draft Day mode: pace clock, pick chime, panic button">⚪ Live</button>
-  <button class="hbtn" id="syncBtn" title="Auto-mark picks from a Sleeper draft (Settings → draft ID)">🔄 Sync</button>
+  <button class="hbtn" id="liveBtn" aria-label="Toggle Draft Day live mode" title="Draft Day mode: pace clock, pick chime, panic button">⚪ Live</button>
+  <button class="hbtn" id="syncBtn" aria-label="Toggle Sleeper live sync" title="Auto-mark picks from a Sleeper draft (Settings → draft ID)">🔄 Sync</button>
   <span class="savebadge" id="syncChip" style="display:none"></span>
   <button class="hbtn" id="injBtn" title="Injury Center — live ESPN reports">🩺</button>
   <button class="hbtn" id="installBtn" style="display:none" title="Install as an app">📥 Install</button>
@@ -103,6 +103,7 @@
         <label class="toggle"><input type="checkbox" id="fFallers"> 💎 fallers</label>
         <label class="toggle"><input type="checkbox" id="fHideHurt"> 🩹 hide O/IR</label>
         <button class="undo1" id="clearFiltersBtn" data-clearfilters="1" style="display:none">✕ clear filters</button>
+        <span id="presetChips"></span>
         <span class="mono" id="poolCount" style="margin-left:auto; font-size:11px; color:var(--faint)"></span>
       </div>
       <div class="tablewrap">
@@ -211,7 +212,8 @@
       <div class="note" id="achCase"></div>
       <div class="sechead">Trophy case</div>
       <div class="note" id="trophyCase"></div>
-      <div class="frow"><label>Compact rows (more players on screen)</label><input type="checkbox" id="setCompact" style="width:auto"></div>
+      <div class="frow"><label>Density</label><select id="setDensity"><option value="normal">Comfortable</option><option value="compact">Compact</option><option value="ultra">Ultra (no photos)</option></select></div>
+      <div class="frow"><label>Show byes on the board</label><input type="checkbox" id="setShowBye" style="width:auto"></div>
       <div class="frow"><label>On-the-clock chime (Live mode)</label><input type="checkbox" id="setSound" style="width:auto"></div>
       <div class="frow"><label>Best Available list length</label><input type="number" id="setBaCount" min="5" max="30"></div>
       <div class="frow"><label>Survival sims per refresh (more = steadier %)</label><input type="number" id="setSimN" min="20" max="100" step="10"></div>
@@ -266,7 +268,7 @@
     </div>
     <div class="foot">
       <button class="hbtn" id="restoreBtn" title="Undo the last import or reset">↩ Restore backup</button>
-      <button class="hbtn" id="drillBtn" title="Offline drill: block all network to prove degraded mode">🧯</button>
+      <button class="hbtn" id="drillBtn" aria-label="Offline drill" title="Offline drill: block all network to prove degraded mode">🧯</button>
       <button class="hbtn" id="debugBtn" title="Copy diagnostic info for bug reports">🐞</button>
       <button class="hbtn" id="defaultsBtn" style="margin-right:auto" title="Reset settings to league defaults (board untouched)">Defaults</button>
       <button class="hbtn" id="settingsCancel">Cancel</button>

@@ -26,6 +26,22 @@ try {
   document.getElementById("cardOverlay").classList.remove("show");
   renderInjCenter();
   out.push("inj:"+(document.getElementById("injBody").innerHTML.includes("sevchip")?"OK":"BAD"));
+  // operators + presets + multiselect (#545)
+  document.getElementById("search").value = "pos:qb team:buf"; renderPool();
+  out.push("ops:"+(document.querySelectorAll("#poolBody tr[data-pid]").length===1?"OK":"BAD("+document.querySelectorAll("#poolBody tr[data-pid]").length+")"));
+  S.filterPresets = {test:{pos:"TE", round:"ALL", q:""}};
+  document.getElementById("search").value=""; renderPool();
+  document.querySelector('[data-preset="test"]').click();
+  out.push("preset:"+(S.ui.pos==="TE"?"OK":"BAD"));
+  S.ui.pos="ALL"; document.getElementById("search").value=""; renderPool();
+  kbSel = 0; applyKbSel();
+  const trs2 = document.querySelectorAll("#poolBody tr[data-pid]");
+  const before2 = S.log.length;
+  const origConfirm = window.confirm; window.confirm = ()=>true;
+  trs2[2].children[3].dispatchEvent(new MouseEvent("click", {bubbles:true, shiftKey:true}));
+  window.confirm = origConfirm;
+  out.push("multi:"+(S.log.length===before2+3?"OK":"BAD("+(S.log.length-before2)+")"));
+  undoLastN(S.log.length-before2);
   // keyboard drafting (#167)
   document.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowDown",bubbles:true}));
   document.dispatchEvent(new KeyboardEvent("keydown",{key:"m",bubbles:true}));

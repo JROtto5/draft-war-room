@@ -371,7 +371,9 @@ function renderPool(){
   const repl = replacementLevels(players);
   const rinfo = roundInfo(players);
   const tm = tierMap(players);
-  const q = $("#search").value.trim().toLowerCase();
+  const rawQ = $("#search").value.trim().toLowerCase();
+  const ops = {};
+  const q = rawQ.replace(/\b(pos|team|bye|tier|rookie):(\S+)/g, (m2,k2,v2)=>{ ops[k2]=v2; return ""; }).trim();
 
   let rows = players.map(p=>({
     p, vorp: p.proj-(repl[p.pos]||0),
@@ -390,6 +392,11 @@ function renderPool(){
   else if(S.ui.pos==="FLEX") rows = rows.filter(r=>["RB","WR","TE"].includes(r.p.pos));
   else if(S.ui.pos!=="ALL") rows = rows.filter(r=>r.p.pos===S.ui.pos);
   if(q) rows = rows.filter(r=> matchesQuery(r.p, q));
+  if(ops.pos) rows = rows.filter(r=> r.p.pos.toLowerCase()===ops.pos);
+  if(ops.team) rows = rows.filter(r=> r.p.team.toLowerCase()===ops.team || (TEAMLOGO[r.p.team]||"").toLowerCase()===ops.team);
+  if(ops.bye) rows = rows.filter(r=> String(byeOf(r.p.team))===ops.bye);
+  if(ops.tier) rows = rows.filter(r=> String(tm[r.p.id])===ops.tier);
+  if(ops.rookie) rows = rows.filter(r=> ((metaFor(r.p)||[])[1]===0) === (ops.rookie!=="no"));
   if(!S.ui.showTaken && S.ui.pos!=="MINE") rows = rows.filter(r=> !r.taken && !(S.keepers[r.p.id] && !r.mine));
   if(S.ui.round!=="ALL"){
     let lo, hi;
@@ -420,6 +427,7 @@ function renderPool(){
       case "adp": return dir*((a.p.adp||999)-(b.p.adp||999));
       case "rd": return dir*(a.rd.rd-b.rd.rd) || (a.p.adp||999)-(b.p.adp||999);
       case "edge": return dir*((a.edge==null?-999:a.edge)-(b.edge==null?-999:b.edge));
+      case "tiergroup": return (tm[a.p.id]-tm[b.p.id]) || (b.vorp-a.vorp);
       case "rank": case "vorp": default: return dir*(a.vorp-b.vorp);
     }
   });
@@ -441,7 +449,7 @@ function renderPool(){
     return i<0 ? nm : nm.slice(0,i)+"<mark>"+nm.slice(i,i+q.length)+"</mark>"+nm.slice(i+q.length);
   };
 
-  const showTierDividers = ["QB","RB","WR","TE","DEF"].includes(S.ui.pos) && (key==="vorp"||key==="rank"||key==="proj") && dir===-1;
+  const showTierDividers = (["QB","RB","WR","TE","DEF"].includes(S.ui.pos) && (key==="vorp"||key==="rank"||key==="proj") && dir===-1) || key==="tiergroup";
   let prevTier = null;
   const tw = document.querySelector(".tablewrap");
   const scrollSave = tw ? tw.scrollTop : 0;
@@ -464,7 +472,7 @@ function renderPool(){
       div = '<tr class="tdiv"><td colspan="10">Tier '+tm[r.p.id]+'</td></tr>';
       prevTier = tm[r.p.id];
     }
-    return div + '<tr class="'+cls+'" data-pid="'+r.p.id+'">'+
+    const rowHtml = '<tr class="'+cls+'" data-pid="'+r.p.id+'" title="M mine · T taken · Q queue · D never · N note · C compare">'+
       '<td class="mono" style="color:var(--faint)">'+(i+1)+'</td>'+
       '<td><span class="pcell" data-card="'+r.p.id+'" title="Open player card">'+avatarImg(r.p,24)+'<span class="pname">'+hl(r.p.name)+'</span></span>'+(S.notes[r.p.id]?'<span class="ib gold" title="'+esc(S.notes[r.p.id])+'">📝</span>':'')+(S.dnd[r.p.id]&&!r.taken&&!r.mine?'<span class="ib bear" title="On your do-not-draft list">🚫</span>':'')+((()=>{const e=injuryOf(r.p); if(!e) return ""; const sv=injSeverity(e.s); return '<span class="ib '+sv.cls+'" title="'+esc(sv.label+(e.c?" — "+e.c:"")+(e.d?" ("+e.d+" · "+e.src+")":""))+'">●</span>';})())+(buzzOf(r.p)>3000?'<span class="ib bull" title="'+buzzOf(r.p).toLocaleString()+' Sleeper adds in 24h">📈</span>':'')+((metaFor(r.p)||[])[1]===0?'<span class="ib" title="Rookie">🎓</span>':'')+(isFav(r.p)?'<span class="ib" style="color:#ff7bac" title="Your favorite state/college">💖</span>':'')+((S.boost||{})[r.p.id]===1?'<span class="ib bull" title="On your boost list">▲</span>':(S.boost||{})[r.p.id]===-1?'<span class="ib bear" title="On your fade list">▼</span>':'')+((()=>{const n=newsFor(r.p); return n && (Date.now()-new Date(n.d).getTime())<3*86400e3 ? '<span class="ib" title="'+esc(n.h)+'">📰</span>' : "";})())+intelBadges(r.p)+(r.stack?'<span class="stackchip">🔗 stack</span>':'')+(!r.taken&&!r.mine&&r.p.adp&&(pickNow()-r.p.adp)>=10?'<span class="ib" title="Falling: '+(pickNow()-r.p.adp)+' picks past ADP '+r.p.adp+'">💎</span>':'')+(r.backRisk==="gone"?'<span class="ib" title="Won\'t make it back to your next pick">🔥</span>':r.backRisk==="risky"?'<span class="ib" title="Coin-flip to survive to your next pick">⏳</span>':'')+'</td>'+
       '<td>'+posBadge(r.p.pos)+'<span class="tier t'+Math.min(tm[r.p.id],5)+'">T'+tm[r.p.id]+'</span></td>'+
@@ -473,11 +481,19 @@ function renderPool(){
       '<td class="mono" style="color:'+(r.vorp>=0?'var(--green)':'var(--faint)')+(r.vorp>0?';background:rgba(47,212,122,'+Math.min(0.22, r.vorp/700).toFixed(3)+')':'')+'">'+(r.vorp>0?"+":"")+Math.round(r.vorp)+'</td>'+
       '<td class="mono" style="color:var(--dim)">'+(r.p.adp||"—")+'</td>'+
       '<td class="mono" style="font-size:12px;color:'+(r.edge>0?'var(--green)':r.edge<0?'var(--red)':'var(--faint)')+'" title="ADP minus value rank: positive = market prices him later than his value">'+(r.edge==null?"—":(r.edge>0?"+":"")+r.edge)+'</td>'+
-      '<td><span class="rd'+(curRd && !r.rd.ud && r.rd.rd<=curRd?" now":"")+'" title="'+(r.rd.est?"Estimated from projection rank (no market ADP)":"Expected round window from ADP")+'">'+r.rd.label+'</span></td>'+
+      '<td><span class="rd'+(curRd && !r.rd.ud && r.rd.rd<=curRd?" now":"")+'" title="'+(r.rd.est?"Estimated from projection rank (no market ADP)":"Expected round window from ADP")+'">'+r.rd.label+(S.settings.showBye && byeOf(r.p.team) ? ' <span class="dimtxt">B'+byeOf(r.p.team)+'</span>' : '')+'</span></td>'+
       '<td><div class="act">'+act+'</div></td></tr>';
+    return rowCache[ck] = div + rowHtml;
   }).join("") + (truncated ? '<tr><td colspan="10" style="text-align:center;padding:12px"><button class="undo1" data-showall="1">▾ show all '+fullLen+' players</button></td></tr>' : "") || '<tr><td colspan="10" class="empty">No players match the current filters.<br><br><button class="undo1" data-clearfilters="1">✕ Clear all filters</button></td></tr>';
   if(tw) tw.scrollTop = scrollSave;
   $("#poolCount").textContent = (truncated ? rows.length+" of "+fullLen : rows.length) + " players";
+  const pc = document.getElementById("presetChips");
+  if(pc){
+    const names = Object.keys(S.filterPresets||{});
+    pc.innerHTML = names.map(n2=>'<span class="scpill" style="cursor:pointer" data-preset="'+esc(n2)+'">'+esc(n2)+'</span>').join("")+
+      '<span class="scpill" style="cursor:pointer" data-presetsave="1" title="Save current filters as a preset">💾</span>'+
+      (key==="tiergroup"?'':'<span class="scpill" style="cursor:pointer" data-tiersort="1" title="Group the whole board by tier">🏔</span>');
+  }
   $("#poolCount").setAttribute("aria-live","polite");
   window._poolIds = rows.filter(r=>!r.taken && !r.mine).length ? rows.map(r=>r.p.id) : [];
   applyKbSel();
@@ -561,11 +577,36 @@ document.addEventListener("mouseover", e=>{
       (ci?' · '+esc(ci.name):'')+(hw&&hw.st?' · '+hw.st:'')+'</span></div></div>'+
       (h3.length?'<div class="dimtxt" style="margin-top:6px">'+h3.map(x=>x[0]+": <b>"+Math.round(x[2])+"</b>"+(x[3]?" ("+p.pos+x[3]+")":"")).join(" · ")+'</div>':'')+
       '<div class="dimtxt" style="margin-top:4px">proj <b style="color:var(--green)">'+p.proj+'</b> · ADP '+(p.adp||"—")+
-      ((()=>{const u5=usageFor(p); return u5&&u5[5]>=6?' · '+u5[4]+'/'+u5[5]+' spike wks':'';})())+'</div>';
+      ((()=>{const u5=usageFor(p); return u5&&u5[5]>=6?' · '+u5[4]+'/'+u5[5]+' spike wks':'';})())+
+      ((()=>{ const pin = window._pinned && idIndex()[window._pinned];
+        if(!pin || pin.id===p.id) return "";
+        const d5 = Math.round(p.proj - pin.proj);
+        return '<div style="margin-top:4px;border-top:1px dashed var(--line);padding-top:4px">vs 📌 '+esc(pin.name.split(" ").slice(-1)[0])+': <b style="color:'+(d5>=0?'var(--green)':'var(--red)')+'">'+(d5>0?'+':'')+d5+' proj</b></div>'; })())+'</div>';
     const r2 = cell.getBoundingClientRect();
     el.style.left = Math.min(r2.left, innerWidth-300)+"px";
     el.style.top = (r2.bottom+6)+"px";
   }, 350);
+});
+
+let _dragIdx = null;
+document.addEventListener("dragstart", e=>{
+  const r2 = e.target.closest && e.target.closest(".qrow");
+  if(r2){ _dragIdx = +r2.dataset.qidx; e.dataTransfer.effectAllowed = "move"; }
+});
+document.addEventListener("dragover", e=>{
+  if(_dragIdx!=null && e.target.closest && e.target.closest(".qrow")) e.preventDefault();
+});
+document.addEventListener("drop", e=>{
+  const r2 = e.target.closest && e.target.closest(".qrow");
+  if(_dragIdx==null || !r2) return;
+  e.preventDefault();
+  const to = +r2.dataset.qidx;
+  if(to!==_dragIdx){
+    const [moved] = S.queue.splice(_dragIdx, 1);
+    S.queue.splice(to, 0, moved);
+    commit();
+  }
+  _dragIdx = null;
 });
 
 /* Right-click context menu on pool rows */

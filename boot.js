@@ -306,7 +306,7 @@ function renderQueue(){
       const p = byId[id]; if(!p) return "";
       const wantR = (S.queueRounds||{})[id];
       const lateQ = wantR && myRoundNow() > wantR;
-      return '<div class="barow" data-card="'+id+'">'+avatarImg(p,22)+posBadge(p.pos)+
+      return '<div class="barow qrow" draggable="true" data-qidx="'+i+'" data-card="'+id+'">'+avatarImg(p,22)+posBadge(p.pos)+
         '<div class="info"><div class="nm">'+p.name+(oddsQ&&oddsQ.h1[id]!=null&&oddsQ.h1[id]<60?' <span class="ib bear" title="Under 60% to survive to your pick — snipe risk">🎯</span>':'')+
         (wantR?' <span class="'+(lateQ?"low":"dimtxt")+'" style="font-size:9px" data-qround="'+id+'" title="Target round — click to change">R'+wantR+(lateQ?" ⏰":"")+'</span>':' <span class="dimtxt" style="font-size:9px;cursor:pointer" data-qround="'+id+'" title="Set a target round">+R?</span>')+'</div></div>'+
         '<button class="undo1" data-qup="'+i+'" aria-label="Move up"'+(i===0?' disabled':'')+'>↑</button>'+

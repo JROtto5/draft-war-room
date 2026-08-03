@@ -457,3 +457,12 @@ a.visually-hidden:focus{width:auto;height:auto;clip:auto;margin:0;white-space:no
   .act{flex-wrap:wrap}
 }
 th[data-sort]:focus, tbody tr:focus-within, .barow:focus-visible{outline:2px solid var(--green); outline-offset:-2px}
+/* round 33 */
+#presetChips{display:flex; gap:5px; flex-wrap:wrap; margin-left:8px}
+.qrow{cursor:grab} .qrow:active{cursor:grabbing}
+body.ultra tbody td{padding:2px 6px; font-size:11.5px}
+body.ultra tbody tr{contain-intrinsic-height:24px}
+body.ultra .avatar{display:none}
+@media (max-width:640px){
+  td:nth-child(2), th:nth-child(2){position:sticky; left:0; background:var(--panel); z-index:2}
+}
