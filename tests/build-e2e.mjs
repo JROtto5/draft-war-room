@@ -99,7 +99,15 @@ try {
   }, 700);
 } catch(e){ out.push("ERR:"+e.message); }
 document.title = "E2E|BOOTING";   // provisional: distinguishes "timers never fired" from "page never loaded"
-setTimeout(()=>{ document.title="E2E|"+out.join("|"); }, 900);
+setTimeout(()=>{
+  const verdict = "E2E|"+out.join("|");
+  document.title = verdict;
+  // the app rewrites document.title on every render, so the title can be
+  // clobbered before dump-dom fires — a dedicated node is the durable record
+  const res = document.createElement("div");
+  res.id = "e2eResult"; res.style.display = "none"; res.textContent = verdict;
+  document.body.appendChild(res);
+}, 900);
 }, 100); });
 </scr` + `ipt>`;
 
