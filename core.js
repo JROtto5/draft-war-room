@@ -1295,6 +1295,42 @@ function openTeamPage(slot){
       const d3 = Math.round(myBs.pts - (bs?bs.pts:0));
       return '<div class="cintel" style="color:'+(d3>=0?'var(--green)':'var(--red)')+'">😤 Head-to-head: your starters project <b>'+(d3>=0?'+':'')+d3+'</b> vs this roster.</div>';
     })() : '')+
+    (slot!==mySlot ? (()=>{   // 🕵️ dossier (#603): tendencies, predicted picks, snipeable targets
+      let h2 = '<div class="cintel" style="border-top:1px solid var(--line);margin-top:8px;padding-top:10px"><b>🕵️ Dossier</b></div>';
+      // learned tendencies from the live log
+      const t2 = S.settings.teams;
+      const reaches = [], posCt = {};
+      S.log.forEach((e2,i2)=>{
+        const n2 = i2+1+(S.pickOffset||0);
+        if(slotOfPick(n2)!==slot) return;
+        const p2 = byId[e2.id]; if(!p2) return;
+        if(p2.adp) reaches.push(n2 - p2.adp);
+        posCt[p2.pos] = (posCt[p2.pos]||0)+1;
+      });
+      if(reaches.length){
+        const avgR = reaches.reduce((a,b)=>a+b,0)/reaches.length;
+        const fav = Object.entries(posCt).sort((a,b)=>b[1]-a[1])[0];
+        h2 += '<div class="cintel dimtxt">Tendencies: '+(avgR<=-4?'<b style="color:var(--red)">reacher</b> (avg '+Math.round(-avgR)+' early)':avgR>=4?'<b style="color:var(--green)">value hunter</b> (avg +'+Math.round(avgR)+' past ADP)':'drafts the board')+
+          (fav?' · leans <b>'+fav[0]+'</b> ('+fav[1]+' picks)':'')+
+          ((S.grudges[slot]||[]).length?' · <b style="color:var(--red)">⚔️ sniped you ×'+S.grudges[slot].length+'</b>':'')+'</div>';
+      }
+      // predicted next picks + what I could snipe from them
+      const theirNext = [];
+      for(let n2=pickNow(); n2<=S.settings.teams*S.settings.roster && theirNext.length<1; n2++)
+        if(slotOfPick(n2)===slot) theirNext.push(n2);
+      if(theirNext.length){
+        const pred2 = predictFor(slot, theirNext[0]);
+        if(pred2.length){
+          h2 += '<div class="cintel dimtxt">Next pick (#'+theirNext[0]+') likely: '+pred2.map(x=>'<b>'+esc(x.p.name)+'</b> ('+x.p.pos+')').join(" or ")+'</div>';
+          const myNext = myOverallPicks().find(n2=>n2>=pickNow());
+          if(myNext && myNext < theirNext[0]){
+            const snipe2 = pred2.filter(x=>x.p.adp && x.p.adp >= myNext - 8);
+            if(snipe2.length) h2 += '<div class="cintel" style="color:var(--gold)">😈 Snipeable at your #'+myNext+': '+snipe2.map(x=>esc(x.p.name)).join(", ")+'</div>';
+          }
+        }
+      }
+      return h2;
+    })() : '')+
     '<div class="cacts"></div>';
   $("#cardOverlay").classList.add("show");
 }
