@@ -1,8 +1,8 @@
 {
-  "generated": "2026-08-10T18:28:55.190Z",
+  "generated": "2026-08-10T18:30:43.232Z",
   "files": {
-    "index.html": "c8bf6410fe373a7941ffd27b7b6c43b8af214b19b1c1b7ff9ec511667f10b4e3",
-    "styles.css": "c22dfb17924e5f90fbda62364561542b77e69c72ab5c803c0dcdd74fdec672ec",
+    "index.html": "a27a2842720f891cef06d60a6ffea3650bb9116444c26ddde935aff9b1a371b9",
+    "styles.css": "6c9f5bdc1912a4a18ddf050ee55e2197a69e0cfdb4bdd7e1b9fd6e63abaf6c92",
     "engine.js": "b577f8fa7e66ec8a37d2e402b404ef4edbfe2fec00889a4f432eb884365ef72b",
     "core.js": "2e80aa65365c129375b510b4f4d6a6f968ca6fb664ca0760b9b314801b9c4e82",
     "season.js": "c156ff42b1de78f3c5fca50263384f3f5cd1b61609bdcac0c2da0a98f3f5f587",
@@ -11,7 +11,7 @@
     "wire.js": "aa197c27843b092d4ce77df0aa4f295b22f03a9c34116d6bcc39fa0081121577",
     "boot.js": "8b94c79451c3dc874b3ae39c8e8afcc2e38b600e03fc916d839cb4e4f1643f02",
     "data.js": "d7270f4caf9eb49cf5b4fd1344bf0ad2f071eceb9be9009d001f06de086cf008",
-    "sw.js": "0d278ee16434dc8d0fa64fef9e6b6930966e53c9dd82e26fb104ee3a3839f461",
+    "sw.js": "1698e1158dfcba52e3f1e57009df97e873b9e54bf72d796fcb70ea1d00e7eda7",
     "manifest.json": "d0582c00c488ad9d1a4095ee547089eefe09bd4de13f616aff1863db54cdd1b1",
     "404.html": "3e07b402220b3082ec6efa53380e03d8238b2891af3ba19bfa82f992c6f00bc0"
   }

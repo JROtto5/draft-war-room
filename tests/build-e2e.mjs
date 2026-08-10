@@ -140,6 +140,13 @@ try {
     }
     return "OK";
   })()));
+  // Identity v2 tokens present (#864–#878)
+  out.push("ident:"+((()=>{try{
+    const cs=getComputedStyle(document.documentElement);
+    return cs.getPropertyValue("--elev1").trim().length>0 && cs.getPropertyValue("--r-lg").trim().length>0 &&
+      cs.getPropertyValue("--grad").trim().length>0 &&
+      !!document.querySelector("#seasonBtn.primary") && seasonDeckHtml().includes("dlab");
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // The rail: sidebar structure (#849–#863)
   out.push("rail:"+((()=>{try{
     const r=sidebarSeasonHtml(idIndex());

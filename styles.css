@@ -670,3 +670,58 @@ body.seasonled .left .panel{position:sticky;top:12px;max-height:calc(100vh - 24p
 .ssrow.skel::after,.ssbbug.skel::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.05),transparent);animation:shim 1.4s infinite}
 @keyframes shim{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
 @media (prefers-reduced-motion: reduce){.ssrow.skel::after,.ssbbug.skel::after,.ssquick button{animation:none;transition:none}}
+
+/* ---------- R53 Visual identity v2 (#864–#878) ---------- */
+:root{
+  --elev0:var(--bg); --elev1:var(--panel); --elev2:color-mix(in srgb, var(--panel) 88%, #ffffff 12%);
+  --r-sm:7px; --r-md:10px; --r-lg:14px;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:18px;
+  --grad:linear-gradient(135deg,#060a0f,#101825);
+  --track-lb:.14em;
+}
+:root[data-theme="light"]{ --elev2:color-mix(in srgb, var(--panel) 94%, #000 6%); --grad:linear-gradient(135deg,#1b2735,#243447); }
+/* buttons (#867): variants over inline styles */
+.hbtn.primary{border-color:var(--gold);color:var(--gold);font-weight:700}
+.hbtn.act{border-color:var(--green);color:var(--green);font-weight:700}
+.hbtn.quiet{opacity:.75}
+.hbtn.danger{border-color:var(--red);color:var(--red)}
+/* chips (#868) */
+.scpill.good{border-color:var(--green);color:var(--green)}
+.scpill.warn{border-color:var(--red);color:var(--red)}
+.scpill.stat b{color:var(--gold)}
+/* overlay masthead unified (#869) */
+.snov .sbcard > .tag, #sbOverlay .sbcard > .tag{
+  background:var(--grad);color:#e8eef5;margin:-18px -20px 14px;padding:12px 20px;
+  border-radius:var(--r-lg) var(--r-lg) 0 0;letter-spacing:var(--track-lb);font-weight:800;font-size:11px}
+.snov .sbx, #sbOverlay .sbx{color:#8b98a9;z-index:2}
+/* deck v2 (#870) */
+#seasonDeck .deckbtn{flex-direction:column;gap:1px;min-width:56px;padding:7px 8px 6px;border-radius:var(--r-md)}
+#seasonDeck .dicon{font-size:17px}
+#seasonDeck .dlab{font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+#seasonDeck .deckbtn:hover .dlab{color:var(--gold)}
+/* tables (#871) */
+.sbtab tr:nth-child(even) td{background:rgba(128,140,155,.04)}
+.sbtab tbody tr:hover td, .sbtab tr:hover td{background:rgba(240,180,41,.06)}
+.sbtab td.mono, .sbtab td:nth-child(n+3){text-align:right}
+.sbtab th:nth-child(n+3){text-align:right}
+/* focus (#872) */
+.ssquick button:focus-visible,.deckbtn:focus-visible,.sbx:focus-visible,.scpill[role="button"]:focus-visible,
+.undo1:focus-visible,.hbtn:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+/* scrollbars (#873) */
+body.seasonled .left .panel::-webkit-scrollbar,.snov::-webkit-scrollbar,#sbOverlay::-webkit-scrollbar{width:8px}
+body.seasonled .left .panel::-webkit-scrollbar-thumb,.snov::-webkit-scrollbar-thumb,#sbOverlay::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+/* light theme depth (#874) */
+:root[data-theme="light"] .sscard,:root[data-theme="light"] .sstile,:root[data-theme="light"] .ssquick button{box-shadow:0 1px 3px rgba(20,30,45,.07)}
+:root[data-theme="light"] .sshead{background:linear-gradient(180deg,rgba(20,30,45,.03),transparent)}
+/* header cleanup in season (#875) */
+body.seasonled #undoBtn,body.seasonled #redoBtn,body.seasonled #liveBtn,body.seasonled #addBtn{display:none}
+body.seasonled.draftopen #undoBtn,body.seasonled.draftopen #redoBtn,body.seasonled.draftopen #liveBtn,body.seasonled.draftopen #addBtn{display:inline-block}
+/* empty states (#876) */
+.empty{border:1px dashed var(--line);border-radius:var(--r-md);padding:14px;text-align:center;color:var(--dim);font-size:12.5px}
+/* print (#877) */
+@media print{
+  header,#seasonDeck,.ssquick,#ticker,#cmdStrip,.sbx{display:none !important}
+  .snov{position:static;background:#fff;padding:0}
+  .snov .sbcard{border:none;box-shadow:none;max-width:none}
+  body{background:#fff;color:#000}
+}
