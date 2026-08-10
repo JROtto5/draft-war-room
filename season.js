@@ -515,6 +515,24 @@ async function renderScoreboard(){
     '<div class="sbply"'+(r.rid===myRid?' style="color:var(--gold)"':'')+'><span>'+(i+1)+'. '+esc(r.name)+
     (r.move>0?' <span style="color:var(--green)">▲'+r.move+'</span>':r.move<0?' <span style="color:var(--red)">▼'+(-r.move)+'</span>':'')+
     '</span><b class="mono">'+Math.round(r.score*100)+'</b></div>').join("");
+  // standings race (#897)
+  if(typeof chartRace==="function" && hist.length>=2){
+    const myRid2 = +S.settings.sleeperRosterId;
+    const rvRid = (S.settings.slot2rid && S.settings.rivalSlot) ? +S.settings.slot2rid[String(S.settings.rivalSlot)] : null;
+    const cum = {};
+    hist.forEach(wm=>{
+      const pairs2 = {}; (wm||[]).forEach(m2=>{ (pairs2[m2.matchup_id]=pairs2[m2.matchup_id]||[]).push(m2); });
+      const won = {};
+      Object.values(pairs2).forEach(pr2=>{ if(pr2.length===2) won[pr2[0].points>pr2[1].points?pr2[0].roster_id:pr2[1].roster_id]=1; });
+      (SCOREB.rosters||[]).forEach(r2=>{ const rid2=r2.roster_id;
+        (cum[rid2]=cum[rid2]||[]).push((cum[rid2].slice(-1)[0]||0)+(won[rid2]?1:0)); });
+    });
+    const series = Object.keys(cum).map(rid2=>({vals:cum[rid2],
+      big:+rid2===myRid2||+rid2===rvRid,
+      color:+rid2===myRid2?"var(--gold)":(+rid2===rvRid?"var(--red)":"var(--line)")}));
+    h += '<div class="tag" style="margin-top:14px">🏁 THE RACE</div><div style="padding:4px 2px">'+
+      chartRace(series, {label:"cumulative wins by week, me in gold"})+'</div>';
+  }
   // luck / all-play (#662)
   if(ap.length && hist.length) h += '<div class="tag" style="margin-top:14px">🍀 LUCK (all-play)</div>'+ap.map(r=>
     '<div class="sbply"'+(r.rid===myRid?' style="color:var(--gold)"':'')+'><span>'+esc(r.name)+' <span class="dimtxt">'+r.apw+'-'+r.apl+' all-play</span></span>'+
@@ -1464,8 +1482,15 @@ async function renderSeasonStats(){                                             
   const ov = document.createElement("div"); ov.id = "ssOverlay";
   ov.className = "snov";
   let h = '<div class="sbcard" role="dialog" aria-label="Season stats"><button class="sbx" data-ssx="1">✕</button><div class="tag">📈 MY SEASON — '+rows.length+' weeks banked</div>';
-  h += '<div class="sbply"><span>🎯 Lineup efficiency by week '+sparkSvg(effs, 90, 18)+'</span><b class="mono">'+
-    (effs.filter(Boolean).length ? Math.round(effs.filter(Boolean).reduce((a,b)=>a+b,0)/effs.filter(Boolean).length)+'%' : '—')+'</b></div>';
+  h += '<div class="sbply"><span>🎯 Lineup efficiency by week</span><b class="mono">'+
+    (effs.filter(Boolean).length ? Math.round(effs.filter(Boolean).reduce((a,b)=>a+b,0)/effs.filter(Boolean).length)+'%' : '—')+'</b></div>'+
+    (typeof chartArea==="function" ? '<div style="padding:0 4px 6px">'+chartArea(effs, {h:52, ref:100, min:60, max:105, color:"var(--green)",
+      label:"lineup efficiency percent by week", fmt:v=>Math.round(v)+"%"})+'</div>' : '');
+  if(typeof chartBars==="function" && rows.length>=2){
+    const med = hist.map(wm=>{ const ptsArr=(wm||[]).map(m2=>m2.points||0).sort((a,b)=>a-b); return ptsArr[Math.floor(ptsArr.length/2)]||0; });
+    h += '<div class="benchhead">📊 My score vs league median</div><div style="padding:0 4px 6px">'+
+      chartBars(rows.map((r2,i)=>[Math.round((r2.m.points||0)*10)/10, Math.round((med[i]||0)*10)/10]), {h:56, label:"my weekly score in green versus league median in grey"})+'</div>';
+  }
   if(myAp) h += '<div class="sbply"><span>🍀 Luck: '+myAp.xWins+' expected wins vs '+myAp.w+' actual</span><b class="mono" style="color:var(--'+(myAp.luck>0?'green':'red')+')">'+(myAp.luck>0?'+':'')+myAp.luck+'</b></div>';
   if(tally.mvps.length) h += '<div class="benchhead">🏅 Carried me</div><div class="scarce">'+tally.mvps.map(x=>'<span class="scpill">'+esc(x.name)+' ×'+x.n+'</span>').join("")+'</div>';
   if(tally.busts.length) h += '<div class="benchhead">🪦 Burned starts</div><div class="scarce">'+tally.busts.map(x=>'<span class="scpill">'+esc(x.name)+' ×'+x.n+'</span>').join("")+'</div>';

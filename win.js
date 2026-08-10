@@ -132,8 +132,9 @@ function titleChaseHtml(){                                                      
     const wk = curWeek();
     if(!th.length || th[th.length-1].w!==wk){ th.push({w:wk, o:odds}); localStorage.setItem(k, JSON.stringify(th.slice(-18))); }
     const toGo = Math.max(0, 17-wk);
-    return '<div class="benchhead">👑 Title chase: <b class="mono">'+odds+'%</b> to the dance '+
-      sparkSvg(th.map(x=>x.o), 70, 16)+' · '+toGo+' week'+(toGo===1?'':'s')+' to the money game</div>';
+    return '<div class="benchhead">👑 Title chase: <b class="mono">'+odds+'%</b> to the dance · '+toGo+' week'+(toGo===1?'':'s')+' to the money game</div>'+
+      (th.length>=3 ? '<div style="padding:0 10px 6px">'+chartArea(th.map(x=>x.o), {h:36, min:0, max:100, ref:50,
+        label:"playoff odds by week, now "+odds+" percent", fmt:v=>Math.round(v)+"%"})+'</div>' : '');
   }catch(e){ return ""; }
 }
 function victoryLap(){                                                           // #762
@@ -708,7 +709,7 @@ async function renderSim(){                                                     
   let h = '<div class="sbcard" role="dialog" aria-label="Matchup simulator"><button class="sbx" data-smx="1">✕</button>';
   h += '<div class="tag">🎲 1,000 SIMULATED SUNDAYS — vs '+esc(md.opp.name)+'</div>';
   h += '<div class="benchhead" style="font-size:16px;color:var(--'+(wpPct>=55?'green':wpPct<=45?'red':'gold')+')">You win '+wpPct+'% of them</div>';
-  h += simHistSvg(r);
+  h += chartDist(r);
   h += '<div class="sbply"><span>your range (p10 / median / p90)</span><b class="mono">'+r.p10+' / '+r.p50+' / '+r.p90+'</b></div>';
   h += '<div class="sbply"><span>💥 blowout W'+r.blow+'% · 😱 blowout L '+r.blown+'% · 😰 one-score '+r.close+'%</span></div>';
   if(r.lev && r.lev.length) h += '<div class="benchhead">🎯 Highest leverage: '+esc(r.lev[0].name)+' (+'+r.lev[0].lev+'% win when he beats his number)'+
@@ -835,8 +836,9 @@ function liveWpChartHtml(){                                                     
     let h = []; try{ h = JSON.parse(localStorage.getItem(LS_KEY+"-wph"+curWeek())||"[]"); }catch(e){}
     if(h.length<3) return "";
     const cur = h[h.length-1].wp;
-    return '<div class="benchhead">📈 The rollercoaster: <b class="mono" style="color:var(--'+(cur>=55?'green':cur<=45?'red':'gold')+')">'+cur+'%</b> live '+
-      sparkSvg(h.map(x=>x.wp), 110, 18, cur>=50?"var(--green)":"var(--red)")+'</div>';
+    return '<div class="benchhead">📈 The rollercoaster: <b class="mono" style="color:var(--'+(cur>=55?'green':cur<=45?'red':'gold')+')">'+cur+'%</b> live</div>'+
+      '<div style="padding:0 10px 8px">'+chartArea(h.map(x=>x.wp), {h:CHART_H.card, ref:50, min:0, max:100,
+        color:cur>=50?"var(--green)":"var(--red)", label:"live win probability through the day, now "+cur+" percent", fmt:v=>Math.round(v)+"%"})+'</div>';
   }catch(e){ return ""; }
 }
 function scenarioLine(){                                                         // #804
@@ -1218,8 +1220,10 @@ function seasonPageHtml(){                                                      
   if(SCOREB.rosters){
     const st = standingsRows(SCOREB.rosters, SCOREB.users);
     const pr = powerRankings(); const mv = {}; pr.forEach(r=>mv[r.rid]=r.move||0);
-    h += '<table class="sbtab"><tr><th></th><th>team</th><th>W-L</th><th>PF</th><th></th></tr>'+
-      st.map((r,i)=>'<tr'+(r.rid===myRid?' class="sbme"':'')+'><td>'+(i+1)+'</td><td>'+esc(r.name)+'</td><td class="mono">'+r.w+'-'+r.l+(r.t?'-'+r.t:'')+'</td><td class="mono">'+r.pf+'</td><td>'+
+    const mxPF = Math.max(...st.map(r=>Math.max(r.pf, r.pa)), 1);
+    h += '<table class="sbtab"><tr><th></th><th>team</th><th>W-L</th><th>PF</th><th>±</th><th></th></tr>'+
+      st.map((r,i)=>'<tr'+(r.rid===myRid?' class="sbme"':'')+'><td>'+(i+1)+'</td><td>'+esc(r.name)+'</td><td class="mono">'+r.w+'-'+r.l+(r.t?'-'+r.t:'')+'</td><td class="mono">'+r.pf+'</td>'+
+      '<td style="min-width:52px"><span class="pfbar"><i style="width:'+Math.round(r.pf/mxPF*100)+'%"></i></span><span class="pfbar pa"><i style="width:'+Math.round(r.pa/mxPF*100)+'%"></i></span></td><td>'+
       (mv[r.rid]>0?'<span style="color:var(--green)">▲</span>':mv[r.rid]<0?'<span style="color:var(--red)">▼</span>':'')+'</td></tr>').join("")+'</table>';
   } else h += '<div class="sspad"><div class="ssrow skel"><span class="skava"></span><div class="ssnm"><span class="skln"></span></div></div></div>';
   h += '</div>';
@@ -1253,7 +1257,13 @@ function renderSeasonPage(){
   sp.hidden = false;
   pool.style.display = window._poolShow ? "" : "none";
   try{ if(window._density===undefined){ window._density = !!localStorage.getItem(LS_KEY+"-dense"); document.body.classList.toggle("compact", window._density); } }catch(e){}
+  const prev = Array.from(sp.querySelectorAll(".spteam b")).map(b=>parseFloat(b.textContent)||0);
   sp.innerHTML = seasonPageHtml();
+  try{
+    const now2 = sp.querySelectorAll(".spteam b");
+    now2.forEach((b,i)=>{ const to = parseFloat(b.textContent);
+      if(!isNaN(to) && prev[i]!=null && Math.abs(to-prev[i])>0.05 && typeof countUp==="function"){ b.textContent = prev[i].toFixed(1); countUp(b, to); } });
+  }catch(e){}
 }
 
 /* ---------- R52 The Rail: season sidebar rebuilt (#849–#863) ---------- */
@@ -1361,6 +1371,115 @@ function sidebarSeasonHtml(byId){                                               
   if(typeof titleChaseHtml==="function") list += titleChaseHtml();
   if(typeof hqMondayLine==="function") list += hqMondayLine();
   return {hero, list};
+}
+
+/* ---------- R55 Chart kit (#894–#908) ---------- */
+const CHART_H = {strip:20, card:64, feature:120};                                // #906
+function chartEmpty(w2, h2, msg){                                                // #902
+  return '<svg width="100%" viewBox="0 0 '+w2+' '+h2+'" role="img" aria-label="'+esc(msg)+'">'+
+    '<rect x="1" y="1" width="'+(w2-2)+'" height="'+(h2-2)+'" rx="6" fill="none" stroke="var(--line)" stroke-dasharray="4 4"/>'+
+    '<text x="'+(w2/2)+'" y="'+(h2/2+4)+'" text-anchor="middle" font-size="10" fill="var(--dim)">'+esc(msg)+'</text></svg>';
+}
+function chartArea(vals, opts){                                                  // #894/#895
+  opts = opts||{};
+  const H = opts.h||CHART_H.card, W = opts.w||300, pad = 12;
+  const a = (vals||[]).filter(v=>v!=null);
+  if(a.length<3) return chartEmpty(W, H, opts.empty||"needs 3+ weeks");
+  const mn = opts.min!=null?opts.min:Math.min(...a), mx = opts.max!=null?opts.max:Math.max(...a);
+  const span = Math.max(0.1, mx-mn);
+  const X = i=>pad + i*((W-pad*2)/(a.length-1));
+  const Y = v=>H-8-((v-mn)/span)*(H-18);
+  const pts = a.map((v,i)=>X(i).toFixed(1)+","+Y(v).toFixed(1));
+  const col = opts.color||"var(--gold)";
+  let s2 = '<svg width="100%" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(opts.label||("trend ending at "+a[a.length-1]))+'">';
+  for(let g=1; g<=2; g++){ const gy = 8+(H-18)*g/3; s2 += '<line x1="'+pad+'" y1="'+gy+'" x2="'+(W-pad)+'" y2="'+gy+'" stroke="var(--line)" stroke-width="0.6"/>'; }
+  if(opts.ref!=null && opts.ref>=mn && opts.ref<=mx)
+    s2 += '<line x1="'+pad+'" y1="'+Y(opts.ref)+'" x2="'+(W-pad)+'" y2="'+Y(opts.ref)+'" stroke="var(--dim)" stroke-width="0.8" stroke-dasharray="3 3"/>';
+  s2 += '<polygon points="'+X(0)+','+(H-8)+' '+pts.join(" ")+' '+X(a.length-1)+','+(H-8)+'" fill="'+col+'" opacity="0.14"/>';
+  s2 += '<polyline points="'+pts.join(" ")+'" fill="none" stroke="'+col+'" stroke-width="1.8"/>';
+  const lx = X(a.length-1), ly = Y(a[a.length-1]);
+  s2 += '<circle cx="'+lx+'" cy="'+ly+'" r="3" fill="'+col+'"/>';
+  s2 += '<text x="'+Math.min(lx, W-26)+'" y="'+Math.max(10, ly-6)+'" font-size="10" font-weight="700" fill="'+col+'">'+
+    (opts.fmt?opts.fmt(a[a.length-1]):Math.round(a[a.length-1]*10)/10)+'</text></svg>';   // #901
+  return s2;
+}
+function chartBars(pairs, opts){                                                 // #896/#904
+  opts = opts||{};
+  const H = opts.h||CHART_H.card, W = opts.w||300, pad = 10;
+  const rows = (pairs||[]).filter(p2=>p2 && p2[0]!=null);
+  if(rows.length<2) return chartEmpty(W, H, opts.empty||"needs 2+ weeks");
+  const mx = Math.max(...rows.map(p2=>Math.max(p2[0], p2[1]||0)), 1);
+  const bw = (W-pad*2)/rows.length;
+  let s2 = '<svg width="100%" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(opts.label||"weekly bars")+'">';
+  rows.forEach((p2,i)=>{
+    const x0 = pad+i*bw;
+    const h1 = (p2[0]/mx)*(H-16), h2b = ((p2[1]||0)/mx)*(H-16);
+    if(p2[1]!=null) s2 += '<rect x="'+(x0+bw*0.52).toFixed(1)+'" y="'+(H-6-h2b).toFixed(1)+'" width="'+(bw*0.34).toFixed(1)+'" height="'+h2b.toFixed(1)+'" fill="var(--dim)" opacity="0.45" rx="1.5"/>';
+    s2 += '<rect x="'+(x0+bw*0.10).toFixed(1)+'" y="'+(H-6-h1).toFixed(1)+'" width="'+(bw*0.34).toFixed(1)+'" height="'+h1.toFixed(1)+'" fill="'+(p2[0]>=(p2[1]||0)?"var(--green)":"var(--red)")+'" rx="1.5"/>';
+  });
+  const last = rows[rows.length-1];
+  s2 += '<text x="'+(W-pad)+'" y="10" text-anchor="end" font-size="10" font-weight="700" fill="var(--text)">'+Math.round(last[0])+'</text></svg>';
+  return s2;
+}
+function chartRace(series, opts){                                                // #897
+  opts = opts||{};
+  const H = opts.h||CHART_H.feature, W = opts.w||300, pad = 12;
+  const rows = (series||[]).filter(s3=>s3.vals && s3.vals.length>=2);
+  if(rows.length<2) return chartEmpty(W, H, "race unlocks after week 2");
+  const n = Math.max(...rows.map(s3=>s3.vals.length));
+  const mx = Math.max(...rows.flatMap(s3=>s3.vals), 1);
+  const X = i=>pad+i*((W-pad*2)/(n-1));
+  const Y = v=>H-10-(v/mx)*(H-22);
+  let s2 = '<svg width="100%" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(opts.label||"standings race")+'">';
+  rows.forEach(s3=>{
+    const col = s3.color||"var(--line)";
+    s2 += '<polyline points="'+s3.vals.map((v,i)=>X(i).toFixed(1)+","+Y(v).toFixed(1)).join(" ")+'" fill="none" stroke="'+col+'" stroke-width="'+(s3.big?2.4:1)+'" opacity="'+(s3.big?1:0.55)+'"/>';
+    if(s3.big){ const lv = s3.vals[s3.vals.length-1];
+      s2 += '<circle cx="'+X(s3.vals.length-1)+'" cy="'+Y(lv)+'" r="3" fill="'+col+'"/>'+
+        '<text x="'+Math.min(X(s3.vals.length-1), W-20)+'" y="'+Math.max(10, Y(lv)-6)+'" font-size="10" font-weight="700" fill="'+col+'">'+lv+'</text>'; }
+  });
+  return s2+'</svg>';
+}
+function chartDist(r){                                                           // #898 smoothed sim curves
+  const W = 300, H = CHART_H.feature, BINS = 30, pad = 10;
+  const all = [...r.my, ...r.opp];
+  let mn = Infinity, mx = -Infinity;
+  all.forEach(v=>{ if(v<mn) mn = v; if(v>mx) mx = v; });
+  const span = Math.max(1, mx-mn);
+  const bin = arr=>{
+    const b = new Array(BINS).fill(0);
+    arr.forEach(v=>{ b[Math.min(BINS-1, Math.floor((v-mn)/span*BINS))]++; });
+    for(let i=1;i<BINS-1;i++) b[i] = (b[i-1]+b[i]*2+b[i+1])/4;                    // smooth
+    return b;
+  };
+  const bm = bin(r.my), bo = bin(r.opp);
+  const peak = Math.max(...bm, ...bo, 1);
+  const X = i=>pad+i*((W-pad*2)/(BINS-1));
+  const Y = v=>H-14-(v/peak)*(H-30);
+  const path = b=>b.map((v,i)=>X(i).toFixed(1)+","+Y(v).toFixed(1)).join(" ");
+  const mark = v=>{ const x2 = pad+((v-mn)/span)*(W-pad*2); return '<line x1="'+x2+'" y1="12" x2="'+x2+'" y2="'+(H-14)+'" stroke="var(--dim)" stroke-width="0.8" stroke-dasharray="2 3"/><text x="'+x2+'" y="10" text-anchor="middle" font-size="8.5" fill="var(--dim)">'+Math.round(v)+'</text>'; };
+  return '<svg width="100%" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="simulated score distributions, my median '+r.p50+'">'+
+    '<polygon points="'+X(0)+','+(H-14)+' '+path(bo)+' '+X(BINS-1)+','+(H-14)+'" fill="var(--red)" opacity="0.16"/>'+
+    '<polyline points="'+path(bo)+'" fill="none" stroke="var(--red)" stroke-width="1.4" opacity="0.8"/>'+
+    '<polygon points="'+X(0)+','+(H-14)+' '+path(bm)+' '+X(BINS-1)+','+(H-14)+'" fill="var(--green)" opacity="0.2"/>'+
+    '<polyline points="'+path(bm)+'" fill="none" stroke="var(--green)" stroke-width="1.8"/>'+
+    mark(r.p10)+mark(r.p90)+
+    '<text x="'+pad+'" y="'+(H-2)+'" font-size="9" fill="var(--dim)">'+Math.round(mn)+'</text>'+
+    '<text x="'+(W-pad)+'" y="'+(H-2)+'" text-anchor="end" font-size="9" fill="var(--dim)">'+Math.round(mx)+'</text></svg>';
+}
+function countUp(el, to, ms){                                                    // #900
+  try{
+    if(matchMedia("(prefers-reduced-motion: reduce)").matches){ el.textContent = to.toFixed(1); return; }
+    const from = parseFloat(el.textContent)||0;
+    if(Math.abs(to-from)<0.05){ el.textContent = to.toFixed(1); return; }
+    const t0 = performance.now(), dur = ms||600;
+    const step = t=>{
+      const k = Math.min(1, (t-t0)/dur), e = 1-Math.pow(1-k, 3);
+      el.textContent = (from+(to-from)*e).toFixed(1);
+      if(k<1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }catch(e){ el.textContent = String(to); }
 }
 
 window.__mod = window.__mod || []; window.__mod.push("win.js");

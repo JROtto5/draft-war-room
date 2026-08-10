@@ -753,3 +753,7 @@ body.compact .sspad{padding:6px 10px}
 @media (max-width:1280px){ .sptiles{grid-template-columns:repeat(5,1fr)} }
 @media (max-width:1024px){ .spgrid{grid-template-columns:1fr} .spteam b{font-size:28px} }
 @media (max-width:640px){ .sptiles{grid-template-columns:repeat(3,1fr)} .spheroTop{gap:8px;padding:12px 12px 4px} .spbar{position:static} }
+/* R55 pf/pa micro-bars */
+.pfbar{display:block;height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin:2px 0}
+.pfbar i{display:block;height:100%;background:var(--green);border-radius:2px}
+.pfbar.pa i{background:var(--red);opacity:.6}

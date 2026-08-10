@@ -140,6 +140,17 @@ try {
     }
     return "OK";
   })()));
+  // Chart kit (#894–#908)
+  out.push("charts:"+((()=>{try{
+    const a=chartArea([10,20,15,30,25],{ref:20,label:"t"});
+    const b=chartBars([[10,12],[14,9],[8,11]],{label:"t"});
+    const rc=chartRace([{vals:[0,1,2],big:true,color:"var(--gold)"},{vals:[1,1,2]}],{label:"t"});
+    const em=chartArea([1],{empty:"nope"});
+    const fake={my:new Float64Array([80,90,100,85,95]),opp:new Float64Array([70,88,92,75,99]),p10:75,p50:88,p90:99};
+    const d=chartDist(fake);
+    return [a,b,rc,em,d].every(x=>typeof x==="string" && x.startsWith("<svg")) &&
+      a.includes("aria-label") && em.includes("nope") && typeof countUp==="function";
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // Dashboard structure (#879–#893)
   out.push("dash:"+((()=>{try{
     const h=seasonPageHtml();
