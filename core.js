@@ -1244,6 +1244,7 @@ document.getElementById("syncBtn").addEventListener("click", ()=>setSync(!SYNC.o
 
 /* ---------- Routes: / = season, /draft = draft room (#848) ---------- */
 function appRoute(){
+  if(location.search.indexOf("peek")>=0) return "season";                        // #957 screenshot preview
   if(typeof E2E_MODE!=="undefined" && E2E_MODE) return "draft";
   return /\/draft(\.html)?\/?$/.test(location.pathname) ? "draft" : "season";
 }

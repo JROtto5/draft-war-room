@@ -1592,7 +1592,6 @@ function seasonDeckHtml(){                                                      
   };
   return '<div class="actions" id="seasonDeck" role="navigation" aria-label="Season navigation">'+
     btn("renderScoreboard()","📊","Scores","League scoreboard, standings, playoff odds — S")+
-    btn("renderWaivers()","📥","Waivers","Waiver wire war room — V")+
     btn("renderTrades()","🔁","Trades","Trade center — D")+
     btn("renderSeasonStats()","📈","Season","Efficiency, luck, ROI, ghost season — X")+
     btn("renderRituals()","🧘","Ritual","Checklist, goals, grades, bright side")+
@@ -1601,8 +1600,7 @@ function seasonDeckHtml(){                                                      
     btn("renderAlertCenter()","🔔",un?String(un):"Alerts","Alert center")+
     btn("document.getElementById('gradeBtn').click()","🎓","Report","Draft report")+
     btn("document.getElementById('injBtn').click()","🩺","Health","Injury center")+
-    '<button class="hbtn deckbtn" id="weekRecapBtn"><span class="dicon">📅</span><span class="dlab">Weeks</span></button>'+
-    '<button class="hbtn deckbtn" id="healthDigestBtn"><span class="dicon">🩹</span><span class="dlab">Digest</span></button>'+
+    btn("analystReport()","📰","Analyst","The weekly written brief")+
     '</div>';
 }
 function applySeasonHeader(){                                                     // #732

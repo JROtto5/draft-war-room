@@ -1074,7 +1074,7 @@ function renderRoster(){
            roster:myIds(), projections:Object.fromEntries(myIds().map(id2=>{const p2=idIndex()[id2]; return [id2, p2?p2.proj:0];}))};
         if(!all[nm]){ all[nm] = JSON.parse(JSON.stringify(S)); localStorage.setItem(PROF_KEY, JSON.stringify(all)); }
       }catch(e){}
-      setTimeout(buildReport, 900);
+      if(!(typeof SEASON!=="undefined" && SEASON.on) && (typeof appRoute!=="function" || appRoute()!=="season")) setTimeout(buildReport, 900);
     }
   } else if(totalNeeded > picksLeft){
     warn.innerHTML = '<div class="warn crit">⚠️ You owe '+totalNeeded+' required starters but only have '+picksLeft+' picks left. Fill requirements NOW.</div>';

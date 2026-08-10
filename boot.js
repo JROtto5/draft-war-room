@@ -28,7 +28,7 @@ function initLock(){
     q.textContent = line;
   }
   const scr = document.getElementById("lockScreen");
-  const e2e = location.search.indexOf("e2e") >= 0;
+  const e2e = location.search.indexOf("e2e") >= 0 || location.search.indexOf("peek") >= 0;   // ?peek: screenshot preview (#957)
   if(e2e || !window.crypto || !crypto.subtle){ scr.remove(); return; }
   try{ if(localStorage.getItem(LS_KEY+"-auth")===LOCK_HASH){ scr.remove(); return; } }catch(e){}
   scr.style.display = "flex";
@@ -133,6 +133,7 @@ if(!E2E_MODE && location.protocol.indexOf("http")===0){
     startSeasonMode();
     if(typeof renderNow==="function") renderNow();
     if(myIds().length < S.settings.roster && (S.settings.sleeperLeagueId||"").trim()) importCompletedDraft(true);
+    if(location.search.indexOf("peek")<0) setTimeout(()=>{ if(typeof whileYouWereOut==="function") whileYouWereOut(); }, 3000);
   }catch(e){} }, 600);
   setInterval(()=>{ if(document.visibilityState==="visible") refreshInjuries(true); }, Math.max(2, S.settings.pollMins||5)*60e3);
   setInterval(()=>{ if(document.visibilityState==="visible") refreshTrending(); }, 15*60e3);
@@ -148,7 +149,7 @@ document.querySelectorAll(".modal").forEach((m,i)=>{
   const h3 = m.querySelector("h3");
   if(h3){ if(!h3.id) h3.id = "dlg"+i; m.setAttribute("aria-labelledby", h3.id); }
 });
-const BUILD = "13.1";
+const BUILD = "13.2";
 let _installEvt = null;
 window.addEventListener("beforeinstallprompt", e=>{
   e.preventDefault();
@@ -489,7 +490,7 @@ document.addEventListener("keydown", e=>{
     toast("📶 Data-saver detected — photos off (Settings to re-enable)");
   }
   applyTheme();
-  if(!S.seenTour && (typeof E2E_MODE==="undefined" || !E2E_MODE)){
+  if(!S.seenTour && (typeof E2E_MODE==="undefined" || !E2E_MODE) && location.search.indexOf("peek")<0){
     S.seenTour = true; save();
     setTimeout(()=>{ document.getElementById("helpOverlay").classList.add("show"); }, 900);
   }

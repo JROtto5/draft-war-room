@@ -1188,7 +1188,7 @@ function seasonPageHtml(){                                                      
     h += '<div class="spheroTop">'+
       '<div class="spteam"><span class="splab">OTTO5</span><b class="mono">'+md.me.pts.toFixed(1)+'</b><span class="spproj">proj '+fmt(myBs.pts)+'</span></div>'+
       winDial(wpPct)+
-      '<div class="spteam right"><span class="splab">'+esc(md.opp?md.opp.name.toUpperCase():"—")+'</span><b class="mono">'+(md.opp?md.opp.pts.toFixed(1):"0.0")+'</b><span class="spproj">'+(opBs?'proj '+fmt(opBs.pts):'')+'</span></div></div>';
+      '<div class="spteam away"><span class="splab">'+esc(md.opp?md.opp.name.toUpperCase():"—")+'</span><b class="mono">'+(md.opp?md.opp.pts.toFixed(1):"0.0")+'</b><span class="spproj">'+(opBs?'proj '+fmt(opBs.pts):'')+'</span></div></div>';
     // tiles (#880)
     const lev = (typeof SIM!=="undefined" && SIM.lastKey && SIM.cache[SIM.lastKey] && SIM.cache[SIM.lastKey].lev) ? SIM.cache[SIM.lastKey].lev[0] : null;
     const odds = SEASON.lastOdds ? SEASON.lastOdds[myRid] : null;
@@ -1209,7 +1209,7 @@ function seasonPageHtml(){                                                      
     if(typeof liveWpChartHtml==="function") h += liveWpChartHtml();
   } else {
     h += '<div class="spheroTop skel"><div class="spteam"><span class="splab">OTTO5</span><b class="mono">·&#8202;·</b></div>'+winDial(50)+
-      '<div class="spteam right"><span class="splab">LOADING</span><b class="mono">·&#8202;·</b></div></div>'+
+      '<div class="spteam away"><span class="splab">LOADING</span><b class="mono">·&#8202;·</b></div></div>'+
       '<div class="sptiles">'+ssTile("proj final","—")+ssTile("win prob","—")+ssTile("on bench","—")+ssTile("playoffs","—")+ssTile("leverage","—")+'</div>';
   }
   h += '</div>';
@@ -1329,16 +1329,21 @@ function sidebarSeasonHtml(byId){                                               
   hero += '</div>';
   // — lineup card (#852)
   let list = '';
-  const rowOf = (p, slotLab, val, dimVal)=>{
+  const staged = stagedGet();
+  const stagedOut = new Set(staged.map(x=>x.out)), stagedIn = new Set(staged.map(x=>x.in));
+  const rowOf = (p, slotLab, val, dimVal, swappable)=>{
     const e = injuryOf(p), sv = e ? injSeverity(e.s) : null;
     const bye = typeof BYES!=="undefined" && BYES[p.team]===w;
     const badge = (typeof gsBadge==="function") ? gsBadge(p.team) : "";
     const nick = (typeof nicknameOf==="function") ? nicknameOf(p) : null;
-    return '<div class="ssrow" data-card="'+p.id+'" tabindex="0" role="button" aria-label="'+esc(p.name)+'">'+
+    const stCls = stagedOut.has(p.id) ? " stagedout" : stagedIn.has(p.id) ? " stagedin" : "";
+    return '<div class="ssrow'+stCls+'" data-card="'+p.id+'" tabindex="0" role="button" aria-label="'+esc(p.name)+'">'+
       avatarImg(p, 30)+
       (slotLab?'<span class="ssslot '+p.pos.toLowerCase()+'">'+slotLab+'</span>':'')+
       '<div class="ssnm">'+esc(p.name)+(nick?' <span class="ssnick" title="'+esc(nick)+'">★</span>':'')+
+      (stagedOut.has(p.id)?'<span class="stagechip">OUT</span>':stagedIn.has(p.id)?'<span class="stagechip" style="background:var(--green)">IN</span>':'')+
       '<span class="sssub">'+(bye?'🚫 BYE':sv?'<span class="'+sv.cls+'">'+sv.label+'</span>':badge||p.team)+'</span></div>'+
+      (swappable && p.pos!=="DEF" ? '<button class="swapbtn" data-swap="'+p.id+'" title="Swap '+esc(p.name)+' out" aria-label="Swap out">⇄</button>' : '')+
       '<b class="ssval mono'+(dimVal?' dim':'')+'">'+val+'</b></div>';
   };
   if(bs){
@@ -1347,8 +1352,15 @@ function sidebarSeasonHtml(byId){                                               
     list += '<div class="sscard"><div class="sshead">STARTING NINE<span class="mono">'+fmt(bs.pts)+' proj</span></div>'+
       bs.line.filter(sl=>sl.p).map(sl=>{
         const got = (md && md.me && md.me.ppts) ? (+md.me.ppts[inv[sl.p.id]]||0) : 0;
-        return rowOf(sl.p, sl.lab, got ? got.toFixed(1) : sl.wp.toFixed(1), !got);
-      }).join("")+'</div>';
+        return rowOf(sl.p, sl.lab, got ? got.toFixed(1) : sl.wp.toFixed(1), !got, true);
+      }).join("")+
+      '<div class="sslegend">tap a row for the card · ⇄ to swap · plain number = projected, bold = banked</div></div>';
+    if(staged.length){                                                          // #959 staged banner
+      list += '<div class="sscard warn"><div class="sshead">⇄ '+staged.length+' STAGED SWAP'+(staged.length>1?'S':'')+
+        '<span><button class="undo1" data-stagedclear="1">clear</button></span></div>'+
+        '<div class="sspad">'+staged.map(x=>{const o=byId[x.out],n=byId[x.in];return o&&n?esc(n.name)+' in for '+esc(o.name):'';}).filter(Boolean).join(" · ")+
+        '<br><a class="hbtn act" style="text-decoration:none;margin-top:6px;display:inline-block" target="_blank" rel="noopener" href="https://sleeper.com/leagues/'+(S.settings.sleeperLeagueId||"")+'/team">Commit in Sleeper →</a></div></div>';
+    }
     const bench = ids.map(id=>byId[id]).filter(Boolean).filter(p=>!bs.starterIds.has(p.id));
     if(bench.length) list += '<details class="ssbench"><summary>BENCH <span class="mono">'+bench.length+'</span></summary>'+
       bench.sort((a,b)=>weekProj(b,w)-weekProj(a,w)).map(p=>rowOf(p, "", weekProj(p,w).toFixed(1), true)).join("")+'</details>';
@@ -1514,7 +1526,7 @@ function toggleDensity(){
 function copyWkText(){ try{ navigator.clipboard.writeText(window._wkText).then(()=>toast("📋 Recap copied")); }catch(e){} }
 const ACT_OK = ["renderGamePlan","renderSim","renderScoreboard","renderWaivers","renderTrades","renderSeasonStats",
   "renderRituals","egoDash","weeklyRecap2","renderAlertCenter","injuryDigest","scoutMyOpponent","moreSheet",
-  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText"];
+  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText","analystReport"];
 document.addEventListener("click", e=>{
   const t = e.target.closest("[data-act],[data-scout],[data-clickid]");
   if(!t) return;
@@ -1579,5 +1591,122 @@ document.addEventListener("focusin", e=>{
     setTimeout(()=>{ try{ e.target.scrollIntoView({block:"center", behavior:"smooth"}); }catch(e2){} }, 250);
   }
 });
+
+/* ---------- #958/#959 staged swaps, #963 analyst, #964 catch-up ---------- */
+function stagedGet(){ try{ return JSON.parse(localStorage.getItem(LS_KEY+"-staged"+curWeek())||"[]"); }catch(e){ return []; } }
+function stagedSave(a){ try{ localStorage.setItem(LS_KEY+"-staged"+curWeek(), JSON.stringify(a)); }catch(e){} }
+function stageSwap(outId, inId){
+  const a = stagedGet().filter(x=>x.out!==outId && x.in!==inId);
+  a.push({out:outId, in:inId});
+  stagedSave(a);
+  toast("⇄ Staged — now make the same swap in Sleeper to lock it in");
+  renderNow();
+}
+function stagedClear(){ stagedSave([]); renderNow(); }
+function stagedCheck(){                                                          // auto-clear when Sleeper matches
+  try{
+    const md = WEEKST.mate; if(!md || !md.me || !md.me.starters) return;
+    const st = new Set(md.me.starters.filter(Boolean));
+    const still = stagedGet().filter(x=>!(st.has(x.in) && !st.has(x.out)));
+    if(still.length !== stagedGet().length){ stagedSave(still); if(!still.length) toast("✅ Sleeper matches your staged lineup — committed"); }
+  }catch(e){}
+}
+function swapSheet(outId){                                                       // #958
+  const byId = idIndex(), out = byId[outId]; if(!out) return;
+  const w = curWeek();
+  const flexy = ["RB","WR","TE"];
+  const cands = rosterIds().map(id=>byId[id]).filter(Boolean)
+    .filter(p=>p.id!==outId && (p.pos===out.pos || (flexy.includes(p.pos) && flexy.includes(out.pos))))
+    .map(p=>({p, wp:weekProj(p,w)})).sort((a,b)=>b.wp-a.wp).slice(0,6);
+  const outWp = weekProj(out, w);
+  const ov = document.createElement("div"); ov.id = "swapSheet"; ov.className = "snov";
+  ov.innerHTML = '<div class="sbcard" role="dialog" aria-label="Swap '+esc(out.name)+'">'+
+    '<div class="tag">⇄ REPLACE '+esc(out.name.toUpperCase())+' <span class="mono">'+outWp.toFixed(1)+' proj</span></div>'+
+    (cands.length ? cands.map(x=>{
+      const d = Math.round((x.wp-outWp)*10)/10;
+      const e = injuryOf(x.p), sv = e ? injSeverity(e.s) : null;
+      return '<div class="ssrow" data-swapin="'+x.p.id+'" tabindex="0" role="button">'+avatarImg(x.p,30)+
+        '<div class="ssnm">'+esc(x.p.name)+'<span class="sssub">'+x.p.pos+(sv?' · <span class="'+sv.cls+'">'+sv.label+'</span>':'')+
+        ((typeof gsBadge==="function" && gsBadge(x.p.team))?' · '+gsBadge(x.p.team):'')+'</span></div>'+
+        '<b class="ssval mono" style="color:var(--'+(d>0?'green':d<0?'red':'dim')+')">'+x.wp.toFixed(1)+' ('+(d>=0?'+':'')+d+')</b></div>';
+    }).join("") : '<div class="empty">No eligible bench players this week</div>')+
+    '<div class="sspad dim" style="font-size:11px">Staging plans the move here — Sleeper\'s public API can\'t write lineups, so commit it in the Sleeper app (one tap below).</div>'+
+    '<div style="padding:6px 12px 12px"><a class="hbtn act" style="text-decoration:none" target="_blank" rel="noopener" href="https://sleeper.com/leagues/'+(S.settings.sleeperLeagueId||"")+'/team">Open my Sleeper team →</a></div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{
+    if(e.target===ov) return ov.remove();
+    const t = e.target.closest("[data-swapin]");
+    if(t){ ov.remove(); stageSwap(outId, t.dataset.swapin); }
+  });
+}
+document.addEventListener("click", e=>{
+  const sw2 = e.target.closest("[data-swap]");
+  if(sw2){ e.preventDefault(); e.stopPropagation(); swapSheet(sw2.dataset.swap); return; }
+  if(e.target.closest("[data-stagedclear]")){ e.preventDefault(); stagedClear(); }
+}, true);
+function analystReport(){                                                        // #963
+  const old = document.getElementById("anOverlay"); if(old){ old.remove(); return; }
+  const byId = idIndex(), w = curWeek(), md = WEEKST.mate;
+  const wm = winModeFor();
+  const bs = bestStartersWeek(rosterIds(), byId, w);
+  const opBs = (md && md.opp) ? bestStartersWeek(md.opp.ids, byId, w) : null;
+  const {moves} = gamePlanMoves();
+  const hist = seasonArchive();
+  const slop = (md && md.opp) ? sloppinessOf(md.opp.rid, hist) : null;
+  const p2p = pathToPlayoffs();
+  const ms = myStandingsRow();
+  const soft = rosterIds().map(id=>byId[id]).filter(Boolean).filter(p=>p.pos!=="DEF")
+    .map(p=>({p, sos:rosSos(p)})).sort((a,b)=>b.sos-a.sos)[0];
+  const oppName = md && md.opp ? md.opp.name : "the opponent";
+  const wpPct = opBs ? Math.round(winProb(bs.pts, opBs.pts)*100) : null;
+  let paras = [];
+  paras.push("WEEK "+w+" OUTLOOK — Otto5"+(ms?" ("+ms.row.w+"-"+ms.row.l+", "+ordinal(ms.place)+")":"")+
+    (md && md.opp ? " faces "+oppName+"." : "."));
+  if(wpPct!=null) paras.push("The model makes this "+(wpPct>=55?"a game Otto5 should win":wpPct<=45?"an underdog spot":"a coin flip")+
+    " — "+wpPct+"% on projections of "+fmt(bs.pts)+"–"+fmt(opBs.pts)+". "+
+    (wm.mode==="ceiling" ? "Recommendation: variance. Start the boom-bust profiles and the correlated stack; a safe loss is still a loss."
+     : wm.mode==="floor" ? "Recommendation: protect. Floor plays over heroes; make "+oppName+" beat a full lineup." : "Play the best projections straight."));
+  if(slop && slop.eff<93) paras.push("Scouting note: "+oppName+" runs at "+slop.eff+"% lineup efficiency and has left "+slop.left+
+    " points on their bench this season. Expect a mistake; be positioned to punish it.");
+  if(moves.length) paras.push("Action items: "+moves.slice(0,3).map(m=>m.txt.replace(/^[^\w]+\s*/,"")).join(" · ")+".");
+  if(SEASON.avail && SEASON.avail.length) paras.push("Wire watch: "+SEASON.avail.slice(0,3).map(p=>p.name).join(", ")+
+    " heating league-wide and unrostered in Buck Breakers.");
+  if(soft) paras.push("Schedule note: "+soft.p.name+" enters the softest remaining stretch on the roster (avg defense rank "+soft.sos+").");
+  if(p2p) paras.push("Season line: "+p2p.line+".");
+  const ov = document.createElement("div"); ov.id = "anOverlay"; ov.className = "snov";
+  ov.innerHTML = '<div class="sbcard" role="dialog" aria-label="Analyst brief"><button class="sbx" data-anx="1">✕</button>'+
+    '<div class="tag">📰 THE ANALYST — WEEK '+w+' BRIEF</div>'+
+    paras.map(p2=>'<p style="max-width:64ch;font-size:13.5px;line-height:1.65;margin:0 0 12px">'+esc(p2)+'</p>').join("")+
+    '<div style="padding-top:4px"><button class="hbtn" data-anprint="1">🖨 Print</button></div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{
+    if(e.target===ov || e.target.closest("[data-anx]")) return ov.remove();
+    if(e.target.closest("[data-anprint]")) window.print();
+  });
+}
+function whileYouWereOut(){                                                      // #964
+  try{
+    const k = LS_KEY+"-lastseen";
+    let last = null; try{ last = JSON.parse(localStorage.getItem(k)||"null"); }catch(e){}
+    const ms = myStandingsRow();
+    const now = {t:Date.now(), w:ms?ms.row.w:0, l:ms?ms.row.l:0, place:ms?ms.place:0};
+    localStorage.setItem(k, JSON.stringify(now));
+    if(!last || !ms || Date.now()-last.t < 3*86400e3) return;
+    const rows = myWeeklyRows(seasonArchive());
+    const lastGame = rows.slice(-1)[0];
+    const dW = now.w-(last.w||0), dL = now.l-(last.l||0);
+    const ov = document.createElement("div"); ov.id = "wyoOverlay"; ov.className = "snov";
+    ov.innerHTML = '<div class="sbcard" role="dialog" style="max-width:520px"><button class="sbx" data-wyx="1">✕</button>'+
+      '<div class="tag">👋 WHILE YOU WERE OUT</div>'+
+      '<div class="sbply"><span>Since your last visit</span><b>'+(dW||dL ? dW+'W – '+dL+'L' : 'no games played')+'</b></div>'+
+      (lastGame && lastGame.opp ? '<div class="sbply"><span>Last result</span><b style="color:var(--'+(lastGame.m.points>lastGame.opp.points?'green':'red')+')">'+
+        (lastGame.m.points>lastGame.opp.points?'W ':'L ')+lastGame.m.points.toFixed(1)+'–'+lastGame.opp.points.toFixed(1)+'</b></div>' : '')+
+      '<div class="sbply"><span>Standing now</span><b>'+ms.row.w+'-'+ms.row.l+' · '+ordinal(ms.place)+(last.place?' (was '+ordinal(last.place)+')':'')+'</b></div>'+
+      '<div style="padding:10px 0;display:flex;gap:8px"><button class="hbtn primary" data-act="renderGamePlan">🏆 This week\'s plan</button>'+
+      '<button class="hbtn" data-act="analystReport">📰 Analyst brief</button></div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener("click", e=>{ if(e.target===ov || e.target.closest("[data-wyx]") || e.target.closest("[data-act]")) ov.remove(); });
+  }catch(e){}
+}
 
 window.__mod = window.__mod || []; window.__mod.push("win.js");

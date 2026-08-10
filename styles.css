@@ -735,7 +735,7 @@ body.seasonled.draftopen #undoBtn,body.seasonled.draftopen #redoBtn,body.seasonl
 .sphero{padding:0 0 6px}
 .spheroTop{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;padding:16px 18px 6px}
 .spteam{display:flex;flex-direction:column;gap:1px}
-.spteam.right{text-align:right;align-items:flex-end}
+.spteam.away{text-align:right;align-items:flex-end}
 .splab{font-size:10px;font-weight:800;letter-spacing:.14em;color:var(--dim)}
 .spteam b{font-size:34px;line-height:1.05}
 .spproj{font-size:11px;color:var(--dim)}
@@ -839,7 +839,34 @@ body.calm *,body.calm *::before,body.calm *::after{animation:none !important;tra
 @media (prefers-reduced-motion: reduce){.snov .sbcard,.mssheet{animation:none}}
 
 /* ---------- P0 hotfix round (#949–#956) ---------- */
-body.seasonled .right{display:none}                        /* #952 draft-era roster panel is a /draft thing */
+body.seasonled .wrap > .right{display:none}                        /* #952 draft-era roster panel is a /draft thing */
 body.seasonled .wrap{grid-template-columns:360px 1fr}      /* #954 two-pane season layout */
 @media (max-width:1100px){ body.seasonled .wrap{grid-template-columns:320px 1fr} }
 @media (max-width:900px){ body.seasonled .wrap{grid-template-columns:1fr} body.seasonled .left .panel{position:static;max-height:none} }
+
+/* #961 season header purge: logo · HQ · Draft · theme · settings (+install/sync chip) */
+body.seasonled #profQuick,body.seasonled #saveBadge,body.seasonled #helpBtn,body.seasonled #exportBtn,
+body.seasonled #importBtn,body.seasonled #resetBtn,body.seasonled #injBtn,body.seasonled #syncBtn,
+body.seasonled #csvBtn{display:none}
+body.seasonled.draftopen #helpBtn,body.seasonled.draftopen #exportBtn,body.seasonled.draftopen #importBtn,
+body.seasonled.draftopen #resetBtn,body.seasonled.draftopen #injBtn,body.seasonled.draftopen #syncBtn{display:inline-block}
+/* staged swap styling (#958/#959) */
+.ssrow.stagedout{opacity:.45}
+.ssrow.stagedin{background:rgba(47,212,122,.08)}
+.stagechip{font-size:8.5px;font-weight:800;letter-spacing:.08em;background:var(--gold);color:#141414;border-radius:4px;padding:1px 5px;margin-left:5px}
+.swapbtn{background:none;border:1px solid var(--line);border-radius:6px;color:var(--dim);font-size:11px;padding:2px 7px;cursor:pointer;flex:0 0 auto}
+.swapbtn:hover{border-color:var(--gold);color:var(--gold)}
+.sslegend{padding:4px 12px;font-size:10px;color:var(--dim);border-top:1px solid var(--line)}
+/* #965 mobile overflow: grid children must be allowed to shrink */
+.wrap > *{min-width:0}
+.spgrid > *,.spheroTop > *,.sbcols > *{min-width:0}
+.ssbteam span,.splab{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+@media (max-width:640px){
+  html,body{overflow-x:hidden}
+  .wrap{padding:8px 8px 70px}
+  .sstiles{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .ssquick{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .spminis .spmini{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
+}
+/* the 680px table floor is a draft-pool rule — season tables shrink freely */
+@media (max-width:900px){ #seasonPage table,.snov table,#sbOverlay table,.sscard table{min-width:0} }
