@@ -730,4 +730,174 @@ async function renderSim(){                                                     
   });
 }
 
+/* ---------- R49 Live war room v2: real game states (#800–#814) ---------- */
+const NFLSTATE = {at:0, map:{}};
+const ESPN2OURS = {WSH:"WAS", GB:"GBP", KC:"KCC", LV:"LVR", JAX:"JAC", NE:"NEP", NO:"NOS", SF:"SFO", TB:"TBB"};
+function remFrac(state, period, clock){                                          // pure (#806)
+  if(state==="pre") return 1;
+  if(state==="post") return 0;
+  const parts = String(clock||"0:00").split(":");
+  const m = +parts[0]||0, s = +parts[1]||0;
+  const q = Math.min(4, Math.max(1, period||1));
+  const rem = ((4-q)*900 + m*60 + s)/3600;
+  return Math.max(0.02, Math.min(1, rem));
+}
+async function nflStates(force){                                                 // #800
+  if(!force && NFLSTATE.at && Date.now()-NFLSTATE.at < 2*60e3) return NFLSTATE.map;
+  try{
+    const j = await (await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard")).json();
+    const m = {};
+    (j.events||[]).forEach(ev=>{
+      const comp = (ev.competitions||[])[0]; if(!comp) return;
+      const st = ev.status || comp.status || {};
+      const state = (st.type && st.type.state) || "pre";
+      const period = st.period || 0, clock = st.displayClock || "0:00";
+      (comp.competitors||[]).forEach(c=>{
+        const opp = (comp.competitors||[]).find(x2=>x2!==c);
+        const ab = ESPN2OURS[c.team && c.team.abbreviation] || (c.team && c.team.abbreviation);
+        if(!ab) return;
+        m[ab] = {state, period, clock, detail:(st.type && st.type.shortDetail)||"",
+          diff:(+c.score||0)-((opp && +opp.score)||0), rem:remFrac(state, period, clock)};
+      });
+    });
+    if(Object.keys(m).length){ NFLSTATE.map = m; NFLSTATE.at = Date.now(); }
+  }catch(e){}
+  return NFLSTATE.map;
+}
+function gameStateOf(team){ return NFLSTATE.map[team] || null; }
+function anyGameLive(){ for(const t in NFLSTATE.map) if(NFLSTATE.map[t].state==="in") return true; return false; }   // #812
+function gsBadge(team){                                                          // #801
+  const g = gameStateOf(team); if(!g) return "";
+  if(g.state==="in") return "▶Q"+g.period+" "+g.clock;
+  if(g.state==="post") return "FINAL";
+  return "";
+}
+function liveAdjRemaining(p, got){                                               // #805/#806
+  const g = gameStateOf(p.team), w = curWeek();
+  const base = weekProj(p, w);
+  if(!g) return got>0 ? 0 : base;
+  let rem = base * g.rem;
+  if(g.state==="in" && g.period>=4){
+    if(Math.abs(g.diff)>=28) rem *= 0.5;                                          // garbage time (#805)
+    else if(Math.abs(g.diff)<=8) rem *= 1.15;
+  }
+  return Math.max(0, Math.round(rem*10)/10);
+}
+function yetToPlay(side){                                                        // #802/#809
+  if(!side || !side.starters) return null;
+  const byId = idIndex(), s2o = sleeperToOurs();
+  const inv = {}; for(const k2 in s2o) inv[s2o[k2]] = k2;
+  let played = 0, live = 0; const waiting = [];
+  side.starters.filter(Boolean).forEach(id=>{
+    const p = byId[id]; if(!p) return;
+    const g = gameStateOf(p.team);
+    if(g && g.state==="post") played++;
+    else if(g && g.state==="in") live++;
+    else waiting.push(p.name.split(" ").slice(-1)[0]);
+  });
+  return {total:side.starters.filter(Boolean).length, played, live, waiting};
+}
+function liveSim(n){                                                             // #811
+  const md = WEEKST.mate;
+  if(!md || !md.me || !md.opp) return null;
+  const byId = idIndex(), s2o = sleeperToOurs(), w = curWeek();
+  const inv = {}; for(const k2 in s2o) inv[s2o[k2]] = k2;
+  const mkLine = side=>{
+    const teams = {};
+    const ps = side.starters.filter(Boolean).map(id=>byId[id]).filter(Boolean);
+    ps.forEach(p=>{ teams[p.team] = (teams[p.team]||0)+1; });
+    return ps.map(p=>{
+      const got = +side.ppts[inv[p.id]] || 0;
+      const g = gameStateOf(p.team);
+      if(g && g.state==="post") return {name:p.name, mu:got, sd:0.01, team:p.team, corr:false};
+      const rem = liveAdjRemaining(p, got);
+      const frac = g ? g.rem : (got>0 ? 0 : 1);
+      return {name:p.name, mu:got+rem, sd:Math.max(0.5, playerVariance(p)*frac), team:p.team, corr:teams[p.team]>1};
+    });
+  };
+  const a = mkLine(md.me), b = mkLine(md.opp);
+  if(!a.length || !b.length) return null;
+  return simSides(a, b, n||400, Math.floor(Date.now()/6e4));
+}
+function liveWpSnap(){                                                           // #803
+  try{
+    if(!anyGameLive()) return;
+    const r = liveSim(300); if(!r) return;
+    const k = LS_KEY+"-wph"+curWeek();
+    let h = []; try{ h = JSON.parse(localStorage.getItem(k)||"[]"); }catch(e){}
+    h.push({t:Date.now(), wp:Math.round(r.wp*100)});
+    localStorage.setItem(k, JSON.stringify(h.slice(-80)));
+    window._liveWp = Math.round(r.wp*100);
+  }catch(e){}
+}
+function liveWpChartHtml(){                                                      // #803
+  try{
+    let h = []; try{ h = JSON.parse(localStorage.getItem(LS_KEY+"-wph"+curWeek())||"[]"); }catch(e){}
+    if(h.length<3) return "";
+    const cur = h[h.length-1].wp;
+    return '<div class="benchhead">📈 The rollercoaster: <b class="mono" style="color:var(--'+(cur>=55?'green':cur<=45?'red':'gold')+')">'+cur+'%</b> live '+
+      sparkSvg(h.map(x=>x.wp), 110, 18, cur>=50?"var(--green)":"var(--red)")+'</div>';
+  }catch(e){ return ""; }
+}
+function scenarioLine(){                                                         // #804
+  try{
+    const md = WEEKST.mate; if(!md || !md.me || !md.opp) return null;
+    const me = yetToPlay(md.me), op = yetToPlay(md.opp);
+    if(!me || !op) return null;
+    const d = Math.round((md.me.pts-md.opp.pts)*10)/10;
+    if(me.played+me.live===0 && op.played+op.live===0) return null;
+    let s2 = (d>=0 ? "Up "+d : "Down "+(-d));
+    s2 += " · you: "+me.live+" live, "+me.waiting.length+" left · them: "+op.live+" live, "+op.waiting.length+" left";
+    if(d>0 && op.live===0 && op.waiting.length===0) s2 = "🏁 CLINCHED — they're out of bullets, up "+d;
+    else if(d<0 && me.live===0 && me.waiting.length===0) s2 = "😔 Out of bullets, down "+(-d);
+    else if(d<0 && me.waiting.length>0) s2 += " · need "+(Math.round(-d/Math.max(1,me.waiting.length+me.live)*10)/10)+"/player";
+    return s2;
+  }catch(e){ return null; }
+}
+function twoMinuteAlert(){                                                       // #807
+  try{
+    if(!hypeOn("full")) return;
+    const md = WEEKST.mate; if(!md || !md.me) return;
+    const byId = idIndex(), s2o = sleeperToOurs(), w = curWeek();
+    const inv = {}; for(const k2 in s2o) inv[s2o[k2]] = k2;
+    const k = LS_KEY+"-2min"+w;
+    let seen = []; try{ seen = JSON.parse(localStorage.getItem(k)||"[]"); }catch(e){}
+    md.me.starters.filter(Boolean).forEach(id=>{
+      const p = byId[id]; if(!p || seen.includes(id)) return;
+      const g = gameStateOf(p.team);
+      if(!g || g.state!=="in" || g.period<4) return;
+      const parts = String(g.clock).split(":");
+      if((+parts[0]||0)*60+(+parts[1]||0) > 120) return;
+      if(Math.abs(g.diff)>8) return;
+      const got = +md.me.ppts[inv[id]] || 0;
+      if(got >= weekProj(p,w)*0.7) return;
+      seen.push(id);
+      alertFire("2min", "⏱ Two-minute drill: "+p.name+"'s game is one score apart", "Targets and clock stops incoming — hold on");
+    });
+    localStorage.setItem(k, JSON.stringify(seen));
+  }catch(e){}
+}
+function headerPulse(){                                                          // #808
+  try{
+    const h2 = document.querySelector("header"); if(!h2) return;
+    h2.classList.add("tdpulse");
+    setTimeout(()=>h2.classList.remove("tdpulse"), 2400);
+  }catch(e){}
+}
+function gameBreak(){                                                            // #810
+  try{
+    const d = new Date();
+    if(d.getDay()!==0 || d.getHours()!==19) return;
+    const k = LS_KEY+"-break"+curWeek();
+    if(localStorage.getItem(k)) return;
+    localStorage.setItem(k, "1");
+    const r = liveSim(400);
+    const sc = scenarioLine();
+    if(r && sc) alertFire("break", "🌆 Late-window check: "+Math.round(r.wp*100)+"% live", sc);
+  }catch(e){}
+}
+function liveTick(){                                                             // hooked into game-day checks
+  nflStates().then(()=>{ liveWpSnap(); twoMinuteAlert(); gameBreak(); });
+}
+
 window.__mod = window.__mod || []; window.__mod.push("win.js");

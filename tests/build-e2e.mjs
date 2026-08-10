@@ -193,6 +193,21 @@ try {
       typeof renderSim==="function" && typeof simBestLineup==="function" &&
       br.total===0 && (journalOutcomes([])===null || typeof journalOutcomes([])==="object");
   }catch(e){ return false; }})()?"OK":"BAD"));
+  // Live game-state math on fixtures (#814)
+  out.push("live:"+((()=>{try{
+    const r1=remFrac("pre",0,"15:00"), r2=remFrac("post",4,"0:00"), r3=remFrac("in",3,"7:30");
+    NFLSTATE.map={BUF:{state:"in",period:3,clock:"7:30",diff:3,rem:r3}, KCC:{state:"post",period:4,clock:"0:00",diff:-10,rem:0}};
+    const b1=gsBadge("BUF"), b2=gsBadge("KCC"), b3=gsBadge("ZZZ");
+    const p=allPlayers().find(x=>x.team==="BUF");
+    const adj=liveAdjRemaining(p, 5);
+    const ok = r1===1 && r2===0 && Math.abs(r3-((900+450)/3600))<0.01 &&
+      b1.includes("Q3") && b2==="FINAL" && b3==="" && typeof adj==="number" && adj>=0 &&
+      anyGameLive()===true && (scenarioLine()===null || typeof scenarioLine()==="string") &&
+      (liveSim(50)===null || typeof liveSim(50).wp==="number") &&
+      typeof liveWpChartHtml()==="string" && typeof liveTick==="function";
+    NFLSTATE.map={};
+    return ok;
+  }catch(e){ NFLSTATE.map={}; return false; }})()?"OK":"BAD"));
   // My Week math runs offline on fixtures (#654)
   out.push("week:"+((()=>{try{
     const byId=idIndex(); const ids=allPlayers().slice(0,30).map(p=>p.id);

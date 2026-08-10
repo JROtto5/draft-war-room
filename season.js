@@ -158,7 +158,8 @@ function lineupAlarm(){                                                         
 
 /* ---------- R39 Scoreboard, standings, playoff odds (#655–#669) ---------- */
 const SCOREB = {at:0, w:0, mus:null, rosters:null, users:null, hist:null, histW:0, future:null, futureW:0};
-function scoreRefreshMs(){                                                       // #665
+function scoreRefreshMs(){                                                       // #665/#812
+  if(typeof anyGameLive==="function" && anyGameLive()) return 2*60e3;
   const d = new Date(), day = d.getDay(), h = d.getHours();
   const live = (day===0 && h>=13) || ((day===1 || day===4) && h>=20) || (day===2 && h<1);
   return live ? 2*60e3 : 15*60e3;
@@ -370,8 +371,10 @@ function myWeekHtml(byId){
     const p = sl.p, bye = (typeof BYES!=="undefined" && BYES[p.team]===w);
     const e = injuryOf(p), sv = e ? injSeverity(e.s) : null;
     const nick = (typeof nicknameOf==="function") ? nicknameOf(p) : null;
+    const gsb = (typeof gsBadge==="function") ? gsBadge(p.team) : "";
     return '<span class="scpill" data-card="'+p.id+'" style="cursor:pointer" title="'+esc(p.name)+(nick?' — '+nick:'')+' — '+sl.wp+' proj">'+sl.lab+' '+
-      esc(p.name.split(" ").slice(-1)[0])+(nick?' <span style="color:var(--gold)" aria-hidden="true">★</span>':'')+(bye?' 🚫':'')+(sv?' <span class="'+sv.cls+'">'+sv.code+'</span>':'')+
+      esc(p.name.split(" ").slice(-1)[0])+(nick?' <span style="color:var(--gold)" aria-hidden="true">★</span>':'')+(bye?' 🚫':'')+
+      (gsb?' <span class="dimtxt" style="font-size:9px">'+gsb+'</span>':'')+(sv?' <span class="'+sv.cls+'">'+sv.code+'</span>':'')+
       ' <b class="mono">'+sl.wp+'</b></span>';
   }).join("")+'</div>';
   // start/sit vs my ACTUAL Sleeper lineup (#644)
@@ -407,6 +410,14 @@ function myWeekHtml(byId){
       '<div style="padding:2px 12px 8px" aria-hidden="true">'+
       '<div style="height:7px;border-radius:4px;background:var(--green);width:'+Math.round(bs.pts/mx*100)+'%"></div>'+
       '<div style="height:7px;border-radius:4px;background:var(--red);width:'+Math.round(oppBs.pts/mx*100)+'%;margin-top:3px"></div></div>';
+    try{
+      const ytp = (typeof yetToPlay==="function") ? yetToPlay(md.me) : null;
+      const ytpO = (typeof yetToPlay==="function") ? yetToPlay(md.opp) : null;
+      if(ytp && (ytp.played+ytp.live)>0) h += '<div class="sbply"><span>🕐 You: '+ytp.played+' done · '+ytp.live+' live'+
+        (ytp.waiting.length?' · waiting on '+esc(ytp.waiting.slice(0,3).join(", ")):'')+
+        (ytpO?' — Them: '+ytpO.played+' done · '+ytpO.live+' live · '+ytpO.waiting.length+' left':'')+'</span></div>';
+      if(typeof liveWpChartHtml==="function") h += liveWpChartHtml();
+    }catch(e9){}
   }
   // flex agonizer (#651)
   const flexSl = bs.line.find(sl=>sl.lab==="FLEX");
@@ -488,7 +499,8 @@ async function renderScoreboard(){
         const p = byId[id]; if(!p) return;
         const got = +side.ppts[inv[id]]||0;
         const played = got!==0;
-        t2 += '<div class="sbply"><span>'+esc(p.name)+' <span class="dimtxt">'+p.pos+'</span></span><b class="mono"'+(played?'':' class="dimtxt"')+'>'+
+        const gsb2 = (typeof gsBadge==="function") ? gsBadge(p.team) : "";
+        t2 += '<div class="sbply"><span>'+esc(p.name)+' <span class="dimtxt">'+p.pos+(gsb2?' · '+gsb2:'')+'</span></span><b class="mono"'+(played?'':' class="dimtxt"')+'>'+
           (played ? got.toFixed(1) : "~"+weekProj(p, sb.w).toFixed(1))+'</b></div>';
       });
       return t2;
@@ -1097,7 +1109,8 @@ function scoreAlerts(){                                                         
       cur[id] = got;
       if(prev[id]!=null && got-prev[id] >= thr){
         const p = byId[id];
-        if(p) alertFire("score", "💥 "+p.name+" just banked "+(Math.round((got-prev[id])*10)/10), "now "+got.toFixed(1)+" on the day");
+        if(p){ alertFire("score", "💥 "+p.name+" just banked "+(Math.round((got-prev[id])*10)/10), "now "+got.toFixed(1)+" on the day");
+          if(got-prev[id]>=6 && typeof headerPulse==="function") headerPulse(); }
       }
     });
     window._lastPpts = cur;
@@ -1156,6 +1169,7 @@ function gameDayChecks(){                                                       
   inactiveSweep(); scoreAlerts(); closeGameAlert(); oppNewsAlert(); updateActionBadge();
   if(typeof planNag==='function') planNag();
   if(typeof journalRecord==='function') journalRecord();
+  if(typeof liveTick==='function') liveTick();
 }
 function seasonTicker(){                                                          // #701
   let tk = document.getElementById("ticker");
@@ -1167,6 +1181,8 @@ function seasonTicker(){                                                        
   const inv = {}; for(const k2 in s2o) inv[s2o[k2]] = k2;
   const items = [];
   items.push('<span class="tk steal">🏈 '+esc(md.me.name)+' <b>'+md.me.pts.toFixed(1)+'</b>'+(md.opp?' — <b>'+md.opp.pts.toFixed(1)+'</b> '+esc(md.opp.name):'')+'</span>');
+  try{ const sc = (typeof scenarioLine==="function") ? scenarioLine() : null;
+    if(sc) items.push('<span class="tk run">'+esc(sc)+'</span>'); }catch(e8){}
   md.me.starters.filter(Boolean).forEach(id=>{
     const p = byId[id]; if(!p) return;
     const got = +md.me.ppts[inv[id]] || 0;
