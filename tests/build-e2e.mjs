@@ -140,6 +140,12 @@ try {
     }
     return "OK";
   })()));
+  // Mobile nav structure (#924–#938)
+  out.push("mobile:"+((()=>{try{
+    const nav=mobileNavHtml(), sheet=moreSheetHtml();
+    return (nav.match(/data-tab=/g)||[]).length===5 && nav.includes("More") &&
+      (sheet.match(/<button/g)||[]).length===8 && typeof moreSheet==="function" && typeof mountMobileNav==="function";
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // Motion & calm mode (#909–#923)
   out.push("motion:"+((()=>{try{
     applyCalm(true);

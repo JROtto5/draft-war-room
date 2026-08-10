@@ -1257,6 +1257,7 @@ function renderSeasonPage(){
   sp.hidden = false;
   pool.style.display = window._poolShow ? "" : "none";
   try{ if(window._density===undefined){ window._density = !!localStorage.getItem(LS_KEY+"-dense"); document.body.classList.toggle("compact", window._density); } }catch(e){}
+  if(typeof mountMobileNav==="function") mountMobileNav();
   const prev = Array.from(sp.querySelectorAll(".spteam b")).map(b=>parseFloat(b.textContent)||0);
   const prevTiles = Array.from(sp.querySelectorAll(".sptiles .sstile b")).map(b=>b.textContent);
   sp.innerHTML = seasonPageHtml();
@@ -1502,5 +1503,57 @@ function countUp(el, to, ms){                                                   
     requestAnimationFrame(step);
   }catch(e){ el.textContent = String(to); }
 }
+
+/* ---------- R57 Mobile app feel (#924–#938) ---------- */
+function mobileNavHtml(){                                                        // #924
+  const tab = (fn, ico, lab)=>'<button data-tab="'+lab+'" onclick="'+fn+'"><span>'+ico+'</span>'+lab+'</button>';
+  return tab("renderGamePlan()","🏆","Plan")+tab("renderSim()","🎲","Sim")+
+    tab("renderScoreboard()","📊","Scores")+tab("renderWaivers()","📥","Wire")+
+    tab("moreSheet()","⋯","More");
+}
+function moreSheetHtml(){                                                        // #925
+  const b = (fn, ico, lab)=>'<button onclick="'+fn+';document.getElementById(\'moreSheet\').remove()"><span>'+ico+'</span>'+lab+'</button>';
+  return b("renderTrades()","🔁","Trades")+b("renderSeasonStats()","📈","Season")+
+    b("renderRituals()","🧘","Ritual")+b("egoDash()","😤","Ego")+
+    b("weeklyRecap2()","📖","Recap")+b("renderAlertCenter()","🔔","Alerts")+
+    b("document.getElementById('gradeBtn').click()","🎓","Report")+b("injuryDigest()","🩹","Health");
+}
+function moreSheet(){
+  const old = document.getElementById("moreSheet"); if(old){ old.remove(); return; }
+  const ov = document.createElement("div"); ov.id = "moreSheet"; ov.className = "snov";
+  ov.innerHTML = '<div class="mssheet" role="dialog" aria-label="More"><div class="msgrip" aria-hidden="true"></div><div class="msgrid">'+moreSheetHtml()+'</div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{ if(e.target===ov) ov.remove(); });
+}
+function mountMobileNav(){
+  if(document.getElementById("mobNav")) return;
+  if(!SEASON.on || (typeof appRoute==="function" && appRoute()!=="season")) return;
+  const nav = document.createElement("nav");
+  nav.id = "mobNav"; nav.setAttribute("aria-label", "Season navigation");
+  nav.innerHTML = mobileNavHtml();
+  document.body.appendChild(nav);
+}
+/* pull-feel refresh (#933) */
+(function(){
+  let y0 = null;
+  document.addEventListener("touchstart", e=>{ y0 = (window.scrollY<=0 && SEASON.on) ? e.touches[0].clientY : null; }, {passive:true});
+  document.addEventListener("touchend", e=>{
+    if(y0==null) return;
+    const dy = (e.changedTouches[0].clientY - y0); y0 = null;
+    if(dy>90 && window.scrollY<=0 && !window._pulling){
+      window._pulling = true;
+      toast("↻ Refreshing…");
+      Promise.all([leagueWeekData(true), myWeekData(true), myLiveIds(true)])
+        .then(()=>{ if(typeof renderNow==="function") renderNow(); })
+        .finally(()=>{ window._pulling = false; });
+    }
+  }, {passive:true});
+})();
+/* keyboard avoidance (#936) */
+document.addEventListener("focusin", e=>{
+  if(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && window.innerWidth<700){
+    setTimeout(()=>{ try{ e.target.scrollIntoView({block:"center", behavior:"smooth"}); }catch(e2){} }, 250);
+  }
+});
 
 window.__mod = window.__mod || []; window.__mod.push("win.js");

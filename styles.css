@@ -795,3 +795,45 @@ body.calm *,body.calm *::before,body.calm *::after{animation:none !important;tra
   .spdial circle:nth-child(2),.flashup,.flashdown,.sstile b.pulse{animation:none !important}
   .sscard,.sstile,.deckbtn,.ssquick button{transition:none}
 }
+
+/* ---------- R57 mobile app feel (#924–#938) ---------- */
+#mobNav{display:none}
+@media (max-width:640px){
+  #seasonDeck{display:none}                                   /* tab bar replaces the docked deck */
+  #mobNav{position:fixed;left:0;right:0;bottom:0;z-index:300;display:flex;
+    background:var(--headerbg);border-top:1px solid var(--line);
+    padding:4px 6px calc(4px + env(safe-area-inset-bottom))}
+  #mobNav button{flex:1;min-height:48px;background:none;border:none;color:var(--dim);
+    display:flex;flex-direction:column;align-items:center;gap:1px;font-size:9.5px;font-weight:700;
+    letter-spacing:.06em;text-transform:uppercase;border-radius:var(--r-sm)}
+  #mobNav button span{font-size:19px}
+  #mobNav button:active{background:rgba(240,180,41,.1);color:var(--gold)}
+  body:has(#mobNav) #ticker{bottom:calc(64px + env(safe-area-inset-bottom))}
+  body:has(#mobNav) .wrap{padding-bottom:70px}
+  .ssbbug{position:sticky;top:4px;z-index:6;box-shadow:0 4px 14px rgba(0,0,0,.3)}   /* #929 */
+  .snov{padding:0;display:flex;align-items:flex-end}                                 /* #927 sheets */
+  .snov .sbcard{max-width:none;width:100%;margin:0;border-radius:18px 18px 0 0;
+    max-height:88vh;overflow-y:auto;animation:sheetUp .28s cubic-bezier(.2,.8,.3,1)}
+  .ssrow{min-height:44px}                                                            /* #926 */
+  .deckbtn,.undo1,.hbtn{min-height:38px}
+  .sssub{font-size:10px}                                                              /* #934 */
+  header .hbtn{display:none}
+  header #seasonBtn,header #draftMenuBtn,header #settingsBtn,header #themeBtn{display:inline-block}  /* #930 */
+}
+@keyframes sheetUp{from{transform:translateY(30%);opacity:.4}to{transform:none;opacity:1}}
+.mssheet{background:var(--panel);border-radius:18px 18px 0 0;width:100%;padding:8px 14px calc(16px + env(safe-area-inset-bottom));animation:sheetUp .28s cubic-bezier(.2,.8,.3,1)}
+.msgrip{width:38px;height:4px;border-radius:2px;background:var(--line);margin:4px auto 12px}
+.msgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.msgrid button{background:var(--elev0);border:1px solid var(--line);border-radius:var(--r-md);color:var(--text);
+  min-height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10.5px;font-weight:700}
+.msgrid button span{font-size:20px}
+.msgrid button:active{border-color:var(--gold)}
+@media (max-width:900px) and (orientation:landscape){                                /* #932 */
+  #mobNav{left:0;right:auto;top:0;bottom:0;flex-direction:column;width:64px;
+    border-top:none;border-right:1px solid var(--line);padding:8px 4px}
+  body:has(#mobNav) .wrap{padding-left:70px;padding-bottom:0}
+}
+@media (display-mode: standalone){ header{padding-top:calc(6px + env(safe-area-inset-top))} }  /* #931 */
+.snov,#sbOverlay{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}                 /* #937 */
+.ssrow:active,.sscard:active{background:rgba(240,180,41,.07)}                                  /* #935 */
+@media (prefers-reduced-motion: reduce){.snov .sbcard,.mssheet{animation:none}}
