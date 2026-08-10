@@ -610,3 +610,63 @@ body.heater .hero .tag{color:var(--gold)}
 @keyframes seasonPulse{0%,100%{box-shadow:0 0 0 0 rgba(240,180,41,.45)}50%{box-shadow:0 0 0 6px rgba(240,180,41,0)}}
 #seasonBtn.notyet{animation:seasonPulse 1.6s ease infinite}
 @media (prefers-reduced-motion: reduce){#seasonBtn.notyet{animation:none;outline:2px solid var(--gold)}}
+
+/* ---------- R52 The Rail (#849–#863) ---------- */
+body.seasonled .left .panel{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow-y:auto;scrollbar-width:thin}
+.ssb{display:flex;flex-direction:column;gap:10px}
+.ssbbug{display:grid;grid-template-columns:1fr auto 1fr;align-items:stretch;background:linear-gradient(135deg,#060a0f,#101825);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+:root[data-theme="light"] .ssbbug{background:linear-gradient(135deg,#1b2735,#243447)}
+.ssbteam{padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.ssbteam span{font-size:9.5px;font-weight:800;letter-spacing:.14em;color:#8b98a9}
+.ssbteam b{font-size:22px;color:#e8eef5}
+.ssbteam.me{border-left:3px solid var(--gold)}
+.ssbteam.opp{text-align:right;border-right:3px solid var(--red)}
+.ssbteam.opp span{align-self:flex-end}
+.ssbmid{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 10px;border-left:1px solid rgba(255,255,255,.07);border-right:1px solid rgba(255,255,255,.07)}
+.ssbmid b{font-size:17px}
+.ssbmid span{font-size:8.5px;letter-spacing:.16em;color:#8b98a9}
+.sstiles{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.sstile{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:7px 4px;text-align:center;display:flex;flex-direction:column;gap:1px}
+.sstile b{font-size:14.5px}
+.sstile span{font-size:8.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim)}
+.sstile.up b{color:var(--green)}
+.sstile.down b{color:var(--red)}
+.ssquick{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.ssquick button{background:var(--panel);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:9px 4px 7px;font-size:11px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;transition:transform .12s,border-color .12s}
+.ssquick button span{font-size:18px}
+.ssquick button:hover{border-color:var(--gold);transform:translateY(-1px)}
+.ssquick button:active{transform:scale(.96)}
+.sscard{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-top:10px;overflow:hidden}
+.sscard.warn{border-color:var(--red)}
+.sshead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;font-size:10px;font-weight:800;letter-spacing:.14em;color:var(--dim);border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.02),transparent)}
+.sspad{padding:9px 12px;font-size:12.5px}
+.ssrow{display:flex;align-items:center;gap:9px;padding:6px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+.ssrow:last-child{border-bottom:none}
+.ssrow:hover{background:rgba(240,180,41,.05)}
+.ssrow:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+.ssrow .avatar{border-radius:50%;flex:0 0 auto}
+.ssslot{flex:0 0 38px;text-align:center;font-size:9px;font-weight:800;letter-spacing:.08em;border-radius:5px;padding:2px 0;background:var(--line);color:var(--dim)}
+.ssslot.qb{background:rgba(232,80,120,.16);color:var(--qb)}
+.ssslot.rb{background:rgba(56,178,120,.16);color:var(--rb)}
+.ssslot.wr{background:rgba(66,153,225,.16);color:var(--wr)}
+.ssslot.te{background:rgba(237,137,54,.16);color:var(--te)}
+.ssslot.def{background:rgba(160,174,192,.16);color:var(--def)}
+.ssnm{flex:1;min-width:0;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ssnm .sssub{display:block;font-size:10px;font-weight:500;color:var(--dim)}
+.ssnick{color:var(--gold)}
+.ssval{font-size:14px}
+.ssval.dim{color:var(--dim);font-weight:400}
+.ssbench{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-top:10px;overflow:hidden}
+.ssbench summary{padding:8px 12px;font-size:10px;font-weight:800;letter-spacing:.14em;color:var(--dim);cursor:pointer;list-style:none;display:flex;justify-content:space-between}
+.ssbench summary::after{content:"▾"}
+.ssbench[open] summary::after{content:"▴"}
+.ssbyes{display:flex;flex-wrap:wrap;gap:6px}
+.ssbye{background:var(--line);border-radius:7px;padding:3px 9px;font-size:11px}
+.ssbye b{color:var(--gold);margin-right:5px}
+/* skeleton shimmer (#858) */
+.skava{width:30px;height:30px;border-radius:50%;background:var(--line);flex:0 0 auto}
+.skln{display:block;height:10px;width:70%;border-radius:5px;background:var(--line)}
+.ssrow.skel,.ssbbug.skel{position:relative;overflow:hidden}
+.ssrow.skel::after,.ssbbug.skel::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.05),transparent);animation:shim 1.4s infinite}
+@keyframes shim{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+@media (prefers-reduced-motion: reduce){.ssrow.skel::after,.ssbbug.skel::after,.ssquick button{animation:none;transition:none}}

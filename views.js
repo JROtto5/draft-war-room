@@ -678,6 +678,17 @@ function renderBest(){
   const top = scored[0];
   const hero = $("#hero");
   const doneN = myIds().length;
+  if(typeof sidebarSeasonHtml==="function" && typeof SEASON!=="undefined" && SEASON.on &&
+     typeof appRoute==="function" && appRoute()==="season"){                     // #849 the rail
+    const rail = sidebarSeasonHtml(idIndex());
+    hero.innerHTML = rail.hero;
+    $("#baList").innerHTML = rail.list;
+    const h2t = document.querySelector(".left .panel h2");
+    if(h2t && !h2t.dataset.season){ h2t.dataset.season = "1"; h2t.innerHTML = '<span class="dot"></span> Otto5 · Buck Breakers'; }
+    document.title = "Draft War Room — 2QB";
+    updatePanic(null, null);
+    return;
+  }
   if((typeof SEASON!=="undefined" && SEASON.on) || (doneN >= S.settings.roster && doneN > 0)){
     const byIdH = idIndex();
     const bsH = bestStarters(myIds(), byIdH);

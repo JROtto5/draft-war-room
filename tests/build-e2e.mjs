@@ -140,6 +140,13 @@ try {
     }
     return "OK";
   })()));
+  // The rail: sidebar structure (#849–#863)
+  out.push("rail:"+((()=>{try{
+    const r=sidebarSeasonHtml(idIndex());
+    return typeof r.hero==="string" && typeof r.list==="string" &&
+      r.hero.includes("ssbbug") && r.hero.includes("sstile") && r.hero.includes("ssquick") &&
+      r.list.includes("STARTING NINE") && (r.list.includes("ssrow") || r.list.includes("skel"));
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // Routes: / season, /draft draft, e2e pinned to draft (#845–#848)
   out.push("route:"+((()=>{try{
     const sp=document.getElementById("seasonPage"), pp=document.getElementById("poolPanel");

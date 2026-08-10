@@ -1214,4 +1214,111 @@ function renderSeasonPage(){
   sp.innerHTML = h;
 }
 
+/* ---------- R52 The Rail: season sidebar rebuilt (#849–#863) ---------- */
+function ssTile(label, value, cls){
+  return '<div class="sstile'+(cls?' '+cls:'')+'"><b class="mono">'+value+'</b><span>'+label+'</span></div>';
+}
+function sidebarSeasonHtml(byId){                                                // returns {hero, list}
+  const w = curWeek(), md = WEEKST.mate;
+  const ids = rosterIds();
+  const bs = ids.length ? bestStartersWeek(ids, byId, w) : null;
+  const opBs = (md && md.opp) ? bestStartersWeek(md.opp.ids, byId, w) : null;
+  const ms = (typeof myStandingsRow==="function") ? myStandingsRow() : null;
+  const myRid = +S.settings.sleeperRosterId;
+  const odds = SEASON.lastOdds ? SEASON.lastOdds[myRid] : null;
+  let streak = 0;
+  try{
+    const rows = myWeeklyRows(seasonArchive());
+    for(let i=rows.length-1;i>=0;i--){ if(rows[i].opp && rows[i].m.points>rows[i].opp.points) streak++; else break; }
+  }catch(e){}
+  const wpPct = (window._liveWp!=null && typeof anyGameLive==="function" && anyGameLive()) ? window._liveWp
+    : (bs && opBs ? Math.round(winProb(bs.pts, opBs.pts)*100) : null);
+  // — scorebug (#850)
+  let hero = '<div class="ssb">';
+  if(md && md.me){
+    hero += '<div class="ssbbug" role="img" aria-label="Live score">'+
+      '<div class="ssbteam me"><span>OTTO5</span><b class="mono">'+md.me.pts.toFixed(1)+'</b></div>'+
+      '<div class="ssbmid">'+(wpPct!=null?'<b class="mono" style="color:var(--'+(wpPct>=55?'green':wpPct<=45?'red':'gold')+')">'+wpPct+'%</b><span>WIN</span>':'<b>W'+w+'</b><span>WEEK</span>')+'</div>'+
+      '<div class="ssbteam opp"><span>'+esc((md.opp?md.opp.name:"—").slice(0,12).toUpperCase())+'</span><b class="mono">'+(md.opp?md.opp.pts.toFixed(1):"0.0")+'</b></div>'+
+      '</div>';
+  } else {
+    hero += '<div class="ssbbug skel" aria-hidden="true"><div class="ssbteam me"><span>OTTO5</span><b class="mono">·&#8202;·</b></div>'+
+      '<div class="ssbmid"><b>W'+w+'</b><span>WEEK</span></div><div class="ssbteam opp"><span>LOADING</span><b class="mono">·&#8202;·</b></div></div>';
+  }
+  // — stat tiles (#851)
+  hero += '<div class="sstiles">'+
+    ssTile("record", ms ? ms.row.w+'-'+ms.row.l+(ms.row.t?'-'+ms.row.t:'') : '—')+
+    ssTile("place", ms ? ordinal(ms.place) : '—')+
+    ssTile("playoffs", odds!=null ? odds+'%' : '—', odds!=null ? (odds>=60?'up':odds<=30?'down':'') : '')+
+    ssTile("streak", streak>=2 ? '🔥'+streak : (streak===1?'W1':'—'), streak>=3?'up':'')+
+    '</div>';
+  // — quick rail (#854)
+  hero += '<div class="ssquick" role="navigation" aria-label="Quick actions">'+
+    '<button onclick="renderGamePlan()" title="Game plan — G"><span>🏆</span>Plan</button>'+
+    '<button onclick="renderSim()" title="Simulator — M"><span>🎲</span>Sim</button>'+
+    '<button onclick="renderWaivers()" title="Waiver wire — V"><span>📥</span>Wire</button>'+
+    '<button onclick="scoutMyOpponent()" title="Scout this week\'s opponent"><span>🕵️</span>Scout</button>'+
+    '</div>';
+  hero += (typeof seasonDeckHtml==="function") ? seasonDeckHtml() : '';
+  hero += '</div>';
+  // — lineup card (#852)
+  let list = '';
+  const rowOf = (p, slotLab, val, dimVal)=>{
+    const e = injuryOf(p), sv = e ? injSeverity(e.s) : null;
+    const bye = typeof BYES!=="undefined" && BYES[p.team]===w;
+    const badge = (typeof gsBadge==="function") ? gsBadge(p.team) : "";
+    const nick = (typeof nicknameOf==="function") ? nicknameOf(p) : null;
+    return '<div class="ssrow" data-card="'+p.id+'" tabindex="0" role="button" aria-label="'+esc(p.name)+'">'+
+      avatarImg(p, 30)+
+      (slotLab?'<span class="ssslot '+p.pos.toLowerCase()+'">'+slotLab+'</span>':'')+
+      '<div class="ssnm">'+esc(p.name)+(nick?' <span class="ssnick" title="'+esc(nick)+'">★</span>':'')+
+      '<span class="sssub">'+(bye?'🚫 BYE':sv?'<span class="'+sv.cls+'">'+sv.label+'</span>':badge||p.team)+'</span></div>'+
+      '<b class="ssval mono'+(dimVal?' dim':'')+'">'+val+'</b></div>';
+  };
+  if(bs){
+    const s2o = (md && md.me) ? sleeperToOurs() : null;
+    const inv = {}; if(s2o) for(const k2 in s2o) inv[s2o[k2]] = k2;
+    list += '<div class="sscard"><div class="sshead">STARTING NINE<span class="mono">'+fmt(bs.pts)+' proj</span></div>'+
+      bs.line.filter(sl=>sl.p).map(sl=>{
+        const got = (md && md.me && md.me.ppts) ? (+md.me.ppts[inv[sl.p.id]]||0) : 0;
+        return rowOf(sl.p, sl.lab, got ? got.toFixed(1) : sl.wp.toFixed(1), !got);
+      }).join("")+'</div>';
+    const bench = ids.map(id=>byId[id]).filter(Boolean).filter(p=>!bs.starterIds.has(p.id));
+    if(bench.length) list += '<details class="ssbench"><summary>BENCH <span class="mono">'+bench.length+'</span></summary>'+
+      bench.sort((a,b)=>weekProj(b,w)-weekProj(a,w)).map(p=>rowOf(p, "", weekProj(p,w).toFixed(1), true)).join("")+'</details>';
+  } else {
+    list += '<div class="sscard"><div class="sshead">STARTING NINE</div>'+
+      Array.from({length:5},()=>'<div class="ssrow skel"><span class="skava"></span><div class="ssnm"><span class="skln"></span></div></div>').join("")+'</div>';
+  }
+  // — start/sit warning carried over
+  try{
+    if(md && md.me && md.me.starters && md.me.starters.filter(Boolean).length && bs){
+      const actual = md.me.starters.filter(Boolean);
+      const actPts = actual.map(id=>byId[id]).filter(Boolean).reduce((a,p)=>a+weekProj(p,w),0);
+      const left = Math.round((bs.pts-actPts)*10)/10;
+      if(left > 1) list += '<div class="sscard warn"><div class="sshead">⚠ LINEUP<span class="mono">−'+left+'</span></div>'+
+        '<div class="sspad">Your Sleeper lineup leaves <b>'+left+'</b> on the bench — open the <a href="#" onclick="renderGamePlan();return false">Game Plan</a>.</div></div>';
+    }
+  }catch(e){}
+  // — heating radar cards (#856)
+  if(SEASON.avail && SEASON.avail.length){
+    list += '<div class="sscard"><div class="sshead">🔥 HEATING · YOUR LEAGUE<span><button class="undo1" onclick="renderWaivers()">wire →</button></span></div>'+
+      SEASON.avail.slice(0,4).map(p=>'<div class="ssrow" data-card="'+p.id+'" tabindex="0" role="button">'+avatarImg(p,30)+
+        '<div class="ssnm">'+esc(p.name)+'<span class="sssub">'+p.pos+' · '+((typeof buzzOf==="function")?buzzOf(p).toLocaleString():'')+' adds/24h</span></div>'+
+        '<b class="ssval mono" style="color:var(--gold)">+</b></div>').join("")+'</div>';
+  }
+  // — byes strip (#857)
+  try{
+    const chips = [];
+    for(let fw=w+1; fw<=Math.min(14,w+4); fw++){
+      const outB = ids.map(id=>byId[id]).filter(Boolean).filter(p=>typeof BYES!=="undefined"&&BYES[p.team]===fw);
+      if(outB.length) chips.push('<span class="ssbye"><b>W'+fw+'</b>'+outB.map(p=>esc(p.name.split(" ").slice(-1)[0])).join(", ")+'</span>');
+    }
+    if(chips.length) list += '<div class="sscard"><div class="sshead">📆 BYES AHEAD</div><div class="sspad ssbyes">'+chips.join("")+'</div></div>';
+  }catch(e){}
+  if(typeof titleChaseHtml==="function") list += titleChaseHtml();
+  if(typeof hqMondayLine==="function") list += hqMondayLine();
+  return {hero, list};
+}
+
 window.__mod = window.__mod || []; window.__mod.push("win.js");
