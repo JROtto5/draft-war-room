@@ -140,6 +140,17 @@ try {
     }
     return "OK";
   })()));
+  // Season sim determinism (#997–#1011)
+  out.push("future:"+((()=>{try{
+    const fix={schedule:{1:[[1,2],[3,4]],2:[[1,3],[2,4]],3:[[1,4],[2,3]]},
+      mu:{1:120,2:100,3:95,4:90}, wins0:{1:0,2:0,3:0,4:0}, pf0:{1:0,2:0,3:0,4:0},
+      myRid:1, rivRid:2, spots:2, lastW:3, games:3, N:200, seed:9, myMult:1};
+    const a=seasonSimCore(fix), b=seasonSimCore(fix);
+    const worse=seasonSimCore(Object.assign({},fix,{seed:9,myMult:0.7}));
+    return JSON.stringify(a.recDist)===JSON.stringify(b.recDist) && a.titlePct>=0 &&
+      a.winsAvg>worse.winsAvg && a.seedCount.length===3 &&
+      typeof renderSeasonSim==="function" && typeof seasonSimData==="function" && typeof myEffMult()==="number";
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // CSV pipeline (#982–#996)
   out.push("csv2:"+((()=>{try{
     const nl=String.fromCharCode(10), qt=String.fromCharCode(34);

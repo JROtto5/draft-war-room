@@ -1594,6 +1594,7 @@ function seasonDeckHtml(){                                                      
     btn("renderScoreboard()","📊","Scores","League scoreboard, standings, playoff odds — S")+
     btn("renderTrades()","🔁","Trades","Trade center — D")+
     btn("renderSeasonStats()","📈","Season","Efficiency, luck, ROI, ghost season — X")+
+    btn("renderSeasonSim()","🔮","Future","500 simulated seasons — Y")+
     btn("renderRituals()","🧘","Ritual","Checklist, goals, grades, bright side")+
     btn("egoDash()","😤","Ego","The ego dashboard: hype card, receipts, speech, trash talk")+
     btn("weeklyRecap2()","📖","Recap","Last week's story + share card")+
@@ -1627,6 +1628,7 @@ document.addEventListener("keydown", e=>{                                       
   else if(k==="d"){ e.preventDefault(); renderTrades(); }
   else if(k==="x"){ e.preventDefault(); renderSeasonStats(); }
   else if(k==="m"){ e.preventDefault(); e.stopImmediatePropagation(); if(typeof renderSim==="function") renderSim(); }
+  else if(k==="y"){ e.preventDefault(); if(typeof renderSeasonSim==="function") renderSeasonSim(); }
   else if(k==="w"){ e.preventDefault(); const h2 = document.getElementById("hero"); if(h2) h2.scrollIntoView({behavior:"smooth", block:"start"}); }
 });
 

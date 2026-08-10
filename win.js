@@ -1542,7 +1542,7 @@ function toggleDensity(){
 function copyWkText(){ try{ navigator.clipboard.writeText(window._wkText).then(()=>toast("📋 Recap copied")); }catch(e){} }
 const ACT_OK = ["renderGamePlan","renderSim","renderScoreboard","renderWaivers","renderTrades","renderSeasonStats",
   "renderRituals","egoDash","weeklyRecap2","renderAlertCenter","injuryDigest","scoutMyOpponent","moreSheet",
-  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText","analystReport","stageOptimal","stageWinProb"];
+  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText","analystReport","stageOptimal","stageWinProb","renderSeasonSim"];
 document.addEventListener("click", e=>{
   const t = e.target.closest("[data-act],[data-scout],[data-clickid]");
   if(!t) return;
@@ -1778,6 +1778,9 @@ function analystReport(){                                                       
     " heating league-wide and unrostered in Buck Breakers.");
   if(soft) paras.push("Schedule note: "+soft.p.name+" enters the softest remaining stretch on the roster (avg defense rank "+soft.sos+").");
   if(p2p) paras.push("Season line: "+p2p.line+".");
+  try{
+    if(window._lastSeasonSim) paras.push("The 500-season sim says: most likely "+window._lastSeasonSim.rec+", "+window._lastSeasonSim.title+"% to win it all.");
+  }catch(e){}
   const ov = document.createElement("div"); ov.id = "anOverlay"; ov.className = "snov";
   ov.innerHTML = '<div class="sbcard" role="dialog" aria-label="Analyst brief"><button class="sbx" data-anx="1">✕</button>'+
     '<div class="tag">📰 THE ANALYST — WEEK '+w+' BRIEF</div>'+
@@ -1946,5 +1949,122 @@ document.addEventListener("click", e=>{                                         
   const bf = e.target.closest("[data-boostf]");
   if(bf){ e.preventDefault(); boostFadePlayer(bf.dataset.boostf, +bf.dataset.dir); }
 });
+
+/* ---------- R62 Season simulator (#997–#1011) ---------- */
+function seasonSimCore(opts){                                                    // pure (#997/#1011)
+  const {schedule, mu, wins0, pf0, myRid, rivRid, N, seed, myMult, spots, lastW} = opts;
+  const rng = mulberry32(seed==null?77:seed);
+  const rids = Object.keys(mu).map(Number);
+  const recDist = {}, rivalDist = {}, seedCount = new Array((spots||6)+1).fill(0);   // last bucket = miss
+  let titles = 0, winsSum = 0;
+  const weeks = Object.keys(schedule).map(Number).sort((a,b)=>a-b).filter(w2=>w2<=lastW);
+  const noise = ()=> (rng()+rng()+rng()-1.5)*28;
+  for(let s2=0; s2<N; s2++){
+    const wins = {}, pf = {};
+    rids.forEach(r=>{ wins[r] = wins0[r]||0; pf[r] = pf0[r]||0; });
+    weeks.forEach(w2=>{
+      (schedule[w2]||[]).forEach(pair=>{
+        const a = pair[0], b = pair[1];
+        const sa = (a===myRid ? mu[a]*(myMult||1) : mu[a]) + noise();
+        const sb = (b===myRid ? mu[b]*(myMult||1) : mu[b]) + noise();
+        pf[a]+=sa; pf[b]+=sb;
+        if(sa>=sb) wins[a]++; else wins[b]++;
+      });
+    });
+    const order = rids.slice().sort((x,y)=> wins[y]-wins[x] || pf[y]-pf[x]);
+    const mySeed = order.indexOf(myRid);
+    winsSum += wins[myRid];
+    const rk = wins[myRid]+"-"+(weeks.length + Object.values(wins0).length? (opts.games - wins[myRid]) : 0);
+    const key = wins[myRid]+"-"+(opts.games - wins[myRid]);
+    recDist[key] = (recDist[key]||0)+1;
+    if(rivRid!=null){ const rk2 = wins[rivRid]+"-"+(opts.games - wins[rivRid]); rivalDist[rk2]=(rivalDist[rk2]||0)+1; }
+    if(mySeed < (spots||6)){
+      seedCount[mySeed]++;
+      // bracket: seeds 0,1 bye; (2 v 5), (3 v 4); winners meet byes; final (#1000)
+      const seeds = order.slice(0, spots||6);
+      const g = (x,y)=> (mu[x]+noise()) >= (mu[y]+noise()) ? x : y;
+      const w1 = g(seeds[2], seeds[5]), w2 = g(seeds[3], seeds[4]);
+      const f1 = g(seeds[0], w2), f2 = g(seeds[1], w1);
+      if(g(f1, f2)===myRid) titles++;
+    } else seedCount[spots||6]++;
+  }
+  return {recDist, rivalDist, seedCount, titlePct:Math.round(titles/N*1000)/10, winsAvg:Math.round(winsSum/N*10)/10, N};
+}
+async function seasonSimData(){                                                  // schedule + inputs from live league
+  if(!SCOREB.rosters) await leagueWeekData(false);
+  if(!SCOREB.rosters) return null;
+  await playoffOdds(10);                                                         // warms SCOREB.future + lastOdds
+  const w = curWeek(), LAST = 14;
+  const schedule = {};
+  const addWeek = (wk, mus)=>{ const pairs = {}; (mus||[]).forEach(m=>{ (pairs[m.matchup_id]=pairs[m.matchup_id]||[]).push(m.roster_id); });
+    schedule[wk] = Object.values(pairs).filter(p2=>p2.length===2); };
+  addWeek(w, SCOREB.mus);
+  for(let fw=w+1; fw<=LAST; fw++) addWeek(fw, (SCOREB.future||{})[fw]);
+  const st = standingsRows(SCOREB.rosters, SCOREB.users);
+  const mu = {}, wins0 = {}, pf0 = {};
+  st.forEach(r=>{ mu[r.rid] = Math.max(80, rosterStrengthOf(r.rid)/16); wins0[r.rid] = r.w; pf0[r.rid] = r.pf; });
+  const rivRid = (S.settings.slot2rid && S.settings.rivalSlot) ? +S.settings.slot2rid[String(S.settings.rivalSlot)] : null;
+  return {schedule, mu, wins0, pf0, myRid:+S.settings.sleeperRosterId, rivRid, spots:6, lastW:LAST, games:14};
+}
+function myEffMult(){                                                            // #1002
+  try{
+    const rows = myWeeklyRows(seasonArchive());
+    const effs = rows.map(r=>r.eff?r.eff.eff:null).filter(Boolean);
+    if(!effs.length) return 0.97;
+    return Math.max(0.85, Math.min(1, effs.reduce((a,b)=>a+b,0)/effs.length/100));
+  }catch(e){ return 0.97; }
+}
+async function renderSeasonSim(){                                                // #997
+  const old = document.getElementById("fsOverlay"); if(old){ old.remove(); return; }
+  toast("🔮 Simulating the rest of the season…");
+  const data = await seasonSimData();
+  if(!data) return toast("Link the league first", {warn:true});
+  const seed = curWeek()*31 + (window._simReroll||0);                             // #1004
+  const opt = seasonSimCore(Object.assign({}, data, {N:500, seed, myMult:1}));
+  const act = seasonSimCore(Object.assign({}, data, {N:500, seed:seed+1, myMult:myEffMult()}));  // #1002
+  const w = curWeek(), byId = idIndex();
+  // week-by-week win prob strip (#1001)
+  const myBs = bestStartersWeek(rosterIds(), byId, w);
+  const strip = [];
+  Object.keys(data.schedule).map(Number).sort((a,b)=>a-b).forEach(wk=>{
+    (data.schedule[wk]||[]).forEach(pair=>{
+      if(!pair.includes(data.myRid)) return;
+      const opp = pair[0]===data.myRid ? pair[1] : pair[0];
+      const wp = winProb(data.mu[data.myRid], data.mu[opp]);
+      strip.push({w:wk, opp:ridName(opp), wp:Math.round(wp*100), rival:opp===data.rivRid});
+    });
+  });
+  const topRec = Object.entries(opt.recDist).sort((a,b)=>b[1]-a[1])[0];
+  window._lastSeasonSim = {rec:topRec[0], title:opt.titlePct};                    // #1009
+  const recBars = Object.entries(opt.recDist).sort((a,b)=>(+b[0].split("-")[0])-(+a[0].split("-")[0]));
+  const mxRec = Math.max(...recBars.map(x=>x[1]), 1);
+  const seedLabels = ["1st seed","2nd seed","3rd","4th","5th","6th","MISS"];
+  const effCost = Math.round((opt.winsAvg-act.winsAvg)*10)/10;
+  const ov = document.createElement("div"); ov.id = "fsOverlay"; ov.className = "snov";
+  let h = '<div class="sbcard" role="dialog" aria-label="Season simulator"><button class="sbx" data-fsx="1">✕</button>';
+  h += '<div class="tag">🔮 500 SIMULATED SEASONS — from week '+w+'</div>';
+  h += '<div class="benchhead" style="font-size:15px">Most likely: <b class="mono" style="color:var(--gold)">'+topRec[0]+'</b> ('+Math.round(topRec[1]/opt.N*100)+'% of sims) · avg <b class="mono">'+opt.winsAvg+'</b> wins</div>';
+  h += '<div class="benchhead">📊 Final record</div>'+recBars.map(([k,n])=>
+    '<div class="bar" style="display:grid;grid-template-columns:44px 1fr 44px;gap:8px;align-items:center;font-size:12px;padding:1px 12px">'+
+    '<span class="mono">'+k+'</span><span style="height:9px;background:var(--line);border-radius:5px;overflow:hidden"><i style="display:block;height:100%;width:'+Math.round(n/mxRec*100)+'%;background:var(--green);border-radius:5px"></i></span>'+
+    '<span class="mono dim">'+Math.round(n/opt.N*100)+'%</span></div>').join("");
+  h += '<div class="benchhead">🎫 Where you land</div><div class="scarce" style="padding:0 12px 6px">'+
+    opt.seedCount.map((n,i)=>'<span class="scpill'+(i<2?' good':i===6?' warn':'')+'">'+seedLabels[i]+' <b class="mono">'+Math.round(n/opt.N*100)+'%</b></span>').join("")+'</div>';
+  h += '<div class="sbply"><span>👑 Championship chain</span><b class="mono">make it '+Math.round((1-opt.seedCount[6]/opt.N)*100)+'% → title <span style="color:var(--gold)">'+opt.titlePct+'%</span></b></div>';
+  if(effCost>=0.2) h += '<div class="sbply"><span>🎯 Lineup discipline is worth</span><b style="color:var(--red)">'+effCost+' wins</b><span class="dimtxt">optimal vs your '+Math.round(myEffMult()*100)+'% efficiency</span></div>';
+  h += '<div class="benchhead">🗓 The road (win prob by week)</div><div class="scarce" style="padding:0 12px 8px">'+
+    strip.map(x=>'<span class="scpill'+(x.rival?' warn':'')+'" title="week '+x.w+' vs '+esc(x.opp)+'">W'+x.w+' '+esc(x.opp.slice(0,8))+' <b class="mono" style="color:var(--'+(x.wp>=55?'green':x.wp<=45?'red':'gold')+')">'+x.wp+'%</b></span>').join("")+'</div>';
+  if(data.rivRid!=null){
+    const rTop = Object.entries(act.rivalDist).sort((a,b)=>b[1]-a[1])[0];
+    if(rTop) h += '<div class="sbply"><span>😈 Rival most likely lands</span><b class="mono">'+rTop[0]+'</b></div>';
+  }
+  h += '<div style="padding:10px 0"><button class="hbtn" data-fsroll="1">🎲 Re-roll</button></div></div>';
+  ov.innerHTML = h;
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{
+    if(e.target===ov || e.target.closest("[data-fsx]")) return ov.remove();
+    if(e.target.closest("[data-fsroll]")){ window._simReroll = (window._simReroll||0)+1; ov.remove(); renderSeasonSim(); }
+  });
+}
 
 window.__mod = window.__mod || []; window.__mod.push("win.js");
