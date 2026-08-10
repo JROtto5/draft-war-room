@@ -210,6 +210,13 @@ function allPlayers(){
   return all;
 }
 
+/* one PPG, everywhere (#1042): override-aware weekly scoring rate for display */
+function ppgOf(p){ return Math.round(p.proj/16*10)/10; }
+function bakedProjOf(p){                                                         // #1043
+  const r = (typeof RAW!=="undefined") && RAW.find(x=>x[0]===p.name && x[2]===p.pos);
+  return r ? r[3] : null;
+}
+
 /* Snake draft math — overall pick numbers for my slot */
 function myOverallPicks(){
   const t=S.settings.teams, slot=Math.min(S.settings.slot,t), out=[];
@@ -1656,6 +1663,8 @@ function openCard(id){
         (ci?'<span class="chip" style="'+(ci.color?'color:#fff;background:'+ci.color+';border-color:'+ci.color:'')+'">🎓 '+esc(ci.name)+(ci.conf?' · '+ci.conf:'')+'</span>':'')+
       '</div></div>'+
     '</div>'+
+    (S.overrides[id]!=null ? '<div class="cintel" style="color:var(--gold)">📌 MY NUMBER: <b class="mono">'+ppgOf(p)+'/wk</b>'+
+      (bakedProjOf(p)!=null ? ' <span class="dimtxt">(baked: '+Math.round(bakedProjOf(p)/16*10)/10+'/wk)</span>' : '')+'</div>' : '')+
     '<div class="ctabs">'+tabBtn("ov","Overview")+tabBtn("hist","History")+tabBtn("intel","Intel")+'</div>'+
     '<div class="ctabbody">'+(tab==="hist"?history:tab==="intel"?intelTab:overview)+
       (typeof cardSeasonStrip==="function" ? cardSeasonStrip(p) : '')+'</div>'+   // season strip (#728)

@@ -1912,7 +1912,7 @@ function csvReport(res, fname){                                                 
 }
 function exportProjCsv(){                                                        // #989
   const csv = "name,ppg\n" + allPlayers().filter(p=>p.pos!=="DEF")
-    .map(p=>'"'+p.name.replace(/"/g,"")+'",'+(Math.round(p.proj/16*10)/10)).join("\n");
+    .map(p=>'"'+p.name.replace(/"/g,"")+'",'+ppgOf(p)).join("\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv"}));
   a.download = "war-room-projections.csv"; a.click();
@@ -1952,7 +1952,7 @@ async function sleeperPpgImport(){                                              
 }
 function setMyPpg(id){                                                           // #986
   const p = idIndex()[id]; if(!p) return;
-  const cur = Math.round(p.proj/16*10)/10;
+  const cur = ppgOf(p);
   const v = prompt("Your PPG for "+p.name+" (now "+cur+"):", cur);
   if(v==null) return;
   const ppg = parseFloat(v);
@@ -1965,7 +1965,7 @@ function boostFadePlayer(id, dir){                                              
   const p = idIndex()[id]; if(!p) return;
   S.overrides[id] = Math.round(p.proj*(dir>0?1.1:0.9)*10)/10;
   _memo = {key:null}; commit(); renderNow();
-  toast((dir>0?"📈 +10% ":"📉 −10% ")+p.name+" → "+Math.round(S.overrides[id]/16*10)/10+"/wk");
+  toast((dir>0?"📈 +10% ":"📉 −10% ")+p.name+" → "+ppgOf(idIndex()[id])+"/wk");
 }
 (function(){
   const t1=document.getElementById("csvTplBtn"), t2=document.getElementById("csvClearBtn"), t3=document.getElementById("csvSleeperBtn");

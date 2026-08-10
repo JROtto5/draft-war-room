@@ -140,6 +140,23 @@ try {
     }
     return "OK";
   })()));
+  // Data correctness matrix (#1042–#1056)
+  out.push("truth:"+((()=>{try{
+    const p=allPlayers().find(x=>x.pos==="WR" && !injuryOf(x) && (typeof BYES==="undefined" || BYES[x.team]!==3));
+    S.overrides[p.id]=320; _memo={key:null};                                     // pin at 20 ppg
+    const p2=allPlayers().find(x=>x.id===p.id);
+    const ppg=ppgOf(p2), wk=weekProj(p2,3);
+    const line=buildSimLine(bestStartersWeek([p2.id], idIndex(), 3));
+    const nv=nextWeeksValue(p2,3,3);
+    const varOk=playerVariance(p2)>0;
+    const consistent = ppg===20 && wk>16 && wk<24 && line.length===1 &&
+      Math.abs(line[0].mu-wk)<0.01 && nv>10 && varOk &&
+      String(wk).length<=5 && bakedProjOf(p2)!=null;                             // #1054 no float tails
+    const exported = JSON.parse(JSON.stringify(S)).overrides[p.id]===320;        // #1051
+    S.overrides={}; _memo={key:null}; commit();
+    const back=ppgOf(allPlayers().find(x=>x.id===p.id))!==20 || bakedProjOf(p2)===320;
+    return consistent && exported && back;
+  }catch(e){ S.overrides={}; return false; }})()?"OK":"BAD"));
   // Forms & flows (#1027–#1041)
   out.push("flows:"+((()=>{try{
     localStorage.removeItem(LS_KEY+"-alertlog");
