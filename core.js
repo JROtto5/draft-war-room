@@ -1670,6 +1670,8 @@ function openCard(id){
       '<button class="undo1" data-notetpl="'+id+'" title="Quick note: handcuff / flier / sleeper">📎</button>'+
       '<button class="undo1" data-cmpfrom="'+id+'">⚖</button>'+
       '<button class="undo1" data-setppg="'+id+'" title="Set my PPG">✏️ ppg</button>'+
+      ((typeof SEASON!=="undefined" && SEASON.on && SEASON.rostered && !SEASON.rostered.has(id) && status!=="on your roster") ?
+        '<button class="undo1" data-cardclaim="'+id+'" title="Plan a waiver claim">＋ claim</button>' : '')+
       '<button class="undo1" data-boostf="'+id+'" data-dir="1" title="Boost 10%">📈</button>'+
       '<button class="undo1" data-boostf="'+id+'" data-dir="-1" title="Fade 10%">📉</button>'+
       '<button class="undo1" data-pin="'+id+'">'+(window._pinned===id?"📌 pinned":"📌")+'</button>'+

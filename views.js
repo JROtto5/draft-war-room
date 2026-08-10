@@ -519,6 +519,7 @@ const PALETTE_ACTIONS = [
   ["🎲 Simulate my matchup", ()=>renderSim()],
   ["🧘 Rituals & goals", ()=>renderRituals()],
   ["🔮 Season simulator", ()=>renderSeasonSim()],
+  ["🕵️ Scout a team…", ()=>scoutPicker()],
   ["⚔ Jump: matchup", ()=>{ const el=document.getElementById("spMatchup"); if(el) el.scrollIntoView({behavior:"smooth"}); }],
   ["🏆 Jump: standings", ()=>{ const el=document.getElementById("spStandings"); if(el) el.scrollIntoView({behavior:"smooth"}); }],
   ["🔥 Jump: the wire", ()=>{ const el=document.getElementById("spWire"); if(el) el.scrollIntoView({behavior:"smooth"}); }],

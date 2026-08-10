@@ -508,8 +508,8 @@ async function renderScoreboard(){
     h += '<div class="sbcols"><div>'+plist(md.me, "🏈 "+esc(md.me.name||"Me"))+'</div><div>'+plist(md.opp, "⚔ "+esc(md.opp?md.opp.name:""))+'</div></div>';
   }
   // standings (#658)
-  h += '<div class="tag" style="margin-top:14px">🏆 STANDINGS</div><table class="sbtab"><tr><th></th><th>team</th><th>W-L</th><th>PF</th><th>PA</th><th>strk</th></tr>'+
-    st.map((r,i)=>'<tr'+(r.rid===myRid?' class="sbme"':'')+'><td>'+(i+1)+'</td><td>'+esc(r.name)+'</td><td class="mono">'+r.w+'-'+r.l+(r.t?'-'+r.t:'')+'</td><td class="mono">'+r.pf+'</td><td class="mono">'+r.pa+'</td><td>'+esc(r.streak)+'</td></tr>').join("")+'</table>';
+  h += '<div class="tag" style="margin-top:14px">🏆 STANDINGS <span class="dimtxt" style="font-weight:400">(tap a team to scout)</span></div><table class="sbtab"><tr><th></th><th>team</th><th>W-L</th><th>PF</th><th>PA</th><th>strk</th></tr>'+
+    st.map((r,i)=>'<tr'+(r.rid===myRid?' class="sbme"':'')+' data-scout="'+r.rid+'" style="cursor:pointer"><td>'+(i+1)+'</td><td>'+esc(r.name)+'</td><td class="mono">'+r.w+'-'+r.l+(r.t?'-'+r.t:'')+'</td><td class="mono">'+r.pf+'</td><td class="mono">'+r.pa+'</td><td>'+esc(r.streak)+'</td></tr>').join("")+'</table>';
   // power rankings (#659)
   if(pr.length) h += '<div class="tag" style="margin-top:14px">⚡ POWER RANKINGS</div>'+pr.map((r,i)=>
     '<div class="sbply"'+(r.rid===myRid?' style="color:var(--gold)"':'')+'><span>'+(i+1)+'. '+esc(r.name)+
@@ -766,9 +766,14 @@ async function renderWaivers(){
   const myDropping = rosterIds().map(id=>byId[id]).filter(Boolean).filter(p=>dropsMap[normName(p.name)]>500);
   if(myDropping.length) h += '<div class="benchhead" style="color:var(--gold)">🗑 The world is dropping (and you roster)</div><div class="scarce">'+
     myDropping.map(p=>'<span class="scpill">'+esc(p.name)+' — '+dropsMap[normName(p.name)].toLocaleString()+' drops/24h</span>').join("")+'</div>';
-  if(claims.length) h += '<div class="benchhead">📋 My claim planner ($'+claims.reduce((a,c)=>a+c.bid,0)+' of $'+(myFaab==null?"?":myFaab)+')</div>'+
+  if(claims.length){
+    const totBid = claims.reduce((a,c)=>a+c.bid,0);
+    const over = myFaab!=null && totBid>myFaab;
+    h += '<div class="benchhead">📋 My claim planner (<span style="color:var(--'+(over?'red':'green')+')">$'+totBid+'</span> of $'+(myFaab==null?"?":myFaab)+')</div>'+
     claims.map((c,i)=>{ const a = byId[c.add], d = c.drop?byId[c.drop]:null;
-      return '<div class="sbply"><span>'+(a?esc(a.name):"?")+(d?' <span class="dimtxt">drop '+esc(d.name)+'</span>':'')+' · $'+c.bid+'</span><button class="undo1" data-unclaim="'+i+'">✕</button></div>'; }).join("");
+      return '<div class="sbply"><span>'+(a?esc(a.name):"?")+(d?' <span class="dimtxt">drop '+esc(d.name)+'</span>':'')+
+      ' · $<input type="number" class="bidin" data-bidedit="'+i+'" value="'+c.bid+'" min="0" max="200" aria-label="FAAB bid"></span><button class="undo1" data-unclaim="'+i+'">✕</button></div>'; }).join("");
+  }
   if(fr.length) h += '<div class="benchhead">💰 FAAB league-wide</div><div class="scarce">'+
     fr.map(r=>'<span class="scpill"'+(r.rid===myRid?' style="color:var(--gold)"':'')+'>'+esc(r.name)+' $'+r.left+'</span>').join("")+'</div>';
   if(spy) h += '<div class="benchhead">😈 Rival spy: '+esc(spy.name)+' has $'+spy.left+' — thinnest at '+esc(spy.hole||"?")+'</div>';
@@ -779,6 +784,11 @@ async function renderWaivers(){
   h += '</div>';
   ov.innerHTML = h;
   document.body.appendChild(ov);
+  ov.addEventListener("change", e=>{                                            // #1028
+    const be = e.target.closest("[data-bidedit]");
+    if(be){ const c = claimsGet(); const i = +be.dataset.bidedit;
+      if(c[i]){ c[i].bid = Math.max(0, Math.min(200, +be.value||0)); claimsSave(c); ov.remove(); renderWaivers(); } }
+  });
   ov.addEventListener("click", e=>{
     if(e.target===ov || e.target.closest("[data-wvx]")) return ov.remove();
     const cl = e.target.closest("[data-claim]");
@@ -969,7 +979,8 @@ async function renderTrades(){
   if(!SCOREB.rosters) return toast("Link your Sleeper league in Settings first", {warn:true});
   const byId = idIndex(), myRid = +S.settings.sleeperRosterId||0;
   const others = (SCOREB.rosters||[]).filter(r=>+r.roster_id!==myRid);
-  const sel = {rid:+((others[0]||{}).roster_id||0), give:new Set(), get:new Set()};
+  const sel = {rid:+(window._tradePre || (others[0]||{}).roster_id || 0), give:new Set(), get:new Set()};
+  window._tradePre = null;
   const hist = await leagueHistory();
   const bl = buyLowSellHigh(hist, byId);
   const hm = strengthHeatmap();
@@ -982,8 +993,8 @@ async function renderTrades(){
     let h = '<div class="sbcard" role="dialog" aria-label="Trade center"><button class="sbx" data-trx="1" aria-label="Close">✕</button>';
     h += '<div class="tag">🔁 TRADE CENTER</div>';
     h += '<div class="frow"><label>Trade with</label><select id="trTeam">'+others.map(r=>'<option value="'+r.roster_id+'"'+(+r.roster_id===sel.rid?' selected':'')+'>'+esc(ridName(r.roster_id))+'</option>').join("")+'</select></div>';
-    h += '<div class="sbcols"><div><div class="benchhead">I give</div>'+rosterChecks(rosterIds(),"give")+'</div>'+
-      '<div><div class="benchhead">I get</div>'+rosterChecks(leagueRosterIds(sel.rid),"get")+'</div></div>';
+    h += '<div class="sbcols"><div><div class="benchhead">I give</div><input class="trfind" data-trfind="give" placeholder="filter…" aria-label="Filter my players">'+rosterChecks(rosterIds(),"give")+'</div>'+
+      '<div><div class="benchhead">I get</div><input class="trfind" data-trfind="get" placeholder="filter…" aria-label="Filter their players">'+rosterChecks(leagueRosterIds(sel.rid),"get")+'</div></div>';
     h += '<div style="padding:10px 0"><button class="hbtn" id="trEval">⚖ Evaluate</button> <button class="hbtn" id="trPng" style="display:none">📤 PNG</button></div><div id="trOut"></div>';
     if(finds.length) h += '<div class="benchhead">🔍 Trade finder (helps both sides)</div>'+finds.map(f=>
       '<div class="sbply"><span>'+esc(byId[f.give].name)+' → '+esc(ridName(f.rid))+' for <b>'+esc(byId[f.get].name)+'</b></span><b style="color:var(--green)">+'+f.ev.me.delta+'</b></div>').join("");
@@ -1003,6 +1014,13 @@ async function renderTrades(){
   ov.innerHTML = build();
   document.body.appendChild(ov);
   let lastEv = null;
+  ov.addEventListener("input", e=>{                                             // #1029
+    const tf = e.target.closest("[data-trfind]");
+    if(tf){
+      const q2 = tf.value.toLowerCase();
+      tf.parentElement.querySelectorAll(".trlab").forEach(l2=>{ l2.style.display = l2.textContent.toLowerCase().includes(q2) ? "" : "none"; });
+    }
+  });
   ov.addEventListener("change", e=>{
     if(e.target.id==="trTeam"){ sel.rid = +e.target.value; sel.give.clear(); sel.get.clear(); ov.innerHTML = build(); return; }
     const t = e.target.closest("[data-tsel]");

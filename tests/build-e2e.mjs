@@ -140,6 +140,20 @@ try {
     }
     return "OK";
   })()));
+  // Forms & flows (#1027–#1041)
+  out.push("flows:"+((()=>{try{
+    localStorage.removeItem(LS_KEY+"-alertlog");
+    alertTest();
+    const alerted = unreadAlerts()===1;
+    const g0=goalsGet().includes("title"); goalsSet("title");
+    const g1=goalsGet().includes("title"); goalsSet("title");
+    claimsAdd(allPlayers()[40].id, null, 5);
+    const c=claimsGet(); c[0].bid=17; claimsSave(c);
+    const bidOk=claimsGet()[0].bid===17;
+    localStorage.removeItem(LS_KEY+"-claims"); localStorage.removeItem(LS_KEY+"-alertlog");
+    return alerted && g0!==g1 && bidOk && typeof scoutPicker==="function" && typeof tradeWith==="function" &&
+      typeof goalsSet==="function" && typeof alertTest==="function";
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // Season sim determinism (#997–#1011)
   out.push("future:"+((()=>{try{
     const fix={schedule:{1:[[1,2],[3,4]],2:[[1,3],[2,4]],3:[[1,4],[2,3]]},

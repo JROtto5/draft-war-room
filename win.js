@@ -439,11 +439,13 @@ async function scoutReport(rid){                                                
     '<div class="sbply"><span>'+(x.w?'W'+x.w+' — ':'')+x.kind+'</span><span class="dimtxt">'+esc(x.note)+'</span></div>').join("");
   if(tend) h += '<div class="sbply"><span>🎰 Tendencies</span><b>$'+tend.faab+' FAAB spent · '+tend.claims+' claims · '+tend.trades+' trades'+(tend.zeros?' · '+tend.zeros+' zero-point starters(!)':'')+'</b></div>';
   if(kr) h += '<div class="sbply"><span>☠ My kryptonite (self-scout)</span><b>'+kr.pos+' averaging '+kr.avg+'/start — feed it or fix it</b></div>';
-  h += '<div style="padding:10px 0"><button class="hbtn" id="scPng">📤 Share the beatdown</button> <button class="hbtn" id="scTalk">🗣 Talk</button></div><div id="scOut"></div></div>';
+  h += '<div style="padding:10px 0"><button class="hbtn" id="scPng">📤 Share the beatdown</button> <button class="hbtn" id="scTalk">🗣 Talk</button> <button class="hbtn" data-tradewith="'+rid+'">🔁 Trade with them</button></div><div id="scOut"></div></div>';
   ov.innerHTML = h;
   document.body.appendChild(ov);
   ov.addEventListener("click", e=>{
     if(e.target===ov || e.target.closest("[data-scx]")) return ov.remove();
+    const tw2 = e.target.closest("[data-tradewith]");
+    if(tw2){ ov.remove(); tradeWith(tw2.dataset.tradewith); return; }
     if(e.target.id==="scPng") scoutCard(name, sd, slop);                          // #781
     if(e.target.id==="scTalk"){
       const line = slop && slop.eff<92 ? esc(name)+" has donated "+slop.left+" points to their own bench this season. Charity is beautiful."
@@ -475,6 +477,29 @@ function scoutCard(name, sd, slop){                                             
     setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
   });
   toast("📤 Scout card downloaded");
+}
+function scoutPicker(){                                                          // #1030
+  const old = document.getElementById("spkOverlay"); if(old){ old.remove(); return; }
+  if(!SCOREB.rosters) return toast("Link the league first", {warn:true});
+  const myRid = +S.settings.sleeperRosterId;
+  const ov = document.createElement("div"); ov.id = "spkOverlay"; ov.className = "snov";
+  ov.innerHTML = '<div class="sbcard" role="dialog" style="max-width:420px"><button class="sbx" data-spkx="1">✕</button>'+
+    '<div class="tag">🕵️ SCOUT WHO?</div>'+
+    standingsRows(SCOREB.rosters, SCOREB.users).filter(r=>r.rid!==myRid).map(r=>
+    '<div class="sbply" data-scout="'+r.rid+'" style="cursor:pointer" tabindex="0" role="button"><span>'+esc(r.name)+'</span><b class="mono">'+r.w+'-'+r.l+'</b></div>').join("")+'</div>';
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{
+    if(e.target===ov || e.target.closest("[data-spkx]")) return ov.remove();
+    if(e.target.closest("[data-scout]")) ov.remove();
+  });
+}
+function tradeWith(rid){ window._tradePre = +rid; renderTrades(); }              // #1037
+function alertTest(){ alertFire("test", "🔔 Test alert — the chain works", "Toast ✓ log ✓ badge ✓"+(Notification && Notification.permission==="granted" ? " notification ✓" : " (system notifications off)")); }   // #1031
+function goalsSet(key){                                                          // #1035
+  let g = goalsGet();
+  g = g.includes(key) ? g.filter(x=>x!==key) : g.concat(key);
+  try{ localStorage.setItem(LS_KEY+"-goals", JSON.stringify(g)); }catch(e){}
+  const ov = document.getElementById("rtOverlay"); if(ov){ ov.remove(); renderRituals(); }
 }
 function scoutMyOpponent(){                                                      // #771
   const md = WEEKST.mate;
@@ -624,7 +649,7 @@ function simBestLineup(){                                                       
   return variants.map(v=>{
     const line = buildSimLine(v.bs);
     const r = simSides(line, opLine, 400, seed);
-    return {label:v.label, wp:Math.round(r.wp*1000)/10, pts:Math.round(v.bs.line.reduce((a,s)=>a+(s.wp||0),0)*10)/10};
+    return {label:v.label, bs:v.bs, wp:Math.round(r.wp*1000)/10, pts:Math.round(v.bs.line.reduce((a,s)=>a+(s.wp||0),0)*10)/10};
   }).sort((a,b)=>b.wp-a.wp);
 }
 function journalRecord(){                                                        // #792
@@ -715,8 +740,10 @@ async function renderSim(){                                                     
   if(r.lev && r.lev.length) h += '<div class="benchhead">🎯 Highest leverage: '+esc(r.lev[0].name)+' (+'+r.lev[0].lev+'% win when he beats his number)'+
     (r.lev[1]?' · '+esc(r.lev[1].name)+' +'+r.lev[1].lev+'%':'')+'</div>';
   if(variants && variants.length>1){
+    window._simVariants = variants;
     h += '<div class="benchhead">🧪 Lineup variants, judged by WIN RATE not points</div>'+variants.slice(0,4).map((v,i)=>
-      '<div class="sbply"'+(i===0?' style="color:var(--green)"':'')+'><span>'+(i===0?'✓ ':'')+esc(v.label)+' <span class="dimtxt">'+v.pts+' proj</span></span><b class="mono">'+v.wp+'%</b></div>').join("");
+      '<div class="sbply"'+(i===0?' style="color:var(--green)"':'')+'><span>'+(i===0?'✓ ':'')+esc(v.label)+' <span class="dimtxt">'+v.pts+' proj</span></span>'+
+      '<span><button class="undo1" data-vstage="'+i+'">⇄ stage</button> <b class="mono">'+v.wp+'%</b></span></div>').join("");
     if(variants[0].label!=="projection-optimal") h += '<div class="benchhead" style="color:var(--gold)">⚡ The sim disagrees with raw projections — variance is strategy</div>';
   }
   if(jo && (jo.meBetter+jo.engBetter)>0) h += '<div class="sbply"><span>📓 Decision journal (you vs engine)</span><b class="mono">'+jo.meBetter+'–'+jo.engBetter+'</b></div>';
@@ -727,7 +754,10 @@ async function renderSim(){                                                     
   document.body.appendChild(ov);
   ov.addEventListener("click", e=>{
     if(e.target===ov || e.target.closest("[data-smx]")) return ov.remove();
-    if(e.target.id==="simRerun"){ SIM.cache = {}; ov.remove(); renderSim(); }
+    if(e.target.id==="simRerun"){ SIM.cache = {}; ov.remove(); renderSim(); return; }
+    const vs2 = e.target.closest("[data-vstage]");
+    if(vs2 && window._simVariants){ const v = window._simVariants[+vs2.dataset.vstage];
+      if(v){ ov.remove(); stageToLineup(v.bs, v.label); } }
   });
 }
 
@@ -1122,6 +1152,9 @@ function renderRituals(){                                                       
     [1,2,3,4,5].map(v=>'<span class="scpill" data-conf="'+v+'"'+(myConf===v?' style="color:var(--gold)"':'')+' role="button">'+"🔥".repeat(v)+'</span>').join("")+'</div>';
   if(cal && (cal.hi!=null||cal.lo!=null)) h += '<div class="sbply"><span>calibration over '+cal.n+' weeks</span><b class="mono">'+
     (cal.hi!=null?'confident: '+cal.hi+'% won':'')+(cal.lo!=null?' · nervous: '+cal.lo+'% won':'')+'</b></div>';
+  h += '<div class="benchhead">🎯 Chasing</div><div class="scarce">'+
+    [["playoffs","Make playoffs"],["topPF","Top points"],["10wins","10 wins"],["title","Win it all"]].map(([k2,l2])=>
+    '<span class="scpill'+(goalsGet().includes(k2)?' good':'')+'" data-goal="'+k2+'" role="button" tabindex="0">'+(goalsGet().includes(k2)?'✓ ':'')+l2+'</span>').join("")+'</div>';
   if(goals.length) h += '<div class="benchhead">🎯 Season goals</div>'+goals.map(x=>
     '<div class="sbply"><span>'+esc(x.label)+' <span class="dimtxt">'+esc(x.note)+'</span></span></div>'+
     '<div style="padding:0 12px 8px"><div style="height:6px;border-radius:3px;background:var(--line)"><div style="height:6px;border-radius:3px;width:'+Math.min(100,x.pct)+'%;background:var(--'+(x.pct>=60?'green':x.pct>=30?'gold':'red')+')"></div></div></div>').join("");
@@ -1139,7 +1172,9 @@ function renderRituals(){                                                       
     const rt = e.target.closest("[data-rtick]");
     if(rt){ checklistTick(rt.dataset.rtick); ov.remove(); renderRituals(); return; }
     const cf = e.target.closest("[data-conf]");
-    if(cf){ confSet(cf.dataset.conf); toast("🎚 Confidence logged — we'll check the calibration later"); ov.remove(); renderRituals(); }
+    if(cf){ confSet(cf.dataset.conf); toast("🎚 Confidence logged — we'll check the calibration later"); ov.remove(); renderRituals(); return; }
+    const gl = e.target.closest("[data-goal]");
+    if(gl){ goalsSet(gl.dataset.goal); }
   });
 }
 function ritualTick(){ checklistSweep(); gradeSweep(); streakSkin(); routineCard(); }
@@ -1542,7 +1577,7 @@ function toggleDensity(){
 function copyWkText(){ try{ navigator.clipboard.writeText(window._wkText||"").then(()=>toast("📋 Recap copied")).catch(()=>toast("Copy blocked here — select the text manually", {warn:true})); }catch(e){ toast("Copy blocked here", {warn:true}); } }
 const ACT_OK = ["renderGamePlan","renderSim","renderScoreboard","renderWaivers","renderTrades","renderSeasonStats",
   "renderRituals","egoDash","weeklyRecap2","renderAlertCenter","injuryDigest","scoutMyOpponent","moreSheet",
-  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText","analystReport","stageOptimal","stageWinProb","renderSeasonSim"];
+  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText","analystReport","stageOptimal","stageWinProb","renderSeasonSim","scoutPicker","alertTest"];
 document.addEventListener("click", e=>{
   const t = e.target.closest("[data-act],[data-scout],[data-clickid]");
   if(!t) return;
@@ -1785,11 +1820,15 @@ function analystReport(){                                                       
   ov.innerHTML = '<div class="sbcard" role="dialog" aria-label="Analyst brief"><button class="sbx" data-anx="1">✕</button>'+
     '<div class="tag">📰 THE ANALYST — WEEK '+w+' BRIEF</div>'+
     paras.map(p2=>'<p style="max-width:64ch;font-size:13.5px;line-height:1.65;margin:0 0 12px">'+esc(p2)+'</p>').join("")+
-    '<div style="padding-top:4px"><button class="hbtn" data-anprint="1">🖨 Print</button></div></div>';
+    '<div style="padding-top:4px;display:flex;gap:6px"><button class="hbtn" data-anprint="1">🖨 Print</button><button class="hbtn" data-ancopy="1">📋 Copy</button></div></div>';
+  window._anText = paras.join(String.fromCharCode(10)+String.fromCharCode(10));
   document.body.appendChild(ov);
   ov.addEventListener("click", e=>{
     if(e.target===ov || e.target.closest("[data-anx]")) return ov.remove();
     if(e.target.closest("[data-anprint]")) window.print();
+    if(e.target.closest("[data-ancopy]")){
+      try{ navigator.clipboard.writeText(window._anText||"").then(()=>toast("📋 Brief copied")).catch(()=>toast("Copy blocked here", {warn:true})); }catch(e2){ toast("Copy blocked here", {warn:true}); }
+    }
   });
 }
 function whileYouWereOut(){                                                      // #964
@@ -1947,7 +1986,14 @@ document.addEventListener("click", e=>{                                         
   const sp2 = e.target.closest("[data-setppg]");
   if(sp2){ e.preventDefault(); setMyPpg(sp2.dataset.setppg); return; }
   const bf = e.target.closest("[data-boostf]");
-  if(bf){ e.preventDefault(); boostFadePlayer(bf.dataset.boostf, +bf.dataset.dir); }
+  if(bf){ e.preventDefault(); boostFadePlayer(bf.dataset.boostf, +bf.dataset.dir); return; }
+  const cc = e.target.closest("[data-cardclaim]");
+  if(cc){ e.preventDefault();
+    const id = cc.dataset.cardclaim, p = idIndex()[id];
+    const b2 = bidSuggest(p, null);
+    claimsAdd(id, null, b2.bid);
+    toast("📋 Claim planned: "+p.name+" at $"+b2.bid+" — tune it in 📥 Waivers");
+  }
 });
 
 /* ---------- R62 Season simulator (#997–#1011) ---------- */

@@ -870,3 +870,8 @@ body.seasonled.draftopen #resetBtn,body.seasonled.draftopen #injBtn,body.seasonl
 }
 /* the 680px table floor is a draft-pool rule — season tables shrink freely */
 @media (max-width:900px){ #seasonPage table,.snov table,#sbOverlay table,.sscard table{min-width:0} }
+
+/* R64 flows */
+.bidin{width:52px;background:var(--elev0);border:1px solid var(--line);border-radius:5px;color:var(--text);padding:2px 4px;font-family:inherit}
+.trfind{width:100%;margin:4px 0 6px;background:var(--elev0);border:1px solid var(--line);border-radius:7px;color:var(--text);padding:5px 9px;font-size:12px}
+body.compact .snov .sbply{padding:4px 10px}
