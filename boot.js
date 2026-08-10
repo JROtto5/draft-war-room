@@ -140,7 +140,7 @@ document.querySelectorAll(".modal").forEach((m,i)=>{
   const h3 = m.querySelector("h3");
   if(h3){ if(!h3.id) h3.id = "dlg"+i; m.setAttribute("aria-labelledby", h3.id); }
 });
-const BUILD = "10.1";
+const BUILD = "11.0";
 let _installEvt = null;
 window.addEventListener("beforeinstallprompt", e=>{
   e.preventDefault();
