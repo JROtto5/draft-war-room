@@ -1143,75 +1143,117 @@ function renderRituals(){                                                       
 function ritualTick(){ checklistSweep(); gradeSweep(); streakSkin(); routineCard(); }
 
 /* ---------- The Season Page: / is the season, /draft is the draft (#845–#848) ---------- */
+function winDial(pct){                                                           // #885
+  const r=26, c=2*Math.PI*r, on=Math.max(0,Math.min(100,pct))/100*c;
+  const col = pct>=55?"var(--green)":pct<=45?"var(--red)":"var(--gold)";
+  return '<svg class="spdial" width="72" height="72" viewBox="0 0 72 72" role="img" aria-label="win probability '+pct+' percent">'+
+    '<circle cx="36" cy="36" r="'+r+'" fill="none" stroke="var(--line)" stroke-width="7"/>'+
+    '<circle cx="36" cy="36" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="7" stroke-linecap="round" '+
+    'stroke-dasharray="'+on.toFixed(1)+' '+c.toFixed(1)+'" transform="rotate(-90 36 36)"/>'+
+    '<text x="36" y="41" text-anchor="middle" font-size="16" font-weight="800" fill="'+col+'">'+pct+'</text></svg>';
+}
+function ssPRow(p, sub, val, dim){
+  return '<div class="ssrow" data-card="'+p.id+'" tabindex="0" role="button">'+avatarImg(p,28)+
+    '<div class="ssnm">'+esc(p.name)+'<span class="sssub">'+sub+'</span></div>'+
+    '<b class="ssval mono'+(dim?' dim':'')+'">'+val+'</b></div>';
+}
+function seasonPageHtml(){                                                       // pure builder (#879–#893)
+  const byId = idIndex(), w = curWeek(), md = WEEKST.mate;
+  const s2o = sleeperToOurs();
+  const inv = {}; for(const k2 in s2o) inv[s2o[k2]] = k2;
+  const ms = (typeof myStandingsRow==="function") ? myStandingsRow() : null;
+  const myRid = +S.settings.sleeperRosterId;
+  // page bar (#889)
+  let h = '<div class="spbar"><div class="spbt"><b>WEEK '+w+'</b>'+
+    (ms?' <span class="mono">'+ms.row.w+'-'+ms.row.l+(ms.row.t?'-'+ms.row.t:'')+'</span> · '+ordinal(ms.place):'')+'</div>'+
+    '<div class="spbtns">'+
+    '<button class="hbtn" onclick="window._density=!window._density;document.body.classList.toggle(\'compact\',window._density);try{localStorage.setItem(LS_KEY+\'-dense\',window._density?1:\'\')}catch(e){}">▤</button>'+
+    '<button class="hbtn" onclick="window._poolShow=!window._poolShow;renderSeasonPage()">🗂 '+(window._poolShow?'Hide pool':'Pool')+'</button>'+
+    '<a class="hbtn" href="/draft" style="text-decoration:none">✏️ Draft room</a></div></div>';
+  try{ if(typeof hypeLine==="function" && hypeOn("mild")) h += '<div class="benchhead" style="color:var(--gold)">😤 '+esc(hypeLine())+'</div>'; }catch(e){}
+  // hero (#879/#884/#885)
+  h += '<div class="sphero sscard" id="spMatchup">';
+  if(md && md.me){
+    const myBs = bestStartersWeek(rosterIds(), byId, w);
+    const opBs = md.opp ? bestStartersWeek(md.opp.ids, byId, w) : null;
+    const wpPct = (window._liveWp!=null && typeof anyGameLive==="function" && anyGameLive()) ? window._liveWp
+      : (opBs ? Math.round(winProb(myBs.pts, opBs.pts)*100) : 50);
+    const leftPts = (()=>{ try{
+      const actual = md.me.starters.filter(Boolean);
+      if(!actual.length) return null;
+      return Math.max(0, Math.round((myBs.pts - actual.map(id=>byId[id]).filter(Boolean).reduce((a,p)=>a+weekProj(p,w),0))*10)/10);
+    }catch(e){ return null; } })();
+    h += '<div class="spheroTop">'+
+      '<div class="spteam"><span class="splab">OTTO5</span><b class="mono">'+md.me.pts.toFixed(1)+'</b><span class="spproj">proj '+fmt(myBs.pts)+'</span></div>'+
+      winDial(wpPct)+
+      '<div class="spteam right"><span class="splab">'+esc(md.opp?md.opp.name.toUpperCase():"—")+'</span><b class="mono">'+(md.opp?md.opp.pts.toFixed(1):"0.0")+'</b><span class="spproj">'+(opBs?'proj '+fmt(opBs.pts):'')+'</span></div></div>';
+    // tiles (#880)
+    const lev = (typeof SIM!=="undefined" && SIM.lastKey && SIM.cache[SIM.lastKey] && SIM.cache[SIM.lastKey].lev) ? SIM.cache[SIM.lastKey].lev[0] : null;
+    const odds = SEASON.lastOdds ? SEASON.lastOdds[myRid] : null;
+    h += '<div class="sptiles">'+
+      ssTile("proj final", fmt(myBs.pts))+
+      ssTile("win prob", wpPct+"%", wpPct>=55?"up":wpPct<=45?"down":"")+
+      ssTile("on bench", leftPts!=null?(leftPts>1?"−"+leftPts:"0"):"—", leftPts>1?"down":"up")+
+      ssTile("playoffs", odds!=null?odds+"%":"—")+
+      ssTile("leverage", lev?esc(lev.name.split(" ").slice(-1)[0]):"—")+
+      '</div>';
+    const plist = side=>side.starters.filter(Boolean).map(id=>{
+      const p = byId[id]; if(!p) return "";
+      const got = +side.ppts[inv[id]]||0;
+      const badge = (typeof gsBadge==="function") ? gsBadge(p.team) : "";
+      return ssPRow(p, p.pos+(badge?" · "+badge:""), got?got.toFixed(1):"~"+weekProj(p,w).toFixed(1), !got);
+    }).join("");
+    h += '<div class="sbcols spcols"><div>'+plist(md.me)+'</div><div>'+(md.opp?plist(md.opp):'<div class="empty">no opponent</div>')+'</div></div>';
+    if(typeof liveWpChartHtml==="function") h += liveWpChartHtml();
+  } else {
+    h += '<div class="spheroTop skel"><div class="spteam"><span class="splab">OTTO5</span><b class="mono">·&#8202;·</b></div>'+winDial(50)+
+      '<div class="spteam right"><span class="splab">LOADING</span><b class="mono">·&#8202;·</b></div></div>'+
+      '<div class="sptiles">'+ssTile("proj final","—")+ssTile("win prob","—")+ssTile("on bench","—")+ssTile("playoffs","—")+ssTile("leverage","—")+'</div>';
+  }
+  h += '</div>';
+  // grid (#881)
+  h += '<div class="spgrid">';
+  // standings card (#887)
+  h += '<div class="sscard" id="spStandings"><div class="sshead">🏆 STANDINGS</div>';
+  if(SCOREB.rosters){
+    const st = standingsRows(SCOREB.rosters, SCOREB.users);
+    const pr = powerRankings(); const mv = {}; pr.forEach(r=>mv[r.rid]=r.move||0);
+    h += '<table class="sbtab"><tr><th></th><th>team</th><th>W-L</th><th>PF</th><th></th></tr>'+
+      st.map((r,i)=>'<tr'+(r.rid===myRid?' class="sbme"':'')+'><td>'+(i+1)+'</td><td>'+esc(r.name)+'</td><td class="mono">'+r.w+'-'+r.l+(r.t?'-'+r.t:'')+'</td><td class="mono">'+r.pf+'</td><td>'+
+      (mv[r.rid]>0?'<span style="color:var(--green)">▲</span>':mv[r.rid]<0?'<span style="color:var(--red)">▼</span>':'')+'</td></tr>').join("")+'</table>';
+  } else h += '<div class="sspad"><div class="ssrow skel"><span class="skava"></span><div class="ssnm"><span class="skln"></span></div></div></div>';
+  h += '</div>';
+  // around the league (#886)
+  h += '<div class="sscard"><div class="sshead">📊 AROUND THE LEAGUE</div><div class="sspad spminis">';
+  if(SCOREB.mus){
+    const rows = scoreboardRows(SCOREB, byId).filter(([a,b])=>a.rid!==myRid && b.rid!==myRid);
+    h += rows.map(([a,b])=>'<div class="spmini"><span>'+esc(a.name.slice(0,9))+'</span><b class="mono">'+a.live.toFixed(0)+'–'+b.live.toFixed(0)+'</b><span class="r">'+esc(b.name.slice(0,9))+'</span></div>').join("") || '<div class="empty">quiet week</div>';
+  } else h += '<div class="empty">loading league…</div>';
+  h += '</div></div>';
+  // chase card
+  h += '<div class="sscard"><div class="sshead">👑 THE CHASE</div><div class="sspad">'+
+    ((typeof titleChaseHtml==="function" && titleChaseHtml()) || '<span class="dim">odds compute after the scoreboard loads</span>')+
+    ((typeof deathWatch==="function") ? deathWatch() : '')+
+    ((typeof elimTracker==="function" && elimTracker().length) ? '<div class="benchhead">☠ Dead: '+elimTracker().map(esc).join(", ")+'</div>' : '')+
+    '</div></div>';
+  // wire card (#888)
+  h += '<div class="sscard" id="spWire"><div class="sshead">🔥 THE WIRE<span><button class="undo1" onclick="renderWaivers()">open →</button></span></div>';
+  h += (SEASON.avail && SEASON.avail.length)
+    ? SEASON.avail.slice(0,5).map(p=>ssPRow(p, p.pos+" · "+((typeof buzzOf==="function")?buzzOf(p).toLocaleString():"")+" adds", "＋", true)).join("")
+    : '<div class="sspad"><div class="empty">nobody heating right now — good, nothing to panic-add</div></div>';
+  h += '</div>';
+  h += '</div>';                                                                 // /spgrid
+  return h;
+}
 function renderSeasonPage(){
   const sp = document.getElementById("seasonPage"), pool = document.getElementById("poolPanel");
   if(!sp || !pool) return;
   const on = SEASON.on && (typeof appRoute!=="function" || appRoute()==="season");
   if(!on){ sp.hidden = true; pool.style.display = ""; return; }
   sp.hidden = false;
-  pool.style.display = window._poolShow ? "" : "none";                            // #846
-  const byId = idIndex(), w = curWeek(), md = WEEKST.mate;
-  const s2o = sleeperToOurs();
-  const inv = {}; for(const k2 in s2o) inv[s2o[k2]] = k2;
-  const ms = (typeof myStandingsRow==="function") ? myStandingsRow() : null;
-  let h = '<h2><span class="dot"></span> WEEK '+w+
-    (ms ? ' · <span class="mono">'+ms.row.w+'-'+ms.row.l+(ms.row.t?'-'+ms.row.t:'')+'</span> · '+ordinal(ms.place)+' place' : '')+
-    '<span style="float:right;display:flex;gap:6px">'+
-    '<button class="hbtn" onclick="renderGamePlan()">🏆 Plan</button>'+
-    '<button class="hbtn" onclick="renderSim()">🎲 Sim</button>'+
-    '<button class="hbtn" onclick="window._poolShow=!window._poolShow;renderSeasonPage()">🗂 '+(window._poolShow?'Hide':'Player')+' pool</button>'+
-    '<a class="hbtn" href="/draft" style="text-decoration:none">✏️ Draft room</a></span></h2>';
-  try{ if(typeof hypeLine==="function" && hypeOn("mild")) h += '<div class="benchhead" style="color:var(--gold);font-size:13px">😤 '+esc(hypeLine())+'</div>'; }catch(e){}
-  // ⚔ THE MATCHUP — front and center
-  if(md && md.me){
-    const myBs = bestStartersWeek(rosterIds(), byId, w);
-    const opBs = md.opp ? bestStartersWeek(md.opp.ids, byId, w) : null;
-    const wp = opBs ? winProb(myBs.pts, opBs.pts) : null;
-    h += '<div class="benchhead" style="font-size:15px">⚔ '+esc(md.me.name||"Me")+' <b class="mono">'+md.me.pts.toFixed(1)+'</b>'+
-      (md.opp ? ' — <b class="mono">'+md.opp.pts.toFixed(1)+'</b> '+esc(md.opp.name)+
-      (wp!=null ? ' · <span style="color:var(--'+(wp>=0.55?'green':wp<=0.45?'red':'gold')+')">'+Math.round((window._liveWp!=null && anyGameLive() ? window._liveWp : Math.round(wp*100)))+'% to win</span>' : '') : '')+'</div>';
-    const plist = (side)=>{
-      if(!side || !side.starters) return "";
-      return side.starters.filter(Boolean).map(id=>{
-        const p = byId[id]; if(!p) return "";
-        const got = +side.ppts[inv[id]] || 0;
-        const g = (typeof gameStateOf==="function") ? gameStateOf(p.team) : null;
-        const badge = (typeof gsBadge==="function") ? gsBadge(p.team) : "";
-        const done = g && g.state==="post";
-        return '<div class="sbply" data-card="'+p.id+'" style="cursor:pointer"><span>'+esc(p.name)+
-          ' <span class="dimtxt">'+p.pos+(badge?' · '+badge:'')+'</span></span>'+
-          '<b class="mono"'+(got||done?'':' style="color:var(--dim)"')+'>'+(got||done ? got.toFixed(1) : '~'+weekProj(p,w).toFixed(1))+'</b></div>';
-      }).join("");
-    };
-    h += '<div class="sbcols"><div>'+plist(md.me)+'</div><div>'+(md.opp?plist(md.opp):'<div class="empty">no opponent found</div>')+'</div></div>';
-    if(typeof liveWpChartHtml==="function") h += liveWpChartHtml();
-  } else {
-    h += '<div class="empty">Pulling your matchup from Sleeper… (first load takes a few seconds)</div>';
-  }
-  // 📊 around the league
-  if(SCOREB.mus){
-    const rows = scoreboardRows(SCOREB, byId).filter(([a,b])=>{
-      const myRid = +S.settings.sleeperRosterId;
-      return a.rid!==myRid && b.rid!==myRid;
-    });
-    if(rows.length) h += '<div class="benchhead">📊 Around the league</div><div class="scarce">'+
-      rows.map(([a,b])=>'<span class="scpill">'+esc(a.name.slice(0,10))+' '+a.live.toFixed(0)+'–'+b.live.toFixed(0)+' '+esc(b.name.slice(0,10))+'</span>').join("")+'</div>';
-  }
-  // 🏆 standings
-  if(SCOREB.rosters){
-    const st = standingsRows(SCOREB.rosters, SCOREB.users);
-    const myRid = +S.settings.sleeperRosterId;
-    h += '<div class="benchhead">🏆 Standings</div><table class="sbtab"><tr><th></th><th>team</th><th>W-L</th><th>PF</th><th>strk</th></tr>'+
-      st.map((r,i)=>'<tr'+(r.rid===myRid?' class="sbme"':'')+'><td>'+(i+1)+'</td><td>'+esc(r.name)+'</td><td class="mono">'+r.w+'-'+r.l+(r.t?'-'+r.t:'')+'</td><td class="mono">'+r.pf+'</td><td>'+esc(r.streak)+'</td></tr>').join("")+'</table>';
-  }
-  // chase, rival, wire
-  if(typeof titleChaseHtml==="function") h += titleChaseHtml();
-  if(typeof deathWatch==="function") h += deathWatch();
-  if(SEASON.avail && SEASON.avail.length) h += '<div class="benchhead">🔥 Heating on the wire</div><div class="scarce">'+
-    SEASON.avail.slice(0,6).map(p=>'<span class="scpill" data-card="'+p.id+'">'+esc(p.name)+' '+p.pos+
-    (typeof buzzOf==="function"?' <span class="dimtxt">'+buzzOf(p).toLocaleString()+'</span>':'')+'</span>').join("")+
-    ' <button class="undo1" onclick="renderWaivers()">open waivers →</button></div>';
-  sp.innerHTML = h;
+  pool.style.display = window._poolShow ? "" : "none";
+  try{ if(window._density===undefined){ window._density = !!localStorage.getItem(LS_KEY+"-dense"); document.body.classList.toggle("compact", window._density); } }catch(e){}
+  sp.innerHTML = seasonPageHtml();
 }
 
 /* ---------- R52 The Rail: season sidebar rebuilt (#849–#863) ---------- */

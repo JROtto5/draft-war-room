@@ -140,6 +140,12 @@ try {
     }
     return "OK";
   })()));
+  // Dashboard structure (#879–#893)
+  out.push("dash:"+((()=>{try{
+    const h=seasonPageHtml();
+    return typeof h==="string" && h.includes("sphero") && h.includes("sptiles") && h.includes("spgrid") &&
+      h.includes("spbar") && h.includes("spdial") && h.includes("STANDINGS") && h.includes("THE WIRE");
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // Identity v2 tokens present (#864–#878)
   out.push("ident:"+((()=>{try{
     const cs=getComputedStyle(document.documentElement);

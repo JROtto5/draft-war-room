@@ -725,3 +725,31 @@ body.seasonled.draftopen #undoBtn,body.seasonled.draftopen #redoBtn,body.seasonl
   .snov .sbcard{border:none;box-shadow:none;max-width:none}
   body{background:#fff;color:#000}
 }
+
+/* ---------- R54 dashboard grid (#879–#893) ---------- */
+.spbar{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:10px;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 14px;margin-bottom:10px}
+.spbt{font-size:13px;letter-spacing:.04em}
+.spbt b{color:var(--gold)}
+.spbtns{display:flex;gap:6px}
+.sphero{padding:0 0 6px}
+.spheroTop{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;padding:16px 18px 6px}
+.spteam{display:flex;flex-direction:column;gap:1px}
+.spteam.right{text-align:right;align-items:flex-end}
+.splab{font-size:10px;font-weight:800;letter-spacing:.14em;color:var(--dim)}
+.spteam b{font-size:34px;line-height:1.05}
+.spproj{font-size:11px;color:var(--dim)}
+.sptiles{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:8px 14px}
+.spcols{padding:0 6px 6px}
+.spgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.spgrid .sscard{margin-top:0}
+.spminis{display:flex;flex-direction:column;gap:6px}
+.spmini{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;font-size:12px;padding:5px 8px;background:var(--elev0);border:1px solid var(--line);border-radius:var(--r-sm)}
+.spmini .r{text-align:right}
+.spmini b{color:var(--text)}
+body.compact .ssrow{padding:3px 8px}
+body.compact .sptiles .sstile b{font-size:12.5px}
+body.compact .sspad{padding:6px 10px}
+@media (max-width:1280px){ .sptiles{grid-template-columns:repeat(5,1fr)} }
+@media (max-width:1024px){ .spgrid{grid-template-columns:1fr} .spteam b{font-size:28px} }
+@media (max-width:640px){ .sptiles{grid-template-columns:repeat(3,1fr)} .spheroTop{gap:8px;padding:12px 12px 4px} .spbar{position:static} }
