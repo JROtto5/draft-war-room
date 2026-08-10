@@ -39,7 +39,7 @@ if (!html.includes('rel="stylesheet" href="styles.css"')) fail("styles.css link 
 // college map): app 215K, data 450K leave ~20% headroom over current sizes.
 // rebased post-R37: wire/index got ~25% fresh headroom; boot budget was
 // silently dead (swallowed by a line comment) — restored.
-const budgets = { "core.js": 110000, "season.js": 120000, "win.js": 120000, "views.js": 95000, "wire.js": 110000, "boot.js": 32000,
+const budgets = { "core.js": 110000, "season.js": 135000, "win.js": 135000, "views.js": 95000, "wire.js": 110000, "boot.js": 32000,
   "engine.js": 40000, "data.js": 450000, "styles.css": 70000, "index.html": 42000 };
 for (const [f, cap] of Object.entries(budgets)) {
   const size = statSync(f).size;

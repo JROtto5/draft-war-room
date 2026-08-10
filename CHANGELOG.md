@@ -1,5 +1,21 @@
 # Changelog — Draft War Room
 
+## v13.0 (2026-08-10) — The Badass Update (#849–#948)
+The interface catches up to the engine. 🏟 The Rail: broadcast scorebug,
+stat tiles, quick actions, Starting Nine with headshots and slot chips, bench
+drawer, skeleton-first loading · 🎨 identity v2: design tokens, the signature
+gradient, button/chip systems, unified overlay mastheads, zebra tables, gold
+focus rings, real light-theme depth · 📊 dashboard: matchup hero with SVG win
+dial, five KPI tiles, card grid (standings with movement + PF/PA bars,
+around-the-league mini bugs, the chase, the wire), density toggle, deep links ·
+📈 chart kit: areas with reference lines, paired bars vs league median,
+standings race (me in gold), smoothed sim distributions with p10/p90 markers,
+count-up numbers · ✨ motion: first-paint choreography, sheet/overlay
+entrances, spring presses, dial sweep, score flashes, ticker fades — all
+behind reduced-motion plus a 🧊 calm mode · 📱 app feel: 5-tab bar + More
+sheet, bottom-sheet overlays, 44px targets, sticky scorebug, landscape rail,
+pull-to-refresh, safe areas everywhere. 48 E2E checks.
+
 ## v12.0 (2026-08-10) — The Win Hundred (#740–#839)
 Built to win it all, and loud about it. 🏆 Game Plan: every move ranked by
 win-prob gain with LOCK/LEAN/COIN-FLIP confidence, floor-when-favored /

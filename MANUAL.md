@@ -89,3 +89,15 @@ Five weapons, one loop (see WINNING.md for the doctrine):
 
 Game day runs itself: real NFL clocks on every player, live win probability,
 scenario ticker, two-minute-drill pings, and the late-window verdict.
+
+## 🎛 The v13 interface
+
+- **Left: the rail.** Scorebug (live score + win%), stat tiles, quick actions,
+  the Starting Nine with headshots, bench drawer, the wire, byes ahead.
+- **Center: the dashboard.** Sticky week bar, the matchup hero with the win
+  dial and both lineups, five KPI tiles, then standings / around-the-league /
+  the chase / the wire as cards. `▤` toggles compact density; 🗂 reveals the
+  player pool; ✏️ jumps to the draft room.
+- **Phone: the tab bar.** Plan · Sim · Scores · Wire · More (everything else).
+  Overlays slide up as sheets. Pull down at the top to refresh.
+- **Calm mode** (Settings) turns off every decorative animation.
