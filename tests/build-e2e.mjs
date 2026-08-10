@@ -15,7 +15,7 @@ try {
   out.push("hero:"+(document.getElementById("hero").innerHTML.includes("% at #")?"OK":"BAD"));
   out.push("avatars:"+(document.querySelectorAll("#poolBody .avatar").length>10?"OK":"BAD"));
   out.push("stamp:"+(document.getElementById("buildStamp").textContent.includes("build v")?"OK":"BAD"));
-  out.push("mods:"+((window.__mod||[]).length===4?"OK":"BAD("+(window.__mod||[]).join("/")+")"));
+  out.push("mods:"+((window.__mod||[]).length===5?"OK":"BAD("+(window.__mod||[]).join("/")+")"));
   pickMine(allPlayers().find(p=>p.name==="Josh Allen").id);
   const c={QB:0}; S.mine.forEach(id=>{const p=idIndex()[id]; if(p&&p.pos==="QB")c.QB++;});
   out.push("pick:"+(c.QB===1?"OK":"BAD"));
