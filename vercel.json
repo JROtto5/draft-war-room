@@ -35,11 +35,11 @@
   "rewrites": [
     {
       "source": "/draft",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/season",
-      "destination": "/index.html"
+      "destination": "/"
     }
   ]
 }
