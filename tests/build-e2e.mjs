@@ -147,6 +147,19 @@ try {
       d.includes("renderTrades") && d.includes("seasonDeck") &&
       typeof applySeasonHeader==="function" && !document.getElementById("draftMenuBtn");
   }catch(e){ return false; }})()?"OK":"BAD"));
+  // Game plan math runs offline (#754)
+  out.push("plan:"+((()=>{try{
+    const p0=allPlayers()[0];
+    const ct=confidenceTag(10,4), ct2=confidenceTag(0.5,8);
+    const wm=winModeFor();
+    const bs=winProbLineup("ceiling");
+    const gp=gamePlanMoves();
+    return ct.t==="LOCK" && ct2.t==="COIN-FLIP" && typeof playerVariance(p0)==="number" &&
+      ["floor","ceiling","balanced"].includes(wm.mode) && bs.line.length>=9 &&
+      Array.isArray(gp.moves) && typeof rosSos(p0)==="number" &&
+      (pathToPlayoffs()===null || typeof pathToPlayoffs()==="object") &&
+      typeof planTick==="function" && typeof renderGamePlan==="function";
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // My Week math runs offline on fixtures (#654)
   out.push("week:"+((()=>{try{
     const byId=idIndex(); const ids=allPlayers().slice(0,30).map(p=>p.id);

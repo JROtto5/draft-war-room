@@ -511,6 +511,7 @@ const PALETTE_ACTIONS = [
   ["📖 Week recap story", ()=>weeklyRecap2()],
   ["🩹 Roster health digest", ()=>injuryDigest()],
   ["📈 Season stats", ()=>renderSeasonStats()],
+  ["🏆 Game plan", ()=>renderGamePlan()],
   ["🏆 Standings", ()=>renderScoreboard()],
   ["⚔ My matchup", ()=>renderScoreboard()],
   ["🩺 Injury Center", ()=>document.getElementById("injBtn").click()],

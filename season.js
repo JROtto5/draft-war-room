@@ -246,9 +246,10 @@ function powerRankings(){                                                       
   try{ localStorage.setItem(k, JSON.stringify(Object.fromEntries(rows.map((r,i)=>[r.rid,i])))); }catch(e){}
   return rows;
 }
-async function playoffOdds(nSims){                                               // #660
+async function playoffOdds(nSims, forceMyResult){                                // #660 · forceMyResult: "W"|"L" (#745)
   const lg = (S.settings.sleeperLeagueId||"").trim(); if(!lg || !SCOREB.rosters) return null;
   const w = curWeek(), LAST = 14, N = nSims||300, SPOTS = 6;
+  const myRid = +S.settings.sleeperRosterId || -1;
   if(!SCOREB.future || SCOREB.futureW!==w){
     try{
       const fut = {};
@@ -268,8 +269,13 @@ async function playoffOdds(nSims){                                              
       Object.values(pairs).forEach(pr=>{
         if(pr.length!==2) return;
         const a = pr[0].roster_id, b = pr[1].roster_id;
-        const sa = mu[a] + (Math.random()+Math.random()+Math.random()-1.5)*28;
-        const sb2 = mu[b] + (Math.random()+Math.random()+Math.random()-1.5)*28;
+        let sa = mu[a] + (Math.random()+Math.random()+Math.random()-1.5)*28;
+        let sb2 = mu[b] + (Math.random()+Math.random()+Math.random()-1.5)*28;
+        if(fw===w && forceMyResult && (a===myRid || b===myRid)){                 // #745
+          const meFirst = a===myRid;
+          const win = forceMyResult==="W";
+          if((meFirst && win) || (!meFirst && !win)){ sa = Math.max(sa, sb2+1); } else { sb2 = Math.max(sb2, sa+1); }
+        }
         pf[a]+=sa; pf[b]+=sb2;
         if(sa>=sb2) wins[a]++; else wins[b]++;
       });
@@ -277,6 +283,7 @@ async function playoffOdds(nSims){                                              
     st.map(r=>r.rid).sort((x,y)=> wins[y]-wins[x] || pf[y]-pf[x]).slice(0,SPOTS).forEach(rid=>madeIt[rid]++);
   }
   const out = {}; st.forEach(r=>out[r.rid] = Math.round(madeIt[r.rid]/N*100));
+  if(!forceMyResult) SEASON.lastOdds = out;
   return out;
 }
 function allPlayStandings(hist, rosters, users){                                 // pure (#662)
@@ -1142,6 +1149,7 @@ function oppNewsAlert(){                                                        
 }
 function gameDayChecks(){                                                         // called from the scoreboard loop
   inactiveSweep(); scoreAlerts(); closeGameAlert(); oppNewsAlert(); updateActionBadge();
+  if(typeof planNag==='function') planNag();
 }
 function seasonTicker(){                                                          // #701
   let tk = document.getElementById("ticker");
@@ -1487,6 +1495,7 @@ function seasonDeckHtml(){                                                      
   const un = (typeof unreadAlerts==="function") ? unreadAlerts() : 0;
   const btn = (fn, ico, lab, title)=>'<button class="hbtn deckbtn" onclick="'+fn+'" title="'+(title||lab)+'"><span class="dicon">'+ico+'</span><span class="dlab">'+lab+'</span></button>';
   return '<div class="actions" id="seasonDeck" role="navigation" aria-label="Season navigation">'+
+    btn("renderGamePlan()","🏆","Plan","This week's game plan — G")+
     btn("renderScoreboard()","📊","Scores","League scoreboard, standings, playoff odds — S")+
     btn("renderWaivers()","📥","Waivers","Waiver wire war room — V")+
     btn("renderTrades()","🔁","Trades","Trade center — D")+
@@ -1518,11 +1527,213 @@ document.addEventListener("keydown", e=>{                                       
   const t = e.target;
   if(t && (t.tagName==="INPUT" || t.tagName==="TEXTAREA" || t.tagName==="SELECT" || t.isContentEditable)) return;
   const k = e.key.toLowerCase();
-  if(k==="s"){ e.preventDefault(); renderScoreboard(); }
+  if(k==="g"){ e.preventDefault(); renderGamePlan(); }
+  else if(k==="s"){ e.preventDefault(); renderScoreboard(); }
   else if(k==="v"){ e.preventDefault(); renderWaivers(); }
   else if(k==="d"){ e.preventDefault(); renderTrades(); }
   else if(k==="x"){ e.preventDefault(); renderSeasonStats(); }
   else if(k==="w"){ e.preventDefault(); const h2 = document.getElementById("hero"); if(h2) h2.scrollIntoView({behavior:"smooth", block:"start"}); }
 });
+
+/* ---------- R45 Win Machine: the weekly game plan (#740–#754) ---------- */
+function playerVariance(p){
+  const hist = seasonArchive();
+  if(hist.length>=3){
+    const wk = playerWeekly(hist)[p.id];
+    const c = consistencySeason(wk||[]);
+    if(c && c.n>=3) return Math.max(3, c.sd);
+  }
+  const sr = (typeof spikeRate==="function") ? (spikeRate(p)||0.3) : 0.3;
+  return Math.max(3, (p.proj/16) * (0.45 + sr*0.8));
+}
+function confidenceTag(gap, sd){                                                 // #750
+  const z = gap / Math.max(1, sd);
+  return z>=0.8 ? {t:"LOCK", c:"green"} : z>=0.35 ? {t:"LEAN", c:"gold"} : {t:"COIN-FLIP", c:"dim"};
+}
+function winModeFor(){                                                           // #741/#748
+  try{
+    const byId = idIndex(), w = curWeek(), md = WEEKST.mate;
+    if(!md || !md.opp) return {mode:"balanced", wp:0.5};
+    const my = bestStartersWeek(rosterIds(), byId, w).pts;
+    const opp = bestStartersWeek(md.opp.ids, byId, w).pts;
+    const wp = winProb(my, opp);
+    return {mode: wp>=0.60 ? "floor" : wp<=0.42 ? "ceiling" : "balanced", wp};
+  }catch(e){ return {mode:"balanced", wp:0.5}; }
+}
+function winProbLineup(mode){                                                    // #741
+  const byId = idIndex(), w = curWeek(), ids = rosterIds();
+  const lam = mode==="ceiling" ? 0.35 : mode==="floor" ? -0.30 : 0;
+  const fix = {};
+  ids.map(id=>byId[id]).filter(Boolean).forEach(p=>{
+    const base = weekProj(p, w);
+    fix[p.id] = Math.max(0, base + lam*Math.min(playerVariance(p), base));
+  });
+  const bs = bestStartersWeek(ids, byId, w, fix);
+  bs.line.forEach(sl=>{ if(sl.p) sl.wp = weekProj(sl.p, w); });
+  bs.pts = Math.round(bs.line.reduce((a,s)=>a+s.wp,0)*10)/10;
+  return bs;
+}
+function stackNotes(bs){                                                         // #742
+  const qbTeams = bs.line.filter(sl=>sl.p && sl.p.pos==="QB").map(sl=>sl.p.team);
+  const mates = bs.line.filter(sl=>sl.p && sl.p.pos!=="QB" && sl.p.pos!=="DEF" && qbTeams.includes(sl.p.team)).map(sl=>sl.p.name);
+  return mates.length ? mates : null;
+}
+function rosSos(p){                                                              // #743
+  const w = curWeek(); let s = 0, g = 0;
+  for(let fw=w; fw<=14; fw++){
+    const opp = (typeof SCHED!=="undefined" && SCHED[p.team]) ? SCHED[p.team][fw] : null;
+    if(opp){ s += defToughRank(opp); g++; }
+  }
+  return g ? Math.round(s/g) : 16;
+}
+async function mustWinSwing(){                                                   // #745
+  const withW = await playoffOdds(150, "W");
+  const withL = await playoffOdds(150, "L");
+  const myRid = +S.settings.sleeperRosterId;
+  if(!withW || !withL || !myRid) return null;
+  return {win:withW[myRid]||0, lose:withL[myRid]||0, swing:(withW[myRid]||0)-(withL[myRid]||0)};
+}
+function pathToPlayoffs(){                                                       // #746
+  try{
+    const st = standingsRows(SCOREB.rosters, SCOREB.users);
+    if(!st.length) return null;
+    const myRid = +S.settings.sleeperRosterId;
+    const i = st.findIndex(r=>r.rid===myRid); if(i<0) return null;
+    const me = st[i], seed = i+1, SPOTS = 6;
+    const weeksLeft = Math.max(0, 14-curWeek()+1);
+    if(seed<=SPOTS){
+      const chaser = st[SPOTS] || null;
+      const lead = chaser ? me.w-chaser.w : 99;
+      return {inn:true, seed, weeksLeft, line: lead>weeksLeft ? "CLINCHED territory — nobody can catch you on wins" :
+        "hold the "+ordinal(seed)+" seed — "+(chaser?("lead over "+chaser.name+": "+lead+" game"+(lead===1?"":"s")):"")};
+    }
+    const gate = st[SPOTS-1];
+    const back = gate.w-me.w;
+    const targets = st.slice(Math.max(0,i-2), i).map(r=>r.name);
+    return {inn:false, seed, weeksLeft, line: back>weeksLeft ? "need chaos — "+back+" back with "+weeksLeft+" to play" :
+      back+" back of "+gate.name+" with "+weeksLeft+" left"+(targets.length?" · root against "+targets.join(", "):"")};
+  }catch(e){ return null; }
+}
+function deadlinePlan(){                                                         // #747
+  try{
+    const dl = (WAIV.league && WAIV.league.settings && WAIV.league.settings.trade_deadline) || 11;
+    const w = curWeek(), left = dl-w;
+    if(left<0) return {line:"deadline passed — the roster you have is the roster you ride"};
+    const odds = SEASON.lastOdds ? SEASON.lastOdds[+S.settings.sleeperRosterId] : null;
+    const stance = odds==null ? "scout" : odds>=55 ? "BUY" : odds<=25 ? "SELL" : "hold";
+    return {line:(left===0?"DEADLINE WEEK":left+" week"+(left===1?"":"s")+" to the deadline")+" · stance: "+stance+
+      (odds!=null?" ("+odds+"% playoff odds)":""), stance};
+  }catch(e){ return null; }
+}
+function planTicks(){ try{ return JSON.parse(localStorage.getItem(LS_KEY+"-plan"+curWeek())||"{}"); }catch(e){ return {}; } }
+function planTick(k){                                                            // #752
+  const t = planTicks(); t[k] = !t[k];
+  try{ localStorage.setItem(LS_KEY+"-plan"+curWeek(), JSON.stringify(t)); }catch(e){}
+  return t[k];
+}
+function gamePlanMoves(){                                                        // #749/#750
+  const byId = idIndex(), w = curWeek(), moves = [];
+  const md = WEEKST.mate;
+  const wm = winModeFor();
+  const bs = winProbLineup(wm.mode);
+  if(md && md.me && md.me.starters && md.me.starters.filter(Boolean).length){
+    const actual = md.me.starters.filter(Boolean);
+    const actualSet = new Set(actual);
+    actual.map(id=>byId[id]).filter(Boolean).filter(p=>weekProj(p,w)===0).forEach(p=>{
+      const swap = benchSwapFor(p);
+      moves.push({k:"zero-"+p.id, pri:100, gain:swap?weekProj(swap,w):5,
+        txt:"🚨 BENCH "+p.name+" — projects ZERO (bye/out)"+(swap?", start "+swap.name:""), tag:{t:"LOCK", c:"green"}});
+    });
+    const ins = [...bs.starterIds].filter(id=>!actualSet.has(id)).map(id=>byId[id]).filter(Boolean);
+    const outs = actual.filter(id=>!bs.starterIds.has(id)).map(id=>byId[id]).filter(Boolean)
+      .filter(p=>weekProj(p,w)>0);
+    ins.slice(0,4).forEach((p,i2)=>{
+      const o = outs[i2]; if(!o) return;
+      const gain = Math.round((weekProj(p,w)-weekProj(o,w))*10)/10;
+      if(gain<=0.3) return;
+      moves.push({k:"swap-"+p.id, pri:50+gain, gain,
+        txt:"▲ Start "+p.name+" over "+o.name+" (+"+gain+")", tag:confidenceTag(gain, (playerVariance(p)+playerVariance(o))/2/4)});
+    });
+  }
+  const fas = freeAgents();
+  upgradeFinder(rosterIds(), byId, w, fas).slice(0,2).forEach(u=>{
+    moves.push({k:"claim-"+u.add.id, pri:30+u.gain, gain:u.gain,
+      txt:"📥 Claim "+u.add.name+(u.drop?" (drop "+u.drop.name+")":"")+" · +"+u.gain+"/wk", tag:{t:u.gain>4?"LOCK":"LEAN", c:u.gain>4?"green":"gold"}});
+  });
+  const myDef = rosterIds().map(id=>byId[id]).filter(Boolean).find(p=>p.pos==="DEF");
+  if(myDef){
+    const soft = defStreamRows(fas, w)[0];
+    const myOpp = (typeof SCHED!=="undefined" && SCHED[myDef.team]) ? SCHED[myDef.team][w] : null;
+    if(soft && myOpp && typeof envRank==="function" && envRank(myOpp)<10 && soft.soft>=20)
+      moves.push({k:"defstream", pri:20, gain:2, txt:"🛡 Stream "+soft.p.team+" D over "+myDef.team+" (brutal matchup)", tag:{t:"LEAN", c:"gold"}});
+  }
+  return {moves:moves.sort((a,b)=>b.pri-a.pri), mode:wm, bs};
+}
+async function renderGamePlan(){                                                 // #740
+  const old = document.getElementById("gpOverlay"); if(old){ old.remove(); return; }
+  await Promise.all([refreshWeek(), myLiveIds(), myWeekData(), leagueWeekData(false), leagueMeta(), leagueRosteredSet().catch(()=>null)]);
+  const byId = idIndex(), w = curWeek();
+  const {moves, mode, bs} = gamePlanMoves();
+  const ticks = planTicks();
+  const md = WEEKST.mate;
+  const p2p = pathToPlayoffs();
+  const dl = deadlinePlan();
+  const stack = stackNotes(bs);
+  const ov = document.createElement("div"); ov.id = "gpOverlay"; ov.className = "snov";
+  let h = '<div class="sbcard" role="dialog" aria-label="Game plan"><button class="sbx" data-gpx="1">✕</button>';
+  h += '<div class="tag">🏆 WEEK '+w+' GAME PLAN</div>';
+  const wpPct = Math.round(mode.wp*100);
+  h += '<div class="benchhead" style="font-size:14px;color:var(--'+(wpPct>=55?'green':wpPct<=45?'red':'gold')+')">'+
+    (md && md.opp ? 'vs '+esc(md.opp.name)+' · win prob '+wpPct+'%' : 'no matchup data yet')+
+    (mode.mode==="ceiling" ? ' — YOU\'RE THE DOG. We go down swinging: boom-bust lineup, maximum variance. 🎢' :
+     mode.mode==="floor" ? ' — you\'re favored. Protect the lead: floor plays, no heroics. 🧱' : ' — dead even. Best players play. ⚖')+'</div>';
+  h += moves.length ? '<div class="benchhead">📋 The moves ('+moves.filter(m=>ticks[m.k]).length+'/'+moves.length+' done)</div>'+
+    moves.map(m=>'<div class="sbply" style="cursor:pointer'+(ticks[m.k]?';opacity:.5':'')+'" data-tick="'+m.k+'">'+
+      '<span>'+(ticks[m.k]?'✅ ':'⬜ ')+esc(m.txt)+'</span><b style="color:var(--'+m.tag.c+')">'+m.tag.t+'</b></div>').join("")
+    : '<div class="benchhead" style="color:var(--green)">✓ No moves needed — lineup is already the win-prob max. Go relax.</div>';
+  if(stack) h += '<div class="sbply"><span>🔗 Stack live: '+esc(stack.join(" + "))+' with their QB — '+
+    (mode.mode==="ceiling"?'perfect, correlated ceilings win upsets':'watch it — correlated floors sink favorites')+'</span></div>';
+  h += '<div class="sbply" id="gpSwing"><span>⚖ What this game is worth</span><b class="mono">computing…</b></div>';
+  if(p2p) h += '<div class="sbply"><span>🛣 '+(p2p.inn?'Playoff seat '+ordinal(p2p.seed):'Outside looking in ('+ordinal(p2p.seed)+')')+'</span><span class="dimtxt">'+esc(p2p.line)+'</span></div>';
+  if(dl) h += '<div class="sbply"><span>⏰ '+esc(dl.line)+'</span></div>';
+  const ros = rosterIds().map(id=>byId[id]).filter(Boolean).filter(p=>p.pos!=="DEF")
+    .map(p=>({p, sos:rosSos(p)})).sort((a,b)=>b.sos-a.sos);
+  h += '<div class="benchhead">📅 Rest-of-season schedule (soft → brutal)</div><div class="scarce">'+
+    ros.map(x=>'<span class="scpill" data-card="'+x.p.id+'" style="color:var(--'+(x.sos>=20?'green':x.sos<=12?'red':'text')+')">'+
+    esc(x.p.name.split(" ").slice(-1)[0])+' '+x.sos+'</span>').join("")+'</div>';
+  const eaters = rosterIds().map(id=>byId[id]).filter(Boolean).filter(p=>p.pos!=="DEF" && playoffStars(p.team)>=4);
+  if(eaters.length) h += '<div class="benchhead">🏆 Built for weeks 15–17: '+eaters.map(p=>esc(p.name.split(" ").slice(-1)[0])).join(", ")+' eat in the playoffs</div>';
+  const holes = byeFillFinder(rosterIds(), byId, freeAgents());
+  if(holes.length) h += '<div class="benchhead">📆 Bye master plan</div>'+holes.slice(0,3).map(x=>
+    '<div class="sbply"><span>W'+x.w+': '+x.out.map(p=>esc(p.name.split(" ").slice(-1)[0])).join(", ")+' out</span><span>'+
+    x.fills.slice(0,2).map(p=>'<span class="scpill" data-card="'+p.id+'">'+esc(p.name.split(" ").slice(-1)[0])+'</span>').join("")+'</span></div>').join("");
+  h += '</div>';
+  ov.innerHTML = h;
+  document.body.appendChild(ov);
+  mustWinSwing().then(sw2=>{                                                     // #745
+    const row = document.getElementById("gpSwing");
+    if(row && sw2) row.innerHTML = '<span>⚖ What this game is worth</span><b class="mono">'+
+      (sw2.swing>=25 ? '🔥 '+sw2.swing+'% playoff swing — SEASON GAME' : sw2.swing+'% playoff swing (W: '+sw2.win+'% · L: '+sw2.lose+'%)')+'</b>';
+    else if(row) row.remove();
+  }).catch(()=>{ const row = document.getElementById("gpSwing"); if(row) row.remove(); });
+  ov.addEventListener("click", e=>{
+    if(e.target===ov || e.target.closest("[data-gpx]")) return ov.remove();
+    const tk = e.target.closest("[data-tick]");
+    if(tk){ planTick(tk.dataset.tick); ov.remove(); renderGamePlan(); }
+  });
+}
+function planNag(){                                                              // #752 game-day nag
+  try{
+    if(new Date().getDay()!==0) return;
+    const {moves} = gamePlanMoves();
+    const ticks = planTicks();
+    const open = moves.filter(m=>!ticks[m.k] && m.pri>=50);
+    if(!open.length) return;
+    const k = LS_KEY+"-plannag"+curWeek();
+    if(localStorage.getItem(k)) return;
+    localStorage.setItem(k, "1");
+    alertFire("plan", "📋 Game plan has "+open.length+" unfinished move"+(open.length===1?"":"s"), open[0].txt.replace(/^[^\w]+/,""));
+  }catch(e){}
+}
 
 window.__mod = window.__mod || []; window.__mod.push("season.js");
