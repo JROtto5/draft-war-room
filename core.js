@@ -1242,6 +1242,12 @@ function setSync(on){
 }
 document.getElementById("syncBtn").addEventListener("click", ()=>setSync(!SYNC.on));
 
+/* ---------- Routes: / = season, /draft = draft room (#848) ---------- */
+function appRoute(){
+  if(typeof E2E_MODE!=="undefined" && E2E_MODE) return "draft";
+  return /\/draft(\.html)?\/?$/.test(location.pathname) ? "draft" : "season";
+}
+
 /* ---------- Season Mode: league-true availability + heat alerts (#634–#637) ---------- */
 const SEASON = {on:false, rostered:null, at:0, avail:[], hot:{}, timer:null};
 async function leagueRosteredSet(force){

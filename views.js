@@ -1341,6 +1341,7 @@ function renderNow(){
     requestAnimationFrame(()=>{ [renderBest, renderRoster, renderLog, renderQueue, renderPlan].forEach(fn=>{ try{ fn(); }catch(e){} }); });
     return;
   }
+  if(typeof renderSeasonPage==="function"){ try{ renderSeasonPage(); }catch(e){} }
   [renderHeader, renderTabs, renderPool, renderBest, renderRoster, renderLog, renderQueue, renderPlan].forEach(fn=>{
     try{ fn(); }catch(e){ console.error(fn.name, e); if(typeof surfaceError==="function") surfaceError(fn.name+": "+e.message); }
   });

@@ -1529,6 +1529,7 @@ function applyDefaultIds(){                                                     
   return dirty;
 }
 async function enterSeasonMode(){                                                // #840
+  if(typeof appRoute==="function" && appRoute()==="draft"){ location.href = "/"; return; }   // #848
   if(SEASON.on){
     const h2 = document.getElementById("hero");
     if(h2) h2.scrollIntoView({behavior:"smooth", block:"start"});

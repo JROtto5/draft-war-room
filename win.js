@@ -1142,4 +1142,76 @@ function renderRituals(){                                                       
 }
 function ritualTick(){ checklistSweep(); gradeSweep(); streakSkin(); routineCard(); }
 
+/* ---------- The Season Page: / is the season, /draft is the draft (#845–#848) ---------- */
+function renderSeasonPage(){
+  const sp = document.getElementById("seasonPage"), pool = document.getElementById("poolPanel");
+  if(!sp || !pool) return;
+  const on = SEASON.on && (typeof appRoute!=="function" || appRoute()==="season");
+  if(!on){ sp.hidden = true; pool.style.display = ""; return; }
+  sp.hidden = false;
+  pool.style.display = window._poolShow ? "" : "none";                            // #846
+  const byId = idIndex(), w = curWeek(), md = WEEKST.mate;
+  const s2o = sleeperToOurs();
+  const inv = {}; for(const k2 in s2o) inv[s2o[k2]] = k2;
+  const ms = (typeof myStandingsRow==="function") ? myStandingsRow() : null;
+  let h = '<h2><span class="dot"></span> WEEK '+w+
+    (ms ? ' · <span class="mono">'+ms.row.w+'-'+ms.row.l+(ms.row.t?'-'+ms.row.t:'')+'</span> · '+ordinal(ms.place)+' place' : '')+
+    '<span style="float:right;display:flex;gap:6px">'+
+    '<button class="hbtn" onclick="renderGamePlan()">🏆 Plan</button>'+
+    '<button class="hbtn" onclick="renderSim()">🎲 Sim</button>'+
+    '<button class="hbtn" onclick="window._poolShow=!window._poolShow;renderSeasonPage()">🗂 '+(window._poolShow?'Hide':'Player')+' pool</button>'+
+    '<a class="hbtn" href="/draft" style="text-decoration:none">✏️ Draft room</a></span></h2>';
+  try{ if(typeof hypeLine==="function" && hypeOn("mild")) h += '<div class="benchhead" style="color:var(--gold);font-size:13px">😤 '+esc(hypeLine())+'</div>'; }catch(e){}
+  // ⚔ THE MATCHUP — front and center
+  if(md && md.me){
+    const myBs = bestStartersWeek(rosterIds(), byId, w);
+    const opBs = md.opp ? bestStartersWeek(md.opp.ids, byId, w) : null;
+    const wp = opBs ? winProb(myBs.pts, opBs.pts) : null;
+    h += '<div class="benchhead" style="font-size:15px">⚔ '+esc(md.me.name||"Me")+' <b class="mono">'+md.me.pts.toFixed(1)+'</b>'+
+      (md.opp ? ' — <b class="mono">'+md.opp.pts.toFixed(1)+'</b> '+esc(md.opp.name)+
+      (wp!=null ? ' · <span style="color:var(--'+(wp>=0.55?'green':wp<=0.45?'red':'gold')+')">'+Math.round((window._liveWp!=null && anyGameLive() ? window._liveWp : Math.round(wp*100)))+'% to win</span>' : '') : '')+'</div>';
+    const plist = (side)=>{
+      if(!side || !side.starters) return "";
+      return side.starters.filter(Boolean).map(id=>{
+        const p = byId[id]; if(!p) return "";
+        const got = +side.ppts[inv[id]] || 0;
+        const g = (typeof gameStateOf==="function") ? gameStateOf(p.team) : null;
+        const badge = (typeof gsBadge==="function") ? gsBadge(p.team) : "";
+        const done = g && g.state==="post";
+        return '<div class="sbply" data-card="'+p.id+'" style="cursor:pointer"><span>'+esc(p.name)+
+          ' <span class="dimtxt">'+p.pos+(badge?' · '+badge:'')+'</span></span>'+
+          '<b class="mono"'+(got||done?'':' style="color:var(--dim)"')+'>'+(got||done ? got.toFixed(1) : '~'+weekProj(p,w).toFixed(1))+'</b></div>';
+      }).join("");
+    };
+    h += '<div class="sbcols"><div>'+plist(md.me)+'</div><div>'+(md.opp?plist(md.opp):'<div class="empty">no opponent found</div>')+'</div></div>';
+    if(typeof liveWpChartHtml==="function") h += liveWpChartHtml();
+  } else {
+    h += '<div class="empty">Pulling your matchup from Sleeper… (first load takes a few seconds)</div>';
+  }
+  // 📊 around the league
+  if(SCOREB.mus){
+    const rows = scoreboardRows(SCOREB, byId).filter(([a,b])=>{
+      const myRid = +S.settings.sleeperRosterId;
+      return a.rid!==myRid && b.rid!==myRid;
+    });
+    if(rows.length) h += '<div class="benchhead">📊 Around the league</div><div class="scarce">'+
+      rows.map(([a,b])=>'<span class="scpill">'+esc(a.name.slice(0,10))+' '+a.live.toFixed(0)+'–'+b.live.toFixed(0)+' '+esc(b.name.slice(0,10))+'</span>').join("")+'</div>';
+  }
+  // 🏆 standings
+  if(SCOREB.rosters){
+    const st = standingsRows(SCOREB.rosters, SCOREB.users);
+    const myRid = +S.settings.sleeperRosterId;
+    h += '<div class="benchhead">🏆 Standings</div><table class="sbtab"><tr><th></th><th>team</th><th>W-L</th><th>PF</th><th>strk</th></tr>'+
+      st.map((r,i)=>'<tr'+(r.rid===myRid?' class="sbme"':'')+'><td>'+(i+1)+'</td><td>'+esc(r.name)+'</td><td class="mono">'+r.w+'-'+r.l+(r.t?'-'+r.t:'')+'</td><td class="mono">'+r.pf+'</td><td>'+esc(r.streak)+'</td></tr>').join("")+'</table>';
+  }
+  // chase, rival, wire
+  if(typeof titleChaseHtml==="function") h += titleChaseHtml();
+  if(typeof deathWatch==="function") h += deathWatch();
+  if(SEASON.avail && SEASON.avail.length) h += '<div class="benchhead">🔥 Heating on the wire</div><div class="scarce">'+
+    SEASON.avail.slice(0,6).map(p=>'<span class="scpill" data-card="'+p.id+'">'+esc(p.name)+' '+p.pos+
+    (typeof buzzOf==="function"?' <span class="dimtxt">'+buzzOf(p).toLocaleString()+'</span>':'')+'</span>').join("")+
+    ' <button class="undo1" onclick="renderWaivers()">open waivers →</button></div>';
+  sp.innerHTML = h;
+}
+
 window.__mod = window.__mod || []; window.__mod.push("win.js");

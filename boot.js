@@ -121,8 +121,13 @@ if(!E2E_MODE && location.protocol.indexOf("http")===0){
     ["https://api.sleeper.app/v1/state/nfl"].forEach(u=>{ try{ fetch(u, {mode:"cors"}).catch(()=>{}); }catch(e){} });
   }, {timeout:4000});
   setTimeout(()=>{ refreshInjuries(true); refreshTrending(); }, 1500);
-  // Season Mode IS the default (#844): flip immediately, import fills the board in the background
+  // Season Mode IS the default on / (#844/#848); /draft keeps the classic cockpit
   setTimeout(()=>{ try{
+    if(typeof appRoute==="function" && appRoute()==="draft"){
+      const b2 = document.getElementById("seasonBtn");
+      if(b2){ b2.textContent = "🏟 Season"; b2.title = "Back to the season page (/)"; }
+      return;
+    }
     if(typeof applyDefaultIds==="function") applyDefaultIds();                 // #843: IDs pre-wired, zero setup
     startSeasonMode();
     if(typeof renderNow==="function") renderNow();
@@ -142,7 +147,7 @@ document.querySelectorAll(".modal").forEach((m,i)=>{
   const h3 = m.querySelector("h3");
   if(h3){ if(!h3.id) h3.id = "dlg"+i; m.setAttribute("aria-labelledby", h3.id); }
 });
-const BUILD = "12.2";
+const BUILD = "12.3";
 let _installEvt = null;
 window.addEventListener("beforeinstallprompt", e=>{
   e.preventDefault();

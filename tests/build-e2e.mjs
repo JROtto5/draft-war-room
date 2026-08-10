@@ -140,6 +140,14 @@ try {
     }
     return "OK";
   })()));
+  // Routes: / season, /draft draft, e2e pinned to draft (#845–#848)
+  out.push("route:"+((()=>{try{
+    const sp=document.getElementById("seasonPage"), pp=document.getElementById("poolPanel");
+    const r=appRoute();
+    renderSeasonPage();
+    return r==="draft" && !!sp && sp.hidden===true && !!pp && pp.style.display==="" &&
+      typeof renderSeasonPage==="function";
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // One-tap season entry (#840–#842)
   out.push("entry:"+((()=>{try{
     const b=document.getElementById("seasonBtn");
