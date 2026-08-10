@@ -1512,8 +1512,22 @@ function hqMondayLine(){                                                        
   }catch(e){ return ""; }
 }
 
-/* ---------- One-tap Season Mode (#840–#842) ---------- */
+/* ---------- One-tap Season Mode (#840–#843) ---------- */
 const DEFAULT_LEAGUE = "1357910286874464256";                                    // Buck Breakers (#841)
+const DEFAULT_DRAFT  = "1357910286887043072";                                    // completed 2026 draft (#843)
+const DEFAULT_SLOT2RID = {"1":2,"2":5,"3":4,"4":10,"5":1,"6":9,"7":11,"8":7,"9":8,"10":6,"11":3,"12":12};
+const DEFAULT_ROSTER_ID = 12;                                                    // Otto5, slot 12
+function applyDefaultIds(){                                                      // #843: every ID pre-wired
+  let dirty = false;
+  if(!(S.settings.sleeperLeagueId||"").trim()){ S.settings.sleeperLeagueId = DEFAULT_LEAGUE; dirty = true; }
+  if(S.settings.sleeperLeagueId===DEFAULT_LEAGUE){
+    if(!(S.settings.sleeperDraftId||"").trim()){ S.settings.sleeperDraftId = DEFAULT_DRAFT; dirty = true; }
+    if(!S.settings.sleeperRosterId){ S.settings.sleeperRosterId = DEFAULT_ROSTER_ID; dirty = true; }
+    if(!S.settings.slot2rid){ S.settings.slot2rid = DEFAULT_SLOT2RID; dirty = true; }
+  }
+  if(dirty) commit();
+  return dirty;
+}
 async function enterSeasonMode(){                                                // #840
   if(SEASON.on){
     const h2 = document.getElementById("hero");
@@ -1522,7 +1536,7 @@ async function enterSeasonMode(){                                               
     return;
   }
   toast("🏟 Flipping the war room to Season Mode…");
-  if(!(S.settings.sleeperLeagueId||"").trim()){ S.settings.sleeperLeagueId = DEFAULT_LEAGUE; commit(); }
+  applyDefaultIds();
   const ok = await importCompletedDraft(false);
   if(!ok && myIds().length >= S.settings.roster) startSeasonMode();
   if(typeof renderNow==="function") renderNow();

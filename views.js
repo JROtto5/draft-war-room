@@ -678,7 +678,7 @@ function renderBest(){
   const top = scored[0];
   const hero = $("#hero");
   const doneN = myIds().length;
-  if(doneN >= S.settings.roster && doneN > 0){
+  if((typeof SEASON!=="undefined" && SEASON.on) || (doneN >= S.settings.roster && doneN > 0)){
     const byIdH = idIndex();
     const bsH = bestStarters(myIds(), byIdH);
     const hurtN = myIds().map(id=>byIdH[id]).filter(Boolean).filter(p2=>injuryOf(p2)).length;

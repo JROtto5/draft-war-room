@@ -143,8 +143,14 @@ try {
   // One-tap season entry (#840–#842)
   out.push("entry:"+((()=>{try{
     const b=document.getElementById("seasonBtn");
-    return !!b && typeof enterSeasonMode==="function" && DEFAULT_LEAGUE==="1357910286874464256";
-  }catch(e){ return false; }})()?"OK":"BAD"));
+    const idsOk = DEFAULT_LEAGUE==="1357910286874464256" && DEFAULT_DRAFT==="1357910286887043072" &&
+      DEFAULT_ROSTER_ID===12 && DEFAULT_SLOT2RID["12"]===12 && typeof applyDefaultIds==="function";
+    // forced season render: HQ hero must appear with an EMPTY board when SEASON.on (#844)
+    SEASON.on = true; renderNow();
+    const hq = document.getElementById("hero").innerHTML.includes("SEASON HQ");
+    SEASON.on = false; renderNow();
+    return !!b && typeof enterSeasonMode==="function" && idsOk && hq;
+  }catch(e){ SEASON.on=false; return false; }})()?"OK":"BAD"));
   // Season deck + shortcuts wiring (#738)
   out.push("deck:"+((()=>{try{
     const d = seasonDeckHtml();

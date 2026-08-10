@@ -1315,7 +1315,8 @@ async function importCompletedDraft(auto){
   }catch(e){ if(!auto) toast("Draft import failed — check the ID", {warn:true}); return false; }
 }
 function startSeasonMode(){
-  if(SEASON.on || myIds().length < S.settings.roster) return;
+  if(SEASON.on) return;
+  if(myIds().length < S.settings.roster && !(S.settings.sleeperLeagueId||"").trim()) return;
   SEASON.on = true;
   if(typeof applySeasonHeader==="function") applySeasonHeader();                  // #732
   clearInterval(SEASON.timer);

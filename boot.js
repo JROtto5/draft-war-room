@@ -114,22 +114,20 @@ setTimeout(()=>{
 }, 600);
 if(location.hash.indexOf("#b=")===0){ loadSharedBoard().then(ok=>{ if(ok){ initInjuries(); render(); } }); }
 initInjuries();
-const E2E_MODE = location.search.indexOf("e2e") >= 0;   // deterministic test runs: no network side-effects
+const E2E_MODE = location.search.indexOf("e2e") >= 0 || /e2e/.test(location.pathname);   // deterministic test runs: no network side-effects (e2e.html too — the boot kick was importing the REAL draft mid-test)
 if(!E2E_MODE && location.protocol.indexOf("http")===0){
   // idle connection warm-up (#424): a HEAD-ish ping opens TLS early
   if(window.requestIdleCallback) requestIdleCallback(()=>{
     ["https://api.sleeper.app/v1/state/nfl"].forEach(u=>{ try{ fetch(u, {mode:"cors"}).catch(()=>{}); }catch(e){} });
   }, {timeout:4000});
   setTimeout(()=>{ refreshInjuries(true); refreshTrending(); }, 1500);
-  // Season Mode is page 1 (#634): a finished Sleeper draft imports itself, then heat alerts run (#636/#637)
+  // Season Mode IS the default (#844): flip immediately, import fills the board in the background
   setTimeout(()=>{ try{
-    if(myIds().length >= S.settings.roster) startSeasonMode();
-    else {
-      // zero-config (#841): the app knows its own league
-      if(!(S.settings.sleeperLeagueId||"").trim() && typeof DEFAULT_LEAGUE!=="undefined"){ S.settings.sleeperLeagueId = DEFAULT_LEAGUE; commit(); }
-      if((S.settings.sleeperLeagueId||"").trim()) importCompletedDraft(true);
-    }
-  }catch(e){} }, 2500);
+    if(typeof applyDefaultIds==="function") applyDefaultIds();                 // #843: IDs pre-wired, zero setup
+    startSeasonMode();
+    if(typeof renderNow==="function") renderNow();
+    if(myIds().length < S.settings.roster && (S.settings.sleeperLeagueId||"").trim()) importCompletedDraft(true);
+  }catch(e){} }, 600);
   setInterval(()=>{ if(document.visibilityState==="visible") refreshInjuries(true); }, Math.max(2, S.settings.pollMins||5)*60e3);
   setInterval(()=>{ if(document.visibilityState==="visible") refreshTrending(); }, 15*60e3);
   setInterval(()=>{
@@ -144,7 +142,7 @@ document.querySelectorAll(".modal").forEach((m,i)=>{
   const h3 = m.querySelector("h3");
   if(h3){ if(!h3.id) h3.id = "dlg"+i; m.setAttribute("aria-labelledby", h3.id); }
 });
-const BUILD = "12.1";
+const BUILD = "12.2";
 let _installEvt = null;
 window.addEventListener("beforeinstallprompt", e=>{
   e.preventDefault();
