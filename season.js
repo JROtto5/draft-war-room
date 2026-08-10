@@ -537,4 +537,221 @@ function seasonHeroBits(){                                                      
   }catch(e){ return ""; }
 }
 
+/* ---------- R40 Waiver wire war room (#670–#684) ---------- */
+const WAIV = {league:null, leagueAt:0, drops:{map:{}, at:0}, tx:null, txAt:0};
+async function leagueMeta(){
+  const lg = (S.settings.sleeperLeagueId||"").trim(); if(!lg) return null;
+  if(WAIV.league && Date.now()-WAIV.leagueAt < 60*60e3) return WAIV.league;
+  try{ WAIV.league = await (await fetch(SYNC.base+"/league/"+lg)).json(); WAIV.leagueAt = Date.now(); }catch(e){}
+  return WAIV.league;
+}
+function freeAgents(){
+  const rostered = SEASON.rostered;
+  return allPlayers().filter(p=>rostered ? !rostered.has(p.id) : !offBoard(p.id));
+}
+function faabRows(rosters, users, league){                                       // pure (#671)
+  const budget = (league && league.settings && league.settings.waiver_budget) || 100;
+  const un = {}; (users||[]).forEach(u=>un[u.user_id]=u.display_name);
+  return (rosters||[]).map(r=>{
+    const used = (r.settings && r.settings.waiver_budget_used) || 0;
+    return {rid:r.roster_id, name:un[r.owner_id]||("Team "+r.roster_id), used, left:budget-used, budget};
+  }).sort((a,b)=>b.left-a.left);
+}
+function nextWeeksValue(p, w, n){
+  let v = 0, g = 0;
+  for(let fw=w; fw<w+(n||3) && fw<=17; fw++){ v += weekProj(p, fw); g++; }
+  return g ? Math.round(v/g*10)/10 : 0;
+}
+function upgradeFinder(ids, byId, w, fas){                                       // pure-ish (#672)
+  const bs = bestStartersWeek(ids, byId, w);
+  const bench = ids.map(id=>byId[id]).filter(Boolean).filter(p=>!bs.starterIds.has(p.id));
+  const out = [];
+  for(const pos of ["QB","RB","WR","TE","DEF"]){
+    const myWorst = bench.filter(p=>p.pos===pos).sort((a,b)=>nextWeeksValue(a,w,3)-nextWeeksValue(b,w,3))[0];
+    const bestFA = (fas||[]).filter(p=>p.pos===pos).sort((a,b)=>nextWeeksValue(b,w,3)-nextWeeksValue(a,w,3))[0];
+    if(!bestFA) continue;
+    const mine = myWorst ? nextWeeksValue(myWorst, w, 3) : 0;
+    const theirs = nextWeeksValue(bestFA, w, 3);
+    if(theirs > mine + 1.5) out.push({add:bestFA, drop:myWorst||null, gain:Math.round((theirs-mine)*10)/10});
+  }
+  return out.sort((a,b)=>b.gain-a.gain);
+}
+function byeFillFinder(ids, byId, fas){                                          // #673
+  const w = curWeek(), holes = [];
+  for(let fw=Math.max(w,5); fw<=14; fw++){
+    const outP = ids.map(id=>byId[id]).filter(Boolean).filter(p=>typeof BYES!=="undefined" && BYES[p.team]===fw);
+    if(outP.length < 2) continue;
+    const poss = [...new Set(outP.map(p=>p.pos))].filter(x=>x!=="DEF");
+    const fills = (fas||[]).filter(p=>poss.includes(p.pos) && BYES[p.team]!==fw)
+      .sort((a,b)=>weekProj(b,fw)-weekProj(a,fw)).slice(0,3);
+    holes.push({w:fw, out:outP, fills});
+  }
+  return holes;
+}
+function defStreamRows(fas, w){                                                  // #674
+  return (fas||[]).filter(p=>p.pos==="DEF").map(p=>{
+    let soft = 0, g = 0;
+    for(let fw=w; fw<w+2 && fw<=17; fw++){
+      const opp = (typeof SCHED!=="undefined" && SCHED[p.team]) ? SCHED[p.team][fw] : null;
+      if(opp && typeof envRank==="function"){ soft += envRank(opp); g++; }
+    }
+    return {p, soft: g ? Math.round(soft/g) : 16};
+  }).sort((a,b)=>b.soft-a.soft).slice(0,5);
+}
+function dropHeat(p){ return (typeof buzzOf==="function") ? buzzOf(p) : 0; }     // #675
+function bidSuggest(p, faabLeft){                                                // #678
+  const repl = replacementLevels(allPlayers());
+  const vor = Math.max(0, p.proj - (repl[p.pos]||0));
+  let pct = Math.min(45, Math.max(1, Math.round(vor/3)));
+  const heat = dropHeat(p);
+  if(heat > 5000) pct = Math.min(60, Math.round(pct*1.6));
+  else if(heat > 1500) pct = Math.round(pct*1.25);
+  const bid = Math.round((faabLeft==null ? 100 : faabLeft) * pct/100);
+  return {pct, bid:Math.max(1, Math.min(bid, faabLeft==null?100:faabLeft))};
+}
+function claimsGet(){ try{ return JSON.parse(localStorage.getItem(LS_KEY+"-claims")||"[]"); }catch(e){ return []; } }
+function claimsSave(c){ try{ localStorage.setItem(LS_KEY+"-claims", JSON.stringify(c)); }catch(e){} }
+function claimsAdd(addId, dropId, bid){                                          // #676
+  const c = claimsGet();
+  if(c.some(x=>x.add===addId)) return c;
+  c.push({add:addId, drop:dropId||null, bid:+bid||1});
+  claimsSave(c); return c;
+}
+async function trendingDropsMap(){                                               // #679
+  if(WAIV.drops.map && Date.now()-WAIV.drops.at < 15*60e3 && Object.keys(WAIV.drops.map).length) return WAIV.drops.map;
+  try{
+    const arr = await (await fetch("https://api.sleeper.app/v1/players/nfl/trending/drop?lookback_hours=24&limit=50")).json();
+    const inv = {}; if(typeof HEADSHOT!=="undefined") for(const k in HEADSHOT) inv[HEADSHOT[k]] = k;
+    const m = {}; arr.forEach(x=>{ const k = inv[+x.player_id]; if(k) m[k] = x.count; });
+    WAIV.drops = {map:m, at:Date.now()};
+  }catch(e){}
+  return WAIV.drops.map;
+}
+async function leagueTransactions(){                                             // #680
+  const lg = (S.settings.sleeperLeagueId||"").trim(); if(!lg) return [];
+  if(WAIV.tx && Date.now()-WAIV.txAt < 10*60e3) return WAIV.tx;
+  try{
+    const w = curWeek();
+    const weeks = [w, w-1].filter(x=>x>=1);
+    const all = (await Promise.all(weeks.map(x=>fetch(SYNC.base+"/league/"+lg+"/transactions/"+x).then(r=>r.json())))).flat();
+    const map = sleeperToOurs(), byId = idIndex();
+    const nm = sid=>{ const p = byId[map[String(sid)]]; return p ? p.name : ("#"+sid); };
+    WAIV.tx = (all||[]).filter(t=>t.status==="complete").map(t=>({
+      type:t.type, rid:(t.roster_ids||[])[0],
+      adds:Object.keys(t.adds||{}).map(nm), drops:Object.keys(t.drops||{}).map(nm),
+      bid:(t.settings && t.settings.waiver_bid)||0, at:t.status_updated||0
+    })).sort((a,b)=>b.at-a.at).slice(0,20);
+    WAIV.txAt = Date.now();
+  }catch(e){ WAIV.tx = WAIV.tx || []; }
+  return WAIV.tx;
+}
+function rivalFaabSpy(fr){                                                        // #681
+  const rs = +S.settings.rivalSlot, s2r = S.settings.slot2rid;
+  if(!rs || !s2r) return null;
+  const rrid = +s2r[String(rs)];
+  const row = (fr||[]).find(r=>r.rid===rrid);
+  if(!row) return null;
+  const byId = idIndex(), map = sleeperToOurs();
+  const ro = (SCOREB.rosters||[]).find(r=>+r.roster_id===rrid);
+  let hole = "";
+  if(ro){
+    const ids = (ro.players||[]).map(id=>map[String(id)]).filter(Boolean);
+    const byPos = {}; ids.map(id=>byId[id]).filter(Boolean).forEach(p=>{ byPos[p.pos]=(byPos[p.pos]||0)+p.proj; });
+    hole = ["RB","WR","TE","QB"].sort((a,b)=>(byPos[a]||0)-(byPos[b]||0))[0];
+  }
+  return Object.assign({}, row, {hole});
+}
+function stashRadar(fas){                                                         // #682
+  return (fas||[]).filter(p=>p.pos!=="DEF")
+    .filter(p=>(typeof breakoutTag==="function" && breakoutTag(p)) || (typeof spikeRate==="function" && spikeRate(p)>=0.4))
+    .sort((a,b)=>b.proj-a.proj).slice(0,5);
+}
+function waiverDayReminder(){                                                     // #683
+  try{
+    const lgs = WAIV.league && WAIV.league.settings;
+    if(!lgs || !claimsGet().length) return;
+    const wd = lgs.waiver_day_of_week!=null ? lgs.waiver_day_of_week : 3;         // sleeper: 0=Mon … 6=Sun
+    const sleeperToday = new Date().getDay()===0 ? 6 : new Date().getDay()-1;     // JS Sun=0 → sleeper 6
+    if(sleeperToday!==wd) return;
+    const k = LS_KEY+"-wvday";
+    const stamp = new Date().toDateString();
+    if(localStorage.getItem(k)===stamp) return;
+    localStorage.setItem(k, stamp);
+    toast("📥 Waivers clear today — you have "+claimsGet().length+" planned claim(s) in the planner");
+    if("Notification" in window && Notification.permission==="granted" && document.visibilityState==="hidden"){
+      try{ new Notification("📥 Waiver day", {body:claimsGet().length+" planned claim(s) — get them in", icon:"icon-192.png", tag:"waiver"}); }catch(e2){}
+    }
+  }catch(e){}
+}
+function whatIfSwap(addId, dropId){                                               // #684
+  const byId = idIndex(), w = curWeek();
+  const ids = rosterIds().slice();
+  const before = bestStartersWeek(ids, byId, w).pts;
+  const after = bestStartersWeek(ids.filter(id=>id!==dropId).concat(addId?[addId]:[]), byId, w).pts;
+  return {before, after, delta:Math.round((after-before)*10)/10};
+}
+/* waiver overlay (#670) */
+async function renderWaivers(){
+  const old = document.getElementById("wvOverlay"); if(old){ old.remove(); return; }
+  await Promise.all([leagueRosteredSet().catch(()=>null), leagueMeta(), refreshTrending && refreshTrending()]);
+  const byId = idIndex(), w = curWeek(), fas = freeAgents();
+  const fr = SCOREB.rosters ? faabRows(SCOREB.rosters, SCOREB.users, WAIV.league) : [];
+  const myRid = +S.settings.sleeperRosterId || null;
+  const myFaab = (fr.find(r=>r.rid===myRid)||{}).left;
+  const ups = upgradeFinder(rosterIds(), byId, w, fas);
+  const dst = defStreamRows(fas, w);
+  const holes = byeFillFinder(rosterIds(), byId, fas);
+  const stash = stashRadar(fas);
+  const dropsMap = await trendingDropsMap();
+  const tx = await leagueTransactions();
+  const claims = claimsGet();
+  const spy = rivalFaabSpy(fr);
+  const bidHtml = p=>{ const b = bidSuggest(p, myFaab); return '<span class="dimtxt">bid ~'+b.pct+'%</span> <button class="undo1" data-claim="'+p.id+'" data-bid="'+b.bid+'">＋ claim</button>'; };
+  const ov = document.createElement("div"); ov.id = "wvOverlay";
+  let h = '<div class="sbcard" role="dialog" aria-label="Waiver wire"><button class="sbx" data-wvx="1" aria-label="Close">✕</button>';
+  h += '<div class="tag">📥 WAIVER WIRE — week '+w+(myFaab!=null?' · my FAAB $'+myFaab:'')+'</div>';
+  if(ups.length) h += '<div class="benchhead">🚀 Upgrades on the wire</div>'+ups.map(u=>
+    '<div class="sbply"><span data-card="'+u.add.id+'" style="cursor:pointer"><b>'+esc(u.add.name)+'</b> '+u.add.pos+
+    (u.drop?' <span class="dimtxt">over '+esc(u.drop.name)+(dropHeat(u.drop)>1000?' ⚠grabbed fast':'')+'</span>':'')+
+    ' <b style="color:var(--green)">+'+u.gain+'</b>/wk</span><span>'+bidHtml(u.add)+'</span></div>').join("");
+  if(holes.length) h += '<div class="benchhead">📆 Bye-hole fixes</div>'+holes.slice(0,3).map(x=>
+    '<div class="sbply"><span>W'+x.w+' ('+x.out.map(p=>esc(p.name.split(" ").slice(-1)[0])).join(", ")+' out)</span><span>'+
+    x.fills.map(p=>'<span class="scpill" data-card="'+p.id+'">'+esc(p.name.split(" ").slice(-1)[0])+' '+weekProj(p,x.w)+'</span>').join("")+'</span></div>').join("");
+  if(dst.length) h += '<div class="benchhead">🛡 DEF streamer (next 2 weeks)</div><div class="scarce">'+
+    dst.map(x=>'<span class="scpill" data-card="'+x.p.id+'">'+esc(x.p.team)+' D — soft '+x.soft+'/32</span>').join("")+'</div>';
+  if(stash.length) h += '<div class="benchhead">🌱 Stash radar</div><div class="scarce">'+
+    stash.map(p=>'<span class="scpill" data-card="'+p.id+'">'+esc(p.name)+' '+p.pos+'</span>').join("")+'</div>';
+  const myDropping = rosterIds().map(id=>byId[id]).filter(Boolean).filter(p=>dropsMap[normName(p.name)]>500);
+  if(myDropping.length) h += '<div class="benchhead" style="color:var(--gold)">🗑 The world is dropping (and you roster)</div><div class="scarce">'+
+    myDropping.map(p=>'<span class="scpill">'+esc(p.name)+' — '+dropsMap[normName(p.name)].toLocaleString()+' drops/24h</span>').join("")+'</div>';
+  if(claims.length) h += '<div class="benchhead">📋 My claim planner ($'+claims.reduce((a,c)=>a+c.bid,0)+' of $'+(myFaab==null?"?":myFaab)+')</div>'+
+    claims.map((c,i)=>{ const a = byId[c.add], d = c.drop?byId[c.drop]:null;
+      return '<div class="sbply"><span>'+(a?esc(a.name):"?")+(d?' <span class="dimtxt">drop '+esc(d.name)+'</span>':'')+' · $'+c.bid+'</span><button class="undo1" data-unclaim="'+i+'">✕</button></div>'; }).join("");
+  if(fr.length) h += '<div class="benchhead">💰 FAAB league-wide</div><div class="scarce">'+
+    fr.map(r=>'<span class="scpill"'+(r.rid===myRid?' style="color:var(--gold)"':'')+'>'+esc(r.name)+' $'+r.left+'</span>').join("")+'</div>';
+  if(spy) h += '<div class="benchhead">😈 Rival spy: '+esc(spy.name)+' has $'+spy.left+' — thinnest at '+esc(spy.hole||"?")+'</div>';
+  if(tx.length) h += '<div class="benchhead">🗞 League wire</div>'+tx.slice(0,8).map(t=>
+    '<div class="sbply"><span>'+esc(ridName(t.rid))+' '+(t.type==="trade"?"🔁 traded":"")+
+    (t.adds.length?' ➕'+t.adds.map(esc).join(", "):'')+(t.drops.length?' ➖'+t.drops.map(esc).join(", "):'')+
+    (t.bid?' <span class="dimtxt">$'+t.bid+'</span>':'')+'</span></div>').join("");
+  h += '</div>';
+  ov.innerHTML = h;
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{
+    if(e.target===ov || e.target.closest("[data-wvx]")) return ov.remove();
+    const cl = e.target.closest("[data-claim]");
+    if(cl){
+      const addId = cl.dataset.claim, bid = +cl.dataset.bid||1;
+      const up = ups.find(u=>u.add.id===addId);
+      const wi = whatIfSwap(addId, up && up.drop ? up.drop.id : null);            // #684
+      claimsAdd(addId, up && up.drop ? up.drop.id : null, bid);
+      toast("📋 Claim planned · lineup "+(wi.delta>=0?"+":"")+wi.delta+" pts/wk if it lands");
+      ov.remove(); renderWaivers();
+      return;
+    }
+    const uc = e.target.closest("[data-unclaim]");
+    if(uc){ const c = claimsGet(); c.splice(+uc.dataset.unclaim,1); claimsSave(c); ov.remove(); renderWaivers(); }
+  });
+}
+
 window.__mod = window.__mod || []; window.__mod.push("season.js");

@@ -1321,7 +1321,8 @@ function startSeasonMode(){
   const tick = ()=>{ if(document.visibilityState==="hidden") return;
     Promise.all([refreshWeek(), myLiveIds()]).then(()=>myWeekData())
       .then(()=>heatScan(true))
-      .then(()=>{ lineupAlarm(); if(typeof renderNow==="function") renderNow(); }); };
+      .then(()=>{ lineupAlarm(); if(typeof renderNow==="function") renderNow(); })
+      .then(()=>{ if(typeof leagueMeta==="function") leagueMeta().then(()=>waiverDayReminder()); }); };
   SEASON.timer = setInterval(tick, 5*60e3);
   document.addEventListener("visibilitychange", ()=>{
     if(document.visibilityState==="visible" && SEASON.on && Date.now()-SEASON.at > 5*60e3) tick();

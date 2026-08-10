@@ -84,6 +84,20 @@ try {
     return rows.length===1 && rows[0][0].live===88.4 && st[0].name==="Alpha" && st[0].w===3 &&
       aw && aw.hi.pts===88.4 && ap.length===2 && typeof renderScoreboard==="function" && typeof seasonHeroBits==="function";
   }catch(e){ return false; }})()?"OK":"BAD"));
+  // Waiver math runs offline on fixtures (#684)
+  out.push("waiv:"+((()=>{try{
+    localStorage.removeItem(LS_KEY+"-claims");
+    const rosters=[{roster_id:1,owner_id:"u1",settings:{waiver_budget_used:40}},{roster_id:2,owner_id:"u2",settings:{waiver_budget_used:5}}];
+    const users=[{user_id:"u1",display_name:"Alpha"},{user_id:"u2",display_name:"Beta"}];
+    const fr=faabRows(rosters,users,{settings:{waiver_budget:100}});
+    const bs2=bidSuggest(allPlayers()[20], 60);
+    claimsAdd(allPlayers()[30].id, null, 7);
+    const ok = fr[0].left===95 && bs2.bid>=1 && bs2.bid<=60 && claimsGet().length===1 &&
+      Array.isArray(upgradeFinder(myIds().length?myIds():allPlayers().slice(0,16).map(p=>p.id), idIndex(), 3, [])) &&
+      typeof renderWaivers==="function" && typeof whatIfSwap==="function";
+    localStorage.removeItem(LS_KEY+"-claims");
+    return ok;
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // My Week math runs offline on fixtures (#654)
   out.push("week:"+((()=>{try{
     const byId=idIndex(); const ids=allPlayers().slice(0,30).map(p=>p.id);
