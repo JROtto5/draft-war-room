@@ -206,6 +206,16 @@
       <div class="frow"><label>🔥 Heat alerts (trending + available in your league)</label><input type="checkbox" id="setHeat"></div>
       <div class="frow"><label>🔥 Heat threshold (adds per 24h)</label><select id="setHeatMin"><option value="500">500</option><option value="1000">1,000</option><option value="2500">2,500</option><option value="5000">5,000</option></select></div>
       <div class="frow"><label>🗓 NFL week (auto from Sleeper unless pinned)</label><select id="setWeek"><option value="0">auto</option></select></div>
+      <div class="frow"><label>🔔 Alerts</label><span style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--dim)">
+        <label><input type="checkbox" id="alHeat"> heat</label>
+        <label><input type="checkbox" id="alLineup"> lineup</label>
+        <label><input type="checkbox" id="alScore"> scores</label>
+        <label><input type="checkbox" id="alClose"> close games</label>
+        <label><input type="checkbox" id="alWaiver"> waiver day</label>
+        <label><input type="checkbox" id="alOpp"> opponent news</label></span></div>
+      <div class="frow"><label>💥 Score alert threshold (pts in one refresh)</label><input type="number" id="setScoreDelta" min="2" max="20" step="1" style="width:70px"></div>
+      <div class="frow"><label>🌙 Quiet hours (no notifications)</label><span style="display:flex;gap:6px;align-items:center;font-size:11px">
+        <select id="setQuietFrom"></select> → <select id="setQuietTo"></select></span></div>
       <div class="frow"><label>⏲ Pick timer seconds (0 = off)</label><input type="number" id="setTimer" min="0" max="600" step="15"></div>
       <div class="frow"><label>🔊 Volume</label><input type="range" id="setVol" min="0" max="1" step="0.1" style="width:120px"></div>
       <div class="frow"><label>⌨ Keys: mine / taken / queue</label><span style="display:flex;gap:6px">

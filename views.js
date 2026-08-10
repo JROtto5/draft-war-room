@@ -507,6 +507,9 @@ const PALETTE_ACTIONS = [
   ["📊 League scoreboard", ()=>renderScoreboard()],
   ["📥 Waiver wire", ()=>renderWaivers()],
   ["🔁 Trade center", ()=>renderTrades()],
+  ["🔔 Alert center", ()=>renderAlertCenter()],
+  ["📖 Week recap story", ()=>weeklyRecap2()],
+  ["🩹 Roster health digest", ()=>injuryDigest()],
   ["🏆 Standings", ()=>renderScoreboard()],
   ["⚔ My matchup", ()=>renderScoreboard()],
   ["🩺 Injury Center", ()=>document.getElementById("injBtn").click()],
@@ -704,6 +707,8 @@ function renderBest(){
         '<button class="hbtn" onclick="renderScoreboard()">📊 Scoreboard</button>'+
         '<button class="hbtn" onclick="renderWaivers()">📥 Waivers</button>'+
         '<button class="hbtn" onclick="renderTrades()">🔁 Trades</button>'+
+        '<button class="hbtn" onclick="renderAlertCenter()" title="Alert center">🔔'+((typeof unreadAlerts==="function"&&unreadAlerts())?' <b style="color:var(--gold)">'+unreadAlerts()+'</b>':'')+'</button>'+
+        '<button class="hbtn" onclick="weeklyRecap2()" title="Last week: story + share card">📖 Recap</button>'+
         '<button class="hbtn" onclick="document.getElementById(\'gradeBtn\').click()">🎓 Report</button>'+
         '<button class="hbtn" onclick="document.getElementById(\'injBtn\').click()">🩺 Injuries</button>'+
         '<button class="hbtn" onclick="document.getElementById(\'recapBtn\').click()">📤 Share</button>'+
@@ -1197,6 +1202,7 @@ function exportLogCsv(){
 }
 /* 📉 Market ticker (#611): stock-floor strip during live drafts. */
 function renderTicker(){
+  if(typeof SEASON!=="undefined" && SEASON.on){ if(typeof seasonTicker==="function") seasonTicker(); return; }   // #701
   let tk = document.getElementById("ticker");
   if(!S.ui.live || S.log.length < 3){ if(tk) tk.remove(); return; }
   if(!tk){ tk = document.createElement("div"); tk.id = "ticker"; document.body.appendChild(tk); }

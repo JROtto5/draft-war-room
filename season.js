@@ -993,4 +993,261 @@ async function renderTrades(){
   });
 }
 
+/* ---------- R42 Alerts & game day (#700–#714) ---------- */
+function alertCfg(){ return Object.assign({heat:true, lineup:true, score:true, close:true, waiver:true, oppnews:true}, S.settings.alerts||{}); }
+function quietNow(){                                                             // #710
+  const q = S.settings.quietHours || {from:23, to:8};
+  const h = new Date().getHours();
+  return q.from>q.to ? (h>=q.from || h<q.to) : (h>=q.from && h<q.to);
+}
+function notifyLog(){ try{ return JSON.parse(localStorage.getItem(LS_KEY+"-alertlog")||"[]"); }catch(e){ return []; } }
+function alertFire(kind, title, body){                                           // #709 central dispatcher
+  try{
+    const log = notifyLog(); log.unshift({kind, title, body:body||"", t:Date.now(), un:1});
+    localStorage.setItem(LS_KEY+"-alertlog", JSON.stringify(log.slice(0,50)));
+  }catch(e){}
+  toast(title+(body ? " — "+body : ""));
+  if(!quietNow() && "Notification" in window && Notification.permission==="granted" && document.visibilityState==="hidden"){
+    try{ new Notification(title, {body:body||"", icon:"icon-192.png", tag:"wr-"+kind}); }catch(e){}
+  } else if(document.visibilityState==="hidden") titleBlink(title);               // #712
+  updateActionBadge();
+}
+function titleBlink(msg){                                                         // #712
+  if(window._blinkT) return;
+  const orig = document.title; let onn = false, n = 0;
+  window._blinkT = setInterval(()=>{
+    document.title = (onn=!onn) ? "🔔 "+msg : orig;
+    if(++n>12){ clearInterval(window._blinkT); window._blinkT = null; document.title = orig; }
+  }, 900);
+}
+function unreadAlerts(){ return notifyLog().filter(a=>a.un).length; }
+function markAlertsRead(){
+  try{ localStorage.setItem(LS_KEY+"-alertlog", JSON.stringify(notifyLog().map(a=>Object.assign({}, a, {un:0})))); }catch(e){}
+  updateActionBadge();
+}
+function pendingActions(){                                                        // #711
+  let n = unreadAlerts() + claimsGet().length;
+  try{
+    const md = WEEKST.mate;
+    if(md && md.me && md.me.starters){
+      const byId = idIndex(), w = curWeek();
+      n += md.me.starters.filter(Boolean).map(id=>byId[id]).filter(Boolean).filter(p=>weekProj(p,w)===0).length;
+    }
+  }catch(e){}
+  return n;
+}
+function updateActionBadge(){
+  const n = pendingActions();
+  if(navigator.setAppBadge){
+    if(n) navigator.setAppBadge(n).catch(()=>{});
+    else if(navigator.clearAppBadge) navigator.clearAppBadge().catch(()=>{});
+  }
+}
+function benchSwapFor(p){
+  const byId = idIndex(), w = curWeek();
+  const bs = bestStartersWeek(rosterIds(), byId, w);
+  return rosterIds().map(id=>byId[id]).filter(Boolean)
+    .filter(b=>b.pos===p.pos && b.id!==p.id && !bs.starterIds.has(b.id) && weekProj(b,w)>0)
+    .sort((a,b)=>weekProj(b,w)-weekProj(a,w))[0] || null;
+}
+function inactiveSweep(){                                                         // #700
+  try{
+    if(!alertCfg().lineup) return;
+    const md = WEEKST.mate; if(!md || !md.me || !md.me.starters) return;
+    const byId = idIndex(), w = curWeek();
+    const k = LS_KEY+"-inact"+w;
+    let seen = []; try{ seen = JSON.parse(localStorage.getItem(k)||"[]"); }catch(e){}
+    md.me.starters.filter(Boolean).forEach(id=>{
+      const p = byId[id]; if(!p || seen.includes(id)) return;
+      const e = injuryOf(p), sv = e ? injSeverity(e.s) : null;
+      if(sv && (sv.code==="O" || sv.code==="IR" || sv.code==="D")){
+        seen.push(id);
+        const swap = benchSwapFor(p);
+        alertFire("inactive", "🚨 "+p.name+" is "+sv.label.toLowerCase()+" and in your lineup",
+          swap ? "Best swap: "+swap.name+" ("+weekProj(swap,w)+" proj)" : "No healthy bench replacement — hit waivers");
+      }
+    });
+    try{ localStorage.setItem(k, JSON.stringify(seen)); }catch(e){}
+  }catch(e){}
+}
+function scoreAlerts(){                                                           // #702
+  try{
+    if(!alertCfg().score) return;
+    const md = WEEKST.mate; if(!md || !md.me) return;
+    const byId = idIndex(), s2o = sleeperToOurs();
+    const inv = {}; for(const k2 in s2o) inv[s2o[k2]] = k2;
+    const thr = +S.settings.scoreDelta || 5;
+    const prev = window._lastPpts || {};
+    const cur = {};
+    md.me.starters.filter(Boolean).forEach(id=>{
+      const got = +md.me.ppts[inv[id]] || 0;
+      cur[id] = got;
+      if(prev[id]!=null && got-prev[id] >= thr){
+        const p = byId[id];
+        if(p) alertFire("score", "💥 "+p.name+" just banked "+(Math.round((got-prev[id])*10)/10), "now "+got.toFixed(1)+" on the day");
+      }
+    });
+    window._lastPpts = cur;
+  }catch(e){}
+}
+function closeGameAlert(){                                                        // #703
+  try{
+    if(!alertCfg().close) return;
+    const md = WEEKST.mate; if(!md || !md.me || !md.opp) return;
+    const d = new Date(), day = d.getDay(), h = d.getHours();
+    const late = (day===0 && h>=19) || (day===1 && h>=20);
+    if(!late) return;
+    const gap = Math.abs(md.me.pts - md.opp.pts);
+    if(md.me.pts>0 && md.opp.pts>0 && gap<10){
+      const k = LS_KEY+"-close"+curWeek();
+      if(localStorage.getItem(k)) return;
+      localStorage.setItem(k, "1");
+      alertFire("close", "😰 Nail-biter: "+(md.me.pts>md.opp.pts?"up":"down")+" by "+gap.toFixed(1),
+        md.me.name+" "+md.me.pts.toFixed(1)+" — "+md.opp.pts.toFixed(1)+" "+md.opp.name);
+    }
+  }catch(e){}
+}
+function mnfMath(){                                                               // #704
+  try{
+    const md = WEEKST.mate; if(!md || !md.me || !md.opp) return null;
+    const byId = idIndex(), s2o = sleeperToOurs(), w = curWeek();
+    const inv = {}; for(const k2 in s2o) inv[s2o[k2]] = k2;
+    const leftOf = side=>side.starters.filter(Boolean).map(id=>byId[id]).filter(Boolean)
+      .filter(p=>!(+side.ppts[inv[p.id]]) && weekProj(p,w)>0);
+    const meLeft = leftOf(md.me), oppLeft = leftOf(md.opp);
+    const behind = Math.round((md.opp.pts-md.me.pts)*10)/10;
+    if(!meLeft.length && !oppLeft.length) return null;
+    return {behind, meLeft, oppLeft,
+      per: meLeft.length ? Math.round(Math.max(0,behind)/meLeft.length*10)/10 : 0};
+  }catch(e){ return null; }
+}
+function oppNewsAlert(){                                                          // #706
+  try{
+    if(!alertCfg().oppnews) return;
+    const md = WEEKST.mate; if(!md || !md.opp || !md.opp.starters) return;
+    const byId = idIndex(), w = curWeek();
+    const k = LS_KEY+"-oppout"+w;
+    let seen = []; try{ seen = JSON.parse(localStorage.getItem(k)||"[]"); }catch(e){}
+    md.opp.starters.filter(Boolean).forEach(id=>{
+      const p = byId[id]; if(!p || seen.includes(id)) return;
+      const e = injuryOf(p), sv = e ? injSeverity(e.s) : null;
+      if(sv && (sv.code==="O" || sv.code==="IR")){
+        seen.push(id);
+        alertFire("oppnews", "😏 Their problem: "+p.name+" is "+sv.label.toLowerCase(), "That's your win probability going up");
+      }
+    });
+    try{ localStorage.setItem(k, JSON.stringify(seen)); }catch(e){}
+  }catch(e){}
+}
+function gameDayChecks(){                                                         // called from the scoreboard loop
+  inactiveSweep(); scoreAlerts(); closeGameAlert(); oppNewsAlert(); updateActionBadge();
+}
+function seasonTicker(){                                                          // #701
+  let tk = document.getElementById("ticker");
+  const md = (typeof WEEKST!=="undefined") ? WEEKST.mate : null;
+  const gameOn = scoreRefreshMs()===2*60e3;
+  if(!gameOn || !md || !md.me){ if(tk) tk.remove(); return; }
+  if(!tk){ tk = document.createElement("div"); tk.id = "ticker"; document.body.appendChild(tk); }
+  const byId = idIndex(), s2o = sleeperToOurs();
+  const inv = {}; for(const k2 in s2o) inv[s2o[k2]] = k2;
+  const items = [];
+  items.push('<span class="tk steal">🏈 '+esc(md.me.name)+' <b>'+md.me.pts.toFixed(1)+'</b>'+(md.opp?' — <b>'+md.opp.pts.toFixed(1)+'</b> '+esc(md.opp.name):'')+'</span>');
+  md.me.starters.filter(Boolean).forEach(id=>{
+    const p = byId[id]; if(!p) return;
+    const got = +md.me.ppts[inv[id]] || 0;
+    items.push('<span class="tk'+(got>=15?' steal':'')+'">'+esc(p.name.split(" ").slice(-1)[0])+' '+got.toFixed(1)+'</span>');
+  });
+  const mm = mnfMath();
+  if(mm && mm.behind>0 && mm.meLeft.length) items.push('<span class="tk reach">need '+mm.per+'/player from '+mm.meLeft.map(p=>esc(p.name.split(" ").slice(-1)[0])).join(", ")+'</span>');
+  const html = items.join('<span class="tksep">◆</span>');
+  if(tk.dataset.h === String(items.length)+html.length) return;
+  tk.dataset.h = String(items.length)+html.length;
+  tk.innerHTML = '<div class="tkinner">'+html+'<span class="tksep">◆</span>'+html+'</div>';
+  const inner = tk.firstChild;
+  requestAnimationFrame(()=>{ try{ inner.style.animationDuration = Math.max(16, Math.round(inner.scrollWidth/2/75))+"s"; }catch(e){} });
+}
+function injuryDigest(){                                                          // #705
+  const byId = idIndex(), w = curWeek();
+  const rows = rosterIds().map(id=>byId[id]).filter(Boolean)
+    .map(p=>({p, e:injuryOf(p)})).filter(x=>x.e)
+    .map(x=>({...x, sv:injSeverity(x.e.s), swap:benchSwapFor(x.p)}));
+  if(!rows.length) return toast("Roster fully healthy 🎉");
+  const ov = document.createElement("div"); ov.id = "digOverlay";
+  ov.style.cssText = "position:fixed;inset:0;z-index:320;background:rgba(11,15,20,.94);overflow-y:auto;padding:26px 12px";
+  ov.innerHTML = '<div class="sbcard" role="dialog"><button class="sbx" data-dgx="1">✕</button><div class="tag">🩹 ROSTER HEALTH — week '+w+'</div>'+
+    rows.map(x=>'<div class="sbply"><span><b>'+esc(x.p.name)+'</b> <span class="sevchip '+x.sv.cls+'">'+esc(x.sv.label)+'</span>'+
+      (x.e.c?'<br><span class="dimtxt">'+esc(String(x.e.c).slice(0,90))+'</span>':'')+'</span>'+
+      '<span class="dimtxt">'+(x.swap?'swap: '+esc(x.swap.name):'no bench cover')+'</span></div>').join("")+'</div>';
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{ if(e.target===ov || e.target.closest("[data-dgx]")) ov.remove(); });
+}
+function weeklyRecap2(){                                                          // #707
+  leagueHistory().then(hist=>{
+    if(!hist.length) return toast("No finished weeks yet — recap unlocks after week 1", {warn:true});
+    const wm = hist[hist.length-1], wk = hist.length;
+    const myRid = +S.settings.sleeperRosterId;
+    const m = (wm||[]).find(x=>+x.roster_id===myRid);
+    if(!m) return toast("Couldn't find my matchup in history", {warn:true});
+    const opp = (wm||[]).find(x=>x.matchup_id===m.matchup_id && +x.roster_id!==myRid);
+    const byId = idIndex(), s2o = sleeperToOurs();
+    const perf = (m.starters||[]).map(sid=>({p:byId[s2o[String(sid)]], got:+m.players_points[sid]||0})).filter(x=>x.p);
+    const mvp = perf.slice().sort((a,b)=>b.got-a.got)[0];
+    const bust = perf.filter(x=>x.p.pos!=="DEF").slice().sort((a,b)=>(a.got-a.p.proj/16)-(b.got-b.p.proj/16))[0];
+    const eff = lineupEffOf(m, byId);
+    const med = (wm||[]).map(x=>x.points||0).sort((a,b)=>a-b)[Math.floor(wm.length/2)];
+    const won = opp ? m.points>opp.points : null;
+    const rec = {wk, my:Math.round(m.points*10)/10, their:opp?Math.round(opp.points*10)/10:null, oppName:opp?ridName(opp.roster_id):"",
+      won, mvp, bust, eff, luck: opp && m.points<med && !won ? "unlucky — you outscored half the league" : (won && m.points<med ? "stole one — below-median win" : "")};
+    const ov = document.createElement("div"); ov.id = "rcOverlay";
+    ov.style.cssText = "position:fixed;inset:0;z-index:320;background:rgba(11,15,20,.94);overflow-y:auto;padding:26px 12px";
+    ov.innerHTML = '<div class="sbcard" role="dialog"><button class="sbx" data-rcx="1">✕</button>'+
+      '<div class="tag">📖 WEEK '+wk+' STORY</div>'+
+      '<div class="benchhead" style="font-size:15px;color:var(--'+(won?'green':'red')+')">'+(won?'W':'L')+' '+rec.my+'–'+rec.their+' vs '+esc(rec.oppName)+'</div>'+
+      (mvp?'<div class="sbply"><span>🏅 MVP: '+esc(mvp.p.name)+'</span><b class="mono">'+mvp.got.toFixed(1)+'</b></div>':'')+
+      (bust?'<div class="sbply"><span>🪦 Bust: '+esc(bust.p.name)+'</span><b class="mono">'+bust.got.toFixed(1)+'</b></div>':'')+
+      (eff?'<div class="sbply"><span>🎯 Lineup efficiency</span><b class="mono">'+eff.eff+'% ('+eff.actual+' of '+eff.opt+')</b></div>':'')+
+      (rec.luck?'<div class="sbply"><span>🍀 '+rec.luck+'</span></div>':'')+
+      '<div style="padding:10px 0"><button class="hbtn" id="rcPng">📤 Share card</button></div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener("click", e=>{
+      if(e.target===ov || e.target.closest("[data-rcx]")) return ov.remove();
+      if(e.target.id==="rcPng") recapPng(rec);                                    // #708
+    });
+  });
+}
+function recapPng(rec){                                                           // #708
+  const c = document.createElement("canvas"); c.width = 1000; c.height = 560;
+  const x = c.getContext("2d");
+  x.fillStyle = "#0b0f14"; x.fillRect(0,0,1000,560);
+  x.fillStyle = rec.won ? "#2fd47a" : "#e5484d"; x.font = "bold 52px sans-serif";
+  x.fillText((rec.won?"DUB.":"PAIN.")+"  "+rec.my+" – "+rec.their, 40, 90);
+  x.fillStyle = "#8b98a9"; x.font = "26px sans-serif";
+  x.fillText("Week "+rec.wk+" vs "+rec.oppName+" · Buck Breakers", 40, 135);
+  x.fillStyle = "#e8eef5"; x.font = "28px sans-serif";
+  if(rec.mvp) x.fillText("🏅 "+rec.mvp.p.name+" — "+rec.mvp.got.toFixed(1), 40, 210);
+  if(rec.bust) x.fillText("🪦 "+rec.bust.p.name+" — "+rec.bust.got.toFixed(1), 40, 260);
+  if(rec.eff) x.fillText("🎯 lineup efficiency "+rec.eff.eff+"%", 40, 310);
+  if(rec.luck){ x.fillStyle = "#f0b429"; x.fillText("🍀 "+rec.luck, 40, 360); }
+  x.fillStyle = "#8b98a9"; x.font = "20px sans-serif"; x.fillText("draft-war-room · Otto5", 40, 520);
+  c.toBlob(b=>{
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(b); a.download = "week-"+rec.wk+"-recap.png"; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+  });
+}
+function renderAlertCenter(){                                                     // #709
+  const old = document.getElementById("acOverlay"); if(old){ old.remove(); return; }
+  const log = notifyLog();
+  const ov = document.createElement("div"); ov.id = "acOverlay";
+  ov.style.cssText = "position:fixed;inset:0;z-index:320;background:rgba(11,15,20,.94);overflow-y:auto;padding:26px 12px";
+  ov.innerHTML = '<div class="sbcard" role="dialog"><button class="sbx" data-acx="1">✕</button><div class="tag">🔔 ALERT CENTER</div>'+
+    (log.length ? log.map(a=>'<div class="sbply'+(a.un?'" style="color:var(--text)':'')+'"><span>'+esc(a.title)+
+      (a.body?'<br><span class="dimtxt">'+esc(a.body)+'</span>':'')+'</span><span class="dimtxt">'+
+      new Date(a.t).toLocaleString([], {weekday:"short", hour:"2-digit", minute:"2-digit"})+'</span></div>').join("")
+    : '<div class="empty">Quiet so far. Alerts land here as they fire.</div>')+'</div>';
+  document.body.appendChild(ov);
+  markAlertsRead();
+  ov.addEventListener("click", e=>{ if(e.target===ov || e.target.closest("[data-acx]")) ov.remove(); });
+}
+
 window.__mod = window.__mod || []; window.__mod.push("season.js");

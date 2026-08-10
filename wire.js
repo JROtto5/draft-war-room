@@ -1141,6 +1141,14 @@ $("#settingsBtn").addEventListener("click", ()=>{
   const wkSel = $("#setWeek");
   if(wkSel.options.length<2) for(let w2=1;w2<=18;w2++){ const o=document.createElement("option"); o.value=w2; o.textContent="week "+w2; wkSel.appendChild(o); }
   wkSel.value = String(+S.settings.weekOverride||0);
+  const ac = alertCfg();
+  $("#alHeat").checked=ac.heat; $("#alLineup").checked=ac.lineup; $("#alScore").checked=ac.score;
+  $("#alClose").checked=ac.close; $("#alWaiver").checked=ac.waiver; $("#alOpp").checked=ac.oppnews;
+  $("#setScoreDelta").value = +S.settings.scoreDelta||5;
+  const qf = $("#setQuietFrom"), qt = $("#setQuietTo");
+  if(qf.options.length<2) for(let h2=0;h2<24;h2++){ [qf,qt].forEach(sl2=>{ const o=document.createElement("option"); o.value=h2; o.textContent=(h2%12||12)+(h2<12?"am":"pm"); sl2.appendChild(o.cloneNode(true)); }); }
+  const q = S.settings.quietHours||{from:23,to:8};
+  qf.value = q.from; qt.value = q.to;
   const rs=$("#setRival");
   rs.innerHTML='<option value="">none</option>'+Array.from({length:S.settings.teams},(_,i)=>i+1)
     .filter(s2=>s2!==S.settings.slot).map(s2=>'<option value="'+s2+'"'+(+S.settings.rivalSlot===s2?' selected':'')+'>'+esc(slotName(s2))+'</option>').join("");
@@ -1236,6 +1244,10 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.heatAlerts = wantHeat;
   S.settings.heatMin = +$("#setHeatMin").value || 1000;
   S.settings.weekOverride = +$("#setWeek").value || 0;
+  S.settings.alerts = {heat:$("#alHeat").checked, lineup:$("#alLineup").checked, score:$("#alScore").checked,
+    close:$("#alClose").checked, waiver:$("#alWaiver").checked, oppnews:$("#alOpp").checked};
+  S.settings.scoreDelta = Math.min(20, Math.max(2, +$("#setScoreDelta").value||5));
+  S.settings.quietHours = {from:+$("#setQuietFrom").value||23, to:+$("#setQuietTo").value===0?0:(+$("#setQuietTo").value||8)};
   S.settings.cols = {adp:$("#colADP").checked, edge:$("#colEdge").checked, rd:$("#colRd").checked};
   S.settings.fontSize = $("#setFont").value;
   S.settings.cbSafe = $("#setCbSafe").checked;

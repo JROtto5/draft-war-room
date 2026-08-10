@@ -1264,7 +1264,7 @@ async function heatScan(fire){
     SEASON.avail = allPlayers()
       .filter(p=>p.pos!=="DEF" && !gone(p) && buzzOf(p)>=min)
       .sort((a,b)=>buzzOf(b)-buzzOf(a)).slice(0,8);
-    if(fire && S.settings.heatAlerts!==false && SEASON.avail.length){
+    if(fire && S.settings.heatAlerts!==false && (typeof alertCfg!=="function" || alertCfg().heat) && SEASON.avail.length){
       const k = LS_KEY+"-heatseen";
       let seen = {}; try{ seen = JSON.parse(localStorage.getItem(k)||"{}"); }catch(e){}
       const fresh = SEASON.avail.filter(p=>!seen[p.id]);
@@ -1330,7 +1330,10 @@ function startSeasonMode(){
   tick();
   // scoreboard loop: 2 min in game windows, 15 min otherwise (#665)
   const sbLoop = ()=>{ if(!SEASON.on) return;
-    if(document.visibilityState==="visible") leagueWeekData(true).then(()=>{ if(typeof renderNow==="function") renderNow(); });
+    if(document.visibilityState==="visible") leagueWeekData(true).then(()=>{
+      if(typeof gameDayChecks==="function") gameDayChecks();
+      if(typeof renderNow==="function") renderNow();
+    });
     SEASON.sbTimer = setTimeout(sbLoop, scoreRefreshMs()); };
   clearTimeout(SEASON.sbTimer); SEASON.sbTimer = setTimeout(sbLoop, 4000);
 }

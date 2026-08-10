@@ -108,6 +108,20 @@ try {
       typeof keeperValue(allPlayers()[0])==="number" && Array.isArray(blockToggle("zz")) && Array.isArray(blockToggle("zz")) &&
       typeof renderTrades==="function" && typeof tradeCardPng==="function" && typeof seasonDossierHtml==="function";
   }catch(e){ return false; }})()?"OK":"BAD"));
+  // Alert plumbing runs offline (#714)
+  out.push("alerts:"+((()=>{try{
+    localStorage.removeItem(LS_KEY+"-alertlog");
+    alertFire("test","🔔 test alert","body");
+    const n1 = unreadAlerts();
+    markAlertsRead();
+    const ok = n1===1 && unreadAlerts()===0 && typeof quietNow()==="boolean" &&
+      typeof pendingActions()==="number" && alertCfg().heat!==undefined &&
+      typeof seasonTicker==="function" && typeof weeklyRecap2==="function" &&
+      typeof recapPng==="function" && typeof injuryDigest==="function" &&
+      typeof gameDayChecks==="function" && (mnfMath()===null || typeof mnfMath()==="object");
+    localStorage.removeItem(LS_KEY+"-alertlog");
+    return ok;
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // My Week math runs offline on fixtures (#654)
   out.push("week:"+((()=>{try{
     const byId=idIndex(); const ids=allPlayers().slice(0,30).map(p=>p.id);
