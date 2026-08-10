@@ -140,6 +140,13 @@ try {
     }
     return "OK";
   })()));
+  // Season deck + shortcuts wiring (#738)
+  out.push("deck:"+((()=>{try{
+    const d = seasonDeckHtml();
+    return typeof d==="string" && d.includes("renderScoreboard") && d.includes("renderWaivers") &&
+      d.includes("renderTrades") && d.includes("seasonDeck") &&
+      typeof applySeasonHeader==="function" && !document.getElementById("draftMenuBtn");
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // My Week math runs offline on fixtures (#654)
   out.push("week:"+((()=>{try{
     const byId=idIndex(); const ids=allPlayers().slice(0,30).map(p=>p.id);

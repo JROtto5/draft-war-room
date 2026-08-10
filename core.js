@@ -1317,6 +1317,7 @@ async function importCompletedDraft(auto){
 function startSeasonMode(){
   if(SEASON.on || myIds().length < S.settings.roster) return;
   SEASON.on = true;
+  if(typeof applySeasonHeader==="function") applySeasonHeader();                  // #732
   clearInterval(SEASON.timer);
   const tick = ()=>{ if(document.visibilityState==="hidden") return;
     Promise.all([refreshWeek(), myLiveIds()]).then(()=>myWeekData())

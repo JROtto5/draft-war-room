@@ -580,3 +580,22 @@ body.ultra .avatar{display:none}
 #wvOverlay{position:fixed;inset:0;z-index:320;background:rgba(11,15,20,.94);overflow-y:auto;padding:26px 12px}
 :root[data-theme="light"] #trOverlay,:root[data-theme="light"] #wvOverlay{background:rgba(238,242,247,.96)}
 #trOverlay .sbcard,#wvOverlay .sbcard{max-width:760px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px 24px;position:relative}
+/* ---------- R44 season nav & shared overlays (#730–#734) ---------- */
+.snov{position:fixed;inset:0;z-index:320;background:rgba(11,15,20,.94);overflow-y:auto;padding:26px 12px;animation:toastIn .2s}
+.snov .sbcard{max-width:760px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px 24px;position:relative}
+:root[data-theme="light"] .snov{background:rgba(238,242,247,.96)}
+#seasonDeck{display:flex;flex-wrap:wrap;gap:6px}
+#seasonDeck .deckbtn{display:inline-flex;align-items:center;gap:5px;padding:7px 10px}
+#seasonDeck .dicon{font-size:14px}
+@media (max-width:640px){
+  #seasonDeck{position:fixed;left:0;right:0;bottom:0;z-index:290;margin:0;padding:6px 8px calc(6px + env(safe-area-inset-bottom));
+    background:var(--headerbg);border-top:1px solid var(--line);flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  #seasonDeck .deckbtn{flex:0 0 auto;min-height:40px}
+  body:has(#seasonDeck) #ticker{bottom:calc(118px + env(safe-area-inset-bottom))}
+}
+body.seasonled #mocksBtn,body.seasonled #boardBtn,body.seasonled #pasteBtn,body.seasonled #cmpBtn,
+body.seasonled #sheetBtn,body.seasonled #csvBtn,body.seasonled #shareBtn{display:none}
+body.seasonled.draftopen #mocksBtn,body.seasonled.draftopen #boardBtn,body.seasonled.draftopen #pasteBtn,
+body.seasonled.draftopen #cmpBtn,body.seasonled.draftopen #sheetBtn,body.seasonled.draftopen #csvBtn,
+body.seasonled.draftopen #shareBtn{display:inline-block}
+@media (prefers-reduced-motion: reduce){.snov,#sbOverlay{animation:none}}

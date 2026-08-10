@@ -704,19 +704,7 @@ function renderBest(){
         }catch(e){}
         return ' · 🏆 title odds ~<b>'+Math.round(mine2*100)+'%</b>'+spark;
       })())+'</div>'+
-      '<div class="actions">'+
-        '<button class="hbtn" onclick="renderScoreboard()">📊 Scoreboard</button>'+
-        '<button class="hbtn" onclick="renderWaivers()">📥 Waivers</button>'+
-        '<button class="hbtn" onclick="renderTrades()">🔁 Trades</button>'+
-        '<button class="hbtn" onclick="renderAlertCenter()" title="Alert center">🔔'+((typeof unreadAlerts==="function"&&unreadAlerts())?' <b style="color:var(--gold)">'+unreadAlerts()+'</b>':'')+'</button>'+
-        '<button class="hbtn" onclick="weeklyRecap2()" title="Last week: story + share card">📖 Recap</button>'+
-        '<button class="hbtn" onclick="renderSeasonStats()" title="Efficiency, luck, ROI, ghost season">📈 Season</button>'+
-        '<button class="hbtn" onclick="document.getElementById(\'gradeBtn\').click()">🎓 Report</button>'+
-        '<button class="hbtn" onclick="document.getElementById(\'injBtn\').click()">🩺 Injuries</button>'+
-        '<button class="hbtn" onclick="document.getElementById(\'recapBtn\').click()">📤 Share</button>'+
-        '<button class="hbtn" id="weekRecapBtn">📅 Week recap</button>'+
-        '<button class="hbtn" id="healthDigestBtn">🩹 Health digest</button>'+
-      '</div></div>';
+      ((typeof seasonDeckHtml==="function") ? seasonDeckHtml() : '')+'</div>';   // season command deck (#730)
     // waiver radar: hot adds that nobody in this league rosters (#635 — league-true when Sleeper is linked)
     let radar, radarSrc = "local board";
     if(typeof SEASON!=="undefined" && SEASON.avail.length){ radar = SEASON.avail.slice(0,6); radarSrc = "your league"; }

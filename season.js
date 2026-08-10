@@ -1174,7 +1174,7 @@ function injuryDigest(){                                                        
     .map(x=>({...x, sv:injSeverity(x.e.s), swap:benchSwapFor(x.p)}));
   if(!rows.length) return toast("Roster fully healthy 🎉");
   const ov = document.createElement("div"); ov.id = "digOverlay";
-  ov.style.cssText = "position:fixed;inset:0;z-index:320;background:rgba(11,15,20,.94);overflow-y:auto;padding:26px 12px";
+  ov.className = "snov";
   ov.innerHTML = '<div class="sbcard" role="dialog"><button class="sbx" data-dgx="1">✕</button><div class="tag">🩹 ROSTER HEALTH — week '+w+'</div>'+
     rows.map(x=>'<div class="sbply"><span><b>'+esc(x.p.name)+'</b> <span class="sevchip '+x.sv.cls+'">'+esc(x.sv.label)+'</span>'+
       (x.e.c?'<br><span class="dimtxt">'+esc(String(x.e.c).slice(0,90))+'</span>':'')+'</span>'+
@@ -1200,7 +1200,7 @@ function weeklyRecap2(){                                                        
     const rec = {wk, my:Math.round(m.points*10)/10, their:opp?Math.round(opp.points*10)/10:null, oppName:opp?ridName(opp.roster_id):"",
       won, mvp, bust, eff, luck: opp && m.points<med && !won ? "unlucky — you outscored half the league" : (won && m.points<med ? "stole one — below-median win" : "")};
     const ov = document.createElement("div"); ov.id = "rcOverlay";
-    ov.style.cssText = "position:fixed;inset:0;z-index:320;background:rgba(11,15,20,.94);overflow-y:auto;padding:26px 12px";
+    ov.className = "snov";
     ov.innerHTML = '<div class="sbcard" role="dialog"><button class="sbx" data-rcx="1">✕</button>'+
       '<div class="tag">📖 WEEK '+wk+' STORY</div>'+
       '<div class="benchhead" style="font-size:15px;color:var(--'+(won?'green':'red')+')">'+(won?'W':'L')+' '+rec.my+'–'+rec.their+' vs '+esc(rec.oppName)+'</div>'+
@@ -1240,7 +1240,7 @@ function renderAlertCenter(){                                                   
   const old = document.getElementById("acOverlay"); if(old){ old.remove(); return; }
   const log = notifyLog();
   const ov = document.createElement("div"); ov.id = "acOverlay";
-  ov.style.cssText = "position:fixed;inset:0;z-index:320;background:rgba(11,15,20,.94);overflow-y:auto;padding:26px 12px";
+  ov.className = "snov";
   ov.innerHTML = '<div class="sbcard" role="dialog"><button class="sbx" data-acx="1">✕</button><div class="tag">🔔 ALERT CENTER</div>'+
     (log.length ? log.map(a=>'<div class="sbply'+(a.un?'" style="color:var(--text)':'')+'"><span>'+esc(a.title)+
       (a.body?'<br><span class="dimtxt">'+esc(a.body)+'</span>':'')+'</span><span class="dimtxt">'+
@@ -1432,7 +1432,7 @@ async function renderSeasonStats(){                                             
   const myAp = ap.find(r=>r.rid===myRid);
   const effs = rows.map(r=>r.eff ? r.eff.eff : null);
   const ov = document.createElement("div"); ov.id = "ssOverlay";
-  ov.style.cssText = "position:fixed;inset:0;z-index:320;background:rgba(11,15,20,.94);overflow-y:auto;padding:26px 12px";
+  ov.className = "snov";
   let h = '<div class="sbcard" role="dialog" aria-label="Season stats"><button class="sbx" data-ssx="1">✕</button><div class="tag">📈 MY SEASON — '+rows.length+' weeks banked</div>';
   h += '<div class="sbply"><span>🎯 Lineup efficiency by week '+sparkSvg(effs, 90, 18)+'</span><b class="mono">'+
     (effs.filter(Boolean).length ? Math.round(effs.filter(Boolean).reduce((a,b)=>a+b,0)/effs.filter(Boolean).length)+'%' : '—')+'</b></div>';
@@ -1481,5 +1481,48 @@ function hqMondayLine(){                                                        
       ' · <a href="#" onclick="weeklyRecap2();return false">full story</a></div>';
   }catch(e){ return ""; }
 }
+
+/* ---------- R44 Season nav & ship (#730–#739) ---------- */
+function seasonDeckHtml(){                                                       // #730
+  const un = (typeof unreadAlerts==="function") ? unreadAlerts() : 0;
+  const btn = (fn, ico, lab, title)=>'<button class="hbtn deckbtn" onclick="'+fn+'" title="'+(title||lab)+'"><span class="dicon">'+ico+'</span><span class="dlab">'+lab+'</span></button>';
+  return '<div class="actions" id="seasonDeck" role="navigation" aria-label="Season navigation">'+
+    btn("renderScoreboard()","📊","Scores","League scoreboard, standings, playoff odds — S")+
+    btn("renderWaivers()","📥","Waivers","Waiver wire war room — V")+
+    btn("renderTrades()","🔁","Trades","Trade center — D")+
+    btn("renderSeasonStats()","📈","Season","Efficiency, luck, ROI, ghost season — X")+
+    btn("weeklyRecap2()","📖","Recap","Last week's story + share card")+
+    btn("renderAlertCenter()","🔔",un?String(un):"Alerts","Alert center")+
+    btn("document.getElementById('gradeBtn').click()","🎓","Report","Draft report")+
+    btn("document.getElementById('injBtn').click()","🩺","Health","Injury center")+
+    '<button class="hbtn deckbtn" id="weekRecapBtn"><span class="dicon">📅</span><span class="dlab">Weeks</span></button>'+
+    '<button class="hbtn deckbtn" id="healthDigestBtn"><span class="dicon">🩹</span><span class="dlab">Digest</span></button>'+
+    '</div>';
+}
+function applySeasonHeader(){                                                     // #732
+  if(document.getElementById("draftMenuBtn")) { document.body.classList.add("seasonled"); return; }
+  document.body.classList.add("seasonled");
+  const b = document.createElement("button");
+  b.className = "hbtn"; b.id = "draftMenuBtn"; b.title = "Draft-day tools (mocks, board, compare, sheet)";
+  b.textContent = "🗂 Draft ▾";
+  b.addEventListener("click", ()=>{
+    const open = document.body.classList.toggle("draftopen");
+    b.textContent = open ? "🗂 Draft ▴" : "🗂 Draft ▾";
+  });
+  const anchor = document.getElementById("mocksBtn");
+  if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(b, anchor);
+}
+document.addEventListener("keydown", e=>{                                         // #733
+  if(typeof SEASON==="undefined" || !SEASON.on) return;
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target;
+  if(t && (t.tagName==="INPUT" || t.tagName==="TEXTAREA" || t.tagName==="SELECT" || t.isContentEditable)) return;
+  const k = e.key.toLowerCase();
+  if(k==="s"){ e.preventDefault(); renderScoreboard(); }
+  else if(k==="v"){ e.preventDefault(); renderWaivers(); }
+  else if(k==="d"){ e.preventDefault(); renderTrades(); }
+  else if(k==="x"){ e.preventDefault(); renderSeasonStats(); }
+  else if(k==="w"){ e.preventDefault(); const h2 = document.getElementById("hero"); if(h2) h2.scrollIntoView({behavior:"smooth", block:"start"}); }
+});
 
 window.__mod = window.__mod || []; window.__mod.push("season.js");

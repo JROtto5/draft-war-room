@@ -1,5 +1,23 @@
 # Changelog — Draft War Room
 
+## v11.0 (2026-08-10) — Season Mode (#634–#739)
+The draft ended; the app didn't. 🏁 finished Sleeper drafts import
+themselves and Season HQ becomes page 1 · 🗓 My Week: live roster, week-aware
+optimal lineup, actual-vs-optimal start/sit with named swaps, superflex guard,
+flex agonizer, matchup preview with win prob, bye forecaster · 📊 league
+scoreboard with live points, standings, power rankings, all-play luck,
+weekly awards, 300-sim playoff odds · 📥 waiver war room: upgrade pairs, FAAB
+intel, bid suggester, claim planner, DEF streamer, stash radar, transactions
+wire · 🔁 trade machine: both-lineup verdicts, league-wide finder, 2-for-1
+packages, strength heatmap, buy-low/sell-high, playoff-odds impact, PNG
+proposal card · 🔥 heat alerts for trending free agents in YOUR league ·
+🚨 game-day grid: inactive sweeper, score bursts, close-game alerts,
+Monday-night math, live season ticker, alert center with quiet hours ·
+📈 season analytics: efficiency, luck ledger, waiver/trade/draft ROI, ghost
+season, milestones, JSON export · 🎛 season command deck (mobile bottom dock),
+draft tools folded behind 🗂 Draft ▾, keyboard shortcuts s/v/d/x/w. New
+season.js module. E2E grows to 33 checks.
+
 ## v10.0 (2026-08-03) — The Bold Update (#601–#615)
 ⚡ **On-the-Clock Takeover**: your pick arrives and the screen becomes a
 decision cockpit — top 3 with the case for each, survival odds if you wait,

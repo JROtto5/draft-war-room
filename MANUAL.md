@@ -50,3 +50,23 @@ Any-league setup: LEAGUES.md · Live sync: SYNC.md · In-season: SEASONS.md · F
   counts down to it.
 - During live drafts the header shows the 🏆 **MVP belt** — the best-value pick
   of the draft so far. Milestone toasts fire at 25/50/75/90% with the room's pace.
+
+## 🏟 The season loop (v11)
+
+Draft's over — here's the weekly rhythm the app runs with you:
+
+1. **Monday**: HQ shows the Monday review (result, efficiency, what's heating
+   on the wire). Open 📖 Recap for the story + share card, then 📥 Waivers and
+   plan claims — the planner tracks your bids against your FAAB.
+2. **Waiver day**: you get a reminder if claims are pending. Landed adds show
+   up in the live roster automatically on the next tick.
+3. **Week**: My Week panel keeps the optimal lineup current (byes, injuries,
+   matchups). If your ACTUAL Sleeper lineup leaves points on the bench, the
+   red banner names the swaps. The superflex guard yells if a QB sits.
+4. **Game day**: scoreboard refreshes every 2 minutes, the ticker crawls your
+   players' live points, and alerts fire for inactives, score bursts, close
+   games, and your opponent's bad news. Monday-night math tells you exactly
+   what you need.
+5. **Deck keys**: `s` scores · `v` waivers · `d` trades · `x` season · `w` top.
+
+Draft-day tools live behind 🗂 Draft ▾ in the header all season.
