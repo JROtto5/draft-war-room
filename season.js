@@ -416,6 +416,7 @@ function myWeekHtml(byId){
     if(outByes.length) grid.push('<span class="scpill">W'+fw+': '+outByes.map(p=>esc(p.name.split(" ").slice(-1)[0])).join(", ")+'</span>');
   }
   if(grid.length) h += '<div class="benchhead">📆 Byes ahead</div><div class="scarce">'+grid.join("")+'</div>';
+  if(typeof hqMondayLine==="function") h += hqMondayLine();                       // #727
   // rival tracker (#661)
   try{
     const rs = +S.settings.rivalSlot, s2r = S.settings.slot2rid;
@@ -1248,6 +1249,237 @@ function renderAlertCenter(){                                                   
   document.body.appendChild(ov);
   markAlertsRead();
   ov.addEventListener("click", e=>{ if(e.target===ov || e.target.closest("[data-acx]")) ov.remove(); });
+}
+
+/* ---------- R43 Season memory & analytics (#715–#729) ---------- */
+function seasonArchive(){                                                        // #715
+  if(SCOREB.hist) return SCOREB.hist;
+  try{ return JSON.parse(localStorage.getItem(LS_KEY+"-mhist")||"[]"); }catch(e){ return []; }
+}
+function playerWeekly(hist){
+  const s2o = sleeperToOurs(), out = {};
+  (hist||[]).forEach((wm,wi)=>(wm||[]).forEach(m=>{
+    for(const sid in (m.players_points||{})){
+      const oid = s2o[String(sid)]; if(!oid) continue;
+      (out[oid] = out[oid]||[])[wi] = m.players_points[sid];
+    }
+  }));
+  return out;
+}
+function consistencySeason(ptsArr){                                                  // pure (#718)
+  const a = (ptsArr||[]).filter(x=>x!=null);
+  if(a.length<2) return null;
+  const avg = a.reduce((x,y)=>x+y,0)/a.length;
+  const sd = Math.sqrt(a.reduce((x,y)=>x+(y-avg)*(y-avg),0)/a.length);
+  return {avg:Math.round(avg*10)/10, sd:Math.round(sd*10)/10, n:a.length,
+    tag: sd<avg*0.45 ? "🧱 floor" : sd>avg*0.85 ? "🎢 boom-bust" : "⚖ steady"};
+}
+function cardSeasonStrip(p){                                                     // #728/#718
+  try{
+    const hist = seasonArchive(); if(!hist.length) return "";
+    const wk = playerWeekly(hist)[p.id]; if(!wk || !wk.filter(x=>x!=null).length) return "";
+    const c = consistencySeason(wk);
+    return '<div class="cintel" style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px"><b>📊 This season</b> · '+
+      wk.map((x,i)=>x!=null?'W'+(i+1)+' <b class="mono">'+Math.round(x*10)/10+'</b>':null).filter(Boolean).join(" · ")+
+      (c ? '<br><span class="dimtxt">avg '+c.avg+' · '+c.tag+'</span>' : '')+'</div>';
+  }catch(e){ return ""; }
+}
+function myWeeklyRows(hist){
+  const myRid = +S.settings.sleeperRosterId, byId = idIndex();
+  return (hist||[]).map((wm,wi)=>{
+    const m = (wm||[]).find(x=>+x.roster_id===myRid); if(!m) return null;
+    const opp = (wm||[]).find(x=>x.matchup_id===m.matchup_id && +x.roster_id!==myRid);
+    return {w:wi+1, m, opp, eff:lineupEffOf(m, byId)};
+  }).filter(Boolean);
+}
+function mvpBustTally(hist){                                                     // pure-ish (#719)
+  const byId = idIndex(), s2o = sleeperToOurs();
+  const wins = {}, burns = {};
+  myWeeklyRows(hist).forEach(r=>{
+    const perf = (r.m.starters||[]).map(sid=>({id:s2o[String(sid)], got:+r.m.players_points[sid]||0})).filter(x=>x.id);
+    if(!perf.length) return;
+    const top = perf.slice().sort((a,b)=>b.got-a.got)[0];
+    wins[top.id] = (wins[top.id]||0)+1;
+    perf.forEach(x=>{ const p = byId[x.id]; if(p && p.pos!=="DEF" && x.got < p.proj/16*0.5) burns[x.id] = (burns[x.id]||0)+1; });
+  });
+  const name = id=>byId[id] ? byId[id].name : id;
+  return {mvps:Object.entries(wins).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([id,n])=>({name:name(id), n})),
+    busts:Object.entries(burns).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([id,n])=>({name:name(id), n}))};
+}
+async function txHistory(){                                                      // all-season transactions, cached
+  const lg = (S.settings.sleeperLeagueId||"").trim(); if(!lg) return [];
+  const w = curWeek(), k = LS_KEY+"-txhist";
+  let cache = {upto:0, tx:[]}; try{ cache = JSON.parse(localStorage.getItem(k)||'{"upto":0,"tx":[]}'); }catch(e){}
+  try{
+    for(let pw=cache.upto+1; pw<=w; pw++){
+      const tx = await (await fetch(SYNC.base+"/league/"+lg+"/transactions/"+pw)).json();
+      (tx||[]).filter(t=>t.status==="complete").forEach(t=>cache.tx.push({week:pw, type:t.type, rids:t.roster_ids||[],
+        adds:t.adds||{}, drops:t.drops||{}, bid:(t.settings&&t.settings.waiver_bid)||0}));
+      cache.upto = pw;
+    }
+    localStorage.setItem(k, JSON.stringify(cache));
+  }catch(e){}
+  return cache.tx;
+}
+function waiverRoi(txAll, hist){                                                 // pure (#720)
+  const myRid = +S.settings.sleeperRosterId, s2o = sleeperToOurs(), byId = idIndex();
+  const pw = playerWeekly(hist);
+  const rows = [];
+  (txAll||[]).filter(t=>(t.type==="waiver"||t.type==="free_agent") && t.rids.includes(myRid)).forEach(t=>{
+    for(const sid in t.adds){
+      if(+t.adds[sid]!==myRid) continue;
+      const oid = s2o[String(sid)]; if(!oid || !byId[oid]) continue;
+      const pts = (pw[oid]||[]).slice(t.week-1).filter(x=>x!=null).reduce((a,b)=>a+b,0);
+      rows.push({name:byId[oid].name, week:t.week, bid:t.bid, pts:Math.round(pts*10)/10});
+    }
+  });
+  return rows.sort((a,b)=>b.pts-a.pts);
+}
+function tradeRoi(txAll, hist){                                                  // pure (#721)
+  const myRid = +S.settings.sleeperRosterId, s2o = sleeperToOurs(), byId = idIndex();
+  const pw = playerWeekly(hist);
+  const out = [];
+  (txAll||[]).filter(t=>t.type==="trade" && t.rids.includes(myRid)).forEach(t=>{
+    let got = 0, gave = 0; const gotN = [], gaveN = [];
+    for(const sid in t.adds){
+      const oid = s2o[String(sid)]; if(!oid) continue;
+      const pts = (pw[oid]||[]).slice(t.week-1).filter(x=>x!=null).reduce((a,b)=>a+b,0);
+      if(+t.adds[sid]===myRid){ got += pts; if(byId[oid]) gotN.push(byId[oid].name); }
+      else { gave += pts; if(byId[oid]) gaveN.push(byId[oid].name); }
+    }
+    out.push({week:t.week, got:Math.round(got), gave:Math.round(gave), gotN, gaveN});
+  });
+  return out;
+}
+function draftRoi(hist){                                                         // #722
+  const byId = idIndex(), pw = playerWeekly(hist);
+  const t = S.settings.teams, R = S.settings.roster;
+  const picks = S.log.slice(0, t*R);
+  const rows = picks.map((e,i)=>{
+    const p = byId[e.id]; if(!p || p.pos==="DEF") return null;
+    const pts = (pw[p.id]||[]).filter(x=>x!=null).reduce((a,b)=>a+b,0);
+    return {p, pick:i+1, mine:e.who==="me", pts:Math.round(pts*10)/10};
+  }).filter(Boolean).filter(r=>r.pts>0);
+  if(rows.length<20) return null;
+  const byPts = rows.slice().sort((a,b)=>b.pts-a.pts);
+  rows.forEach(r=>{ r.ptsRank = byPts.indexOf(r)+1; r.gain = r.pick - r.ptsRank; });
+  return {steals:rows.slice().sort((a,b)=>b.gain-a.gain).slice(0,5),
+    busts:rows.slice().sort((a,b)=>a.gain-b.gain).slice(0,5)};
+}
+function ghostSeason(hist){                                                      // pure-ish (#723)
+  const myRid = +S.settings.sleeperRosterId, byId = idIndex();
+  const t = S.settings.teams, R = S.settings.roster;
+  const draftIds = S.log.slice(0, t*R).filter(e=>e.who==="me").map(e=>e.id);
+  if(!draftIds.length) return null;
+  const pw = playerWeekly(hist);
+  const sl = slotCfg();
+  let ghost = 0, real = 0, weeks = 0;
+  myWeeklyRows(hist).forEach(r=>{
+    const wi = r.w-1;
+    const cands = draftIds.map(id=>({p:byId[id], got:(pw[id]||[])[wi]||0})).filter(x=>x.p);
+    const used = new Set();
+    const take = poss=>{ let best=null; for(const x of cands){ if(used.has(x.p.id)||!poss.includes(x.p.pos)) continue; if(!best||x.got>best.got) best=x; } if(best) used.add(best.p.id); return best?best.got:0; };
+    let g = 0;
+    const grabN = (n,poss)=>{ for(let i=0;i<n;i++) g += take(poss); };
+    grabN(sl.QB,["QB"]); grabN(sl.RB,["RB"]); grabN(sl.WR,["WR"]); grabN(sl.TE,["TE"]);
+    grabN(sl.FLEX,["RB","WR","TE"]); grabN(sl.SF,["QB","RB","WR","TE"]); grabN(sl.DEF,["DEF"]);
+    ghost += g; real += r.m.points||0; weeks++;
+  });
+  if(!weeks) return null;
+  return {ghost:Math.round(ghost*10)/10, real:Math.round(real*10)/10, delta:Math.round((real-ghost)*10)/10, weeks};
+}
+function milestoneSweep(){                                                       // #724
+  try{
+    const hist = seasonArchive(); if(!hist.length) return;
+    const k = LS_KEY+"-smiles";
+    let seen = []; try{ seen = JSON.parse(localStorage.getItem(k)||"[]"); }catch(e){}
+    const fire = (id, msg, kind)=>{
+      if(seen.includes(id)) return;
+      seen.push(id);
+      toast(msg);
+      if(typeof confetti==="function") try{ confetti(kind||"gold"); }catch(e2){}
+    };
+    const rows = myWeeklyRows(hist);
+    rows.forEach(r=>{ if((r.m.points||0)>=150) fire("w150-"+r.w, "💯 "+r.m.points.toFixed(1)+" in week "+r.w+" — that's a franchise record pace"); });
+    let streak = 0;
+    rows.forEach(r=>{ if(r.opp && r.m.points>r.opp.points) streak++; else streak = 0;
+      if(streak===3) fire("streak3", "🔥 Three straight wins — heater confirmed");
+      if(streak===5) fire("streak5", "🏆 FIVE straight — someone check the league for a rigging investigation", "hearts"); });
+    try{ localStorage.setItem(k, JSON.stringify(seen)); }catch(e){}
+  }catch(e){}
+}
+function sparkSvg(vals, w2, h2, color){
+  const a = (vals||[]).filter(x=>x!=null);
+  if(a.length<2) return "";
+  const mx = Math.max(...a), mn = Math.min(...a);
+  const pts = a.map((v,i)=>Math.round(i*(w2/(a.length-1)))+","+Math.round(h2-2-(h2-4)*((v-mn)/Math.max(0.1,mx-mn)))).join(" ");
+  return '<svg width="'+w2+'" height="'+h2+'" viewBox="0 0 '+w2+' '+h2+'" aria-hidden="true"><polyline points="'+pts+'" fill="none" stroke="'+(color||"var(--gold)")+'" stroke-width="1.5"/></svg>';
+}
+async function renderSeasonStats(){                                              // #716/#717/#719–#726
+  const old = document.getElementById("ssOverlay"); if(old){ old.remove(); return; }
+  const hist = await leagueHistory();
+  if(!hist.length) return toast("Season stats unlock after week 1 finals", {warn:true});
+  const byId = idIndex();
+  const rows = myWeeklyRows(hist);
+  const tally = mvpBustTally(hist);
+  const txAll = await txHistory();
+  const wroi = waiverRoi(txAll, hist);
+  const troi = tradeRoi(txAll, hist);
+  const droi = draftRoi(hist);
+  const gh = ghostSeason(hist);
+  const ap = allPlayStandings(hist, SCOREB.rosters, SCOREB.users);
+  const myRid = +S.settings.sleeperRosterId;
+  const myAp = ap.find(r=>r.rid===myRid);
+  const effs = rows.map(r=>r.eff ? r.eff.eff : null);
+  const ov = document.createElement("div"); ov.id = "ssOverlay";
+  ov.style.cssText = "position:fixed;inset:0;z-index:320;background:rgba(11,15,20,.94);overflow-y:auto;padding:26px 12px";
+  let h = '<div class="sbcard" role="dialog" aria-label="Season stats"><button class="sbx" data-ssx="1">✕</button><div class="tag">📈 MY SEASON — '+rows.length+' weeks banked</div>';
+  h += '<div class="sbply"><span>🎯 Lineup efficiency by week '+sparkSvg(effs, 90, 18)+'</span><b class="mono">'+
+    (effs.filter(Boolean).length ? Math.round(effs.filter(Boolean).reduce((a,b)=>a+b,0)/effs.filter(Boolean).length)+'%' : '—')+'</b></div>';
+  if(myAp) h += '<div class="sbply"><span>🍀 Luck: '+myAp.xWins+' expected wins vs '+myAp.w+' actual</span><b class="mono" style="color:var(--'+(myAp.luck>0?'green':'red')+')">'+(myAp.luck>0?'+':'')+myAp.luck+'</b></div>';
+  if(tally.mvps.length) h += '<div class="benchhead">🏅 Carried me</div><div class="scarce">'+tally.mvps.map(x=>'<span class="scpill">'+esc(x.name)+' ×'+x.n+'</span>').join("")+'</div>';
+  if(tally.busts.length) h += '<div class="benchhead">🪦 Burned starts</div><div class="scarce">'+tally.busts.map(x=>'<span class="scpill">'+esc(x.name)+' ×'+x.n+'</span>').join("")+'</div>';
+  if(wroi.length) h += '<div class="benchhead">📥 Waiver ROI</div>'+wroi.slice(0,5).map(r=>'<div class="sbply"><span>'+esc(r.name)+' <span class="dimtxt">W'+r.week+(r.bid?' · $'+r.bid:'')+'</span></span><b class="mono">'+r.pts+' pts</b></div>').join("");
+  if(troi.length) h += '<div class="benchhead">🔁 Trade ROI</div>'+troi.map(r=>'<div class="sbply"><span>W'+r.week+': got '+esc(r.gotN.join(", ")||"?")+' <span class="dimtxt">for '+esc(r.gaveN.join(", ")||"?")+'</span></span><b class="mono" style="color:var(--'+(r.got>=r.gave?'green':'red')+')">'+(r.got-r.gave>=0?'+':'')+(r.got-r.gave)+'</b></div>').join("");
+  if(droi) h += '<div class="benchhead">🎓 Draft, judged by reality</div><div class="scarce">'+
+    droi.steals.map(r=>'<span class="scpill" style="color:var(--green)">💎 '+esc(r.p.name)+' pick '+r.pick+' → #'+r.ptsRank+'</span>').join("")+
+    droi.busts.map(r=>'<span class="scpill" style="color:var(--red)">🪦 '+esc(r.p.name)+' pick '+r.pick+' → #'+r.ptsRank+'</span>').join("")+'</div>';
+  if(gh) h += '<div class="sbply"><span>👻 Ghost season (untouched draft roster)</span><b class="mono" style="color:var(--'+(gh.delta>=0?'green':'red')+')">'+
+    'your managing: '+(gh.delta>=0?'+':'')+gh.delta+' pts</b></div>';
+  if(rows.length>=13){                                                           // #725 awards late-season
+    h += '<div class="benchhead">🏆 Season awards (so far)</div><div class="scarce">'+
+      (tally.mvps[0]?'<span class="scpill">MVP: '+esc(tally.mvps[0].name)+'</span>':'')+
+      (wroi[0]?'<span class="scpill">Best pickup: '+esc(wroi[0].name)+'</span>':'')+
+      (myAp?'<span class="scpill">Luck: '+(myAp.luck>0?'blessed':'robbed')+'</span>':'')+'</div>';
+  }
+  h += '<div style="padding:10px 0"><button class="hbtn" id="ssExport">⇩ Export season JSON</button></div></div>';
+  ov.innerHTML = h;
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{
+    if(e.target===ov || e.target.closest("[data-ssx]")) return ov.remove();
+    if(e.target.id==="ssExport"){                                                // #726
+      const blob = new Blob([JSON.stringify({exported:new Date().toISOString(), league:S.settings.sleeperLeagueId,
+        weeks:hist, transactions:txAll, myWeekly:rows.map(r=>({w:r.w, pts:r.m.points, opp:r.opp?r.opp.points:null, eff:r.eff}))}, null, 1)], {type:"application/json"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = "buck-breakers-season.json"; a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+      toast("⇩ Season archive exported");
+    }
+  });
+}
+function hqMondayLine(){                                                          // #727
+  try{
+    if(new Date().getDay()!==1) return "";
+    const hist = seasonArchive(); if(!hist.length) return "";
+    const last = myWeeklyRows(hist).slice(-1)[0]; if(!last) return "";
+    const won = last.opp ? last.m.points>last.opp.points : null;
+    const hot = (SEASON.avail||[])[0];
+    return '<div class="benchhead">☕ Monday review: '+(won?'<span style="color:var(--green)">W':'<span style="color:var(--red)">L')+
+      ' '+(last.m.points||0).toFixed(1)+'–'+(last.opp?last.opp.points.toFixed(1):"?")+'</span>'+
+      (last.eff?' · eff '+last.eff.eff+'%':'')+
+      (hot?' · wire: '+esc(hot.name)+' is heating':'')+
+      ' · <a href="#" onclick="weeklyRecap2();return false">full story</a></div>';
+  }catch(e){ return ""; }
 }
 
 window.__mod = window.__mod || []; window.__mod.push("season.js");

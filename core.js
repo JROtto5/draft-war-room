@@ -1322,7 +1322,8 @@ function startSeasonMode(){
     Promise.all([refreshWeek(), myLiveIds()]).then(()=>myWeekData())
       .then(()=>heatScan(true))
       .then(()=>{ lineupAlarm(); if(typeof renderNow==="function") renderNow(); })
-      .then(()=>{ if(typeof leagueMeta==="function") leagueMeta().then(()=>waiverDayReminder()); }); };
+      .then(()=>{ if(typeof leagueMeta==="function") leagueMeta().then(()=>waiverDayReminder()); })
+      .then(()=>leagueHistory()).then(()=>{ if(typeof milestoneSweep==="function") milestoneSweep(); }); };
   SEASON.timer = setInterval(tick, 5*60e3);
   document.addEventListener("visibilitychange", ()=>{
     if(document.visibilityState==="visible" && SEASON.on && Date.now()-SEASON.at > 5*60e3) tick();
@@ -1647,7 +1648,8 @@ function openCard(id){
       '</div></div>'+
     '</div>'+
     '<div class="ctabs">'+tabBtn("ov","Overview")+tabBtn("hist","History")+tabBtn("intel","Intel")+'</div>'+
-    '<div class="ctabbody">'+(tab==="hist"?history:tab==="intel"?intelTab:overview)+'</div>'+
+    '<div class="ctabbody">'+(tab==="hist"?history:tab==="intel"?intelTab:overview)+
+      (typeof cardSeasonStrip==="function" ? cardSeasonStrip(p) : '')+'</div>'+   // season strip (#728)
     '<div class="cacts">'+
       (status==="available"||status==="do-not-draft" ?
         '<button class="pick" data-pick="'+id+'">✓ MINE</button>'+

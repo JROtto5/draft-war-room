@@ -122,6 +122,24 @@ try {
     localStorage.removeItem(LS_KEY+"-alertlog");
     return ok;
   }catch(e){ return false; }})()?"OK":"BAD"));
+  // Season analytics run offline on fixture archives (#729)
+  out.push("stats:"+((()=>{
+    const steps=["c",()=>consistencySeason([10,12,11,9,10]).tag.includes("floor"),
+      "c2",()=>consistencySeason([2,30,1,28]).tag.includes("boom"),
+      "pw",()=>typeof playerWeekly([[{matchup_id:1,roster_id:1,points:100,starters:[],players:[],players_points:{}}]])==="object",
+      "rows",()=>Array.isArray(myWeeklyRows([[{matchup_id:1,roster_id:1,points:100,starters:[],players:[],players_points:{}}]])),
+      "tally",()=>typeof mvpBustTally([[]])==="object",
+      "wroi",()=>Array.isArray(waiverRoi([],[[]])),
+      "troi",()=>Array.isArray(tradeRoi([],[[]])),
+      "ghost",()=>{const g=ghostSeason([[]]); return g===null||typeof g==="object";},
+      "spark",()=>typeof sparkSvg([1,2,3],60,14)==="string",
+      "strip",()=>typeof cardSeasonStrip(allPlayers()[0])==="string",
+      "mon",()=>typeof hqMondayLine()==="string"];
+    for(let i=0;i<steps.length;i+=2){
+      try{ if(steps[i+1]()!==true) return "FAIL@"+steps[i]; }catch(e){ return "THROW@"+steps[i]+"-"+String(e).slice(0,40); }
+    }
+    return "OK";
+  })()));
   // My Week math runs offline on fixtures (#654)
   out.push("week:"+((()=>{try{
     const byId=idIndex(); const ids=allPlayers().slice(0,30).map(p=>p.id);

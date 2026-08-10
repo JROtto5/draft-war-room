@@ -510,6 +510,7 @@ const PALETTE_ACTIONS = [
   ["🔔 Alert center", ()=>renderAlertCenter()],
   ["📖 Week recap story", ()=>weeklyRecap2()],
   ["🩹 Roster health digest", ()=>injuryDigest()],
+  ["📈 Season stats", ()=>renderSeasonStats()],
   ["🏆 Standings", ()=>renderScoreboard()],
   ["⚔ My matchup", ()=>renderScoreboard()],
   ["🩺 Injury Center", ()=>document.getElementById("injBtn").click()],
@@ -709,6 +710,7 @@ function renderBest(){
         '<button class="hbtn" onclick="renderTrades()">🔁 Trades</button>'+
         '<button class="hbtn" onclick="renderAlertCenter()" title="Alert center">🔔'+((typeof unreadAlerts==="function"&&unreadAlerts())?' <b style="color:var(--gold)">'+unreadAlerts()+'</b>':'')+'</button>'+
         '<button class="hbtn" onclick="weeklyRecap2()" title="Last week: story + share card">📖 Recap</button>'+
+        '<button class="hbtn" onclick="renderSeasonStats()" title="Efficiency, luck, ROI, ghost season">📈 Season</button>'+
         '<button class="hbtn" onclick="document.getElementById(\'gradeBtn\').click()">🎓 Report</button>'+
         '<button class="hbtn" onclick="document.getElementById(\'injBtn\').click()">🩺 Injuries</button>'+
         '<button class="hbtn" onclick="document.getElementById(\'recapBtn\').click()">📤 Share</button>'+
