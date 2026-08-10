@@ -900,4 +900,246 @@ function liveTick(){                                                            
   nflStates().then(()=>{ liveWpSnap(); twoMinuteAlert(); gameBreak(); });
 }
 
+/* ---------- R50 Psychology & rituals (#815–#829) ---------- */
+function ritualCfg(){ return Object.assign({checklist:true, goals:true, grades:true, bright:true}, S.settings.rituals||{}); }
+function checklistState(){                                                       // #815 auto-detect + manual ticks
+  const w = curWeek();
+  let manual = {}; try{ manual = JSON.parse(localStorage.getItem(LS_KEY+"-ritual"+w)||"{}"); }catch(e){}
+  const md = WEEKST.mate;
+  const byId = idIndex();
+  let lineupOk = false;
+  try{
+    if(md && md.me && md.me.starters && md.me.starters.filter(Boolean).length){
+      const actual = md.me.starters.filter(Boolean);
+      lineupOk = !actual.map(id=>byId[id]).filter(Boolean).some(p=>weekProj(p,w)===0);
+    }
+  }catch(e){}
+  const planDone = (()=>{ try{ const {moves} = gamePlanMoves(); const t = planTicks();
+    return moves.filter(m=>m.pri>=50).every(m=>t[m.k]); }catch(e){ return false; } })();
+  const items = [
+    {k:"lineup", label:"Lineup clean (no byes/outs)", auto:lineupOk},
+    {k:"plan", label:"Game plan moves done", auto:planDone},
+    {k:"scout", label:"Scout read", auto:!!manual.scout, manual:true},
+    {k:"sim", label:"Sim run", auto:SIM.lastKey!=null && SIM.lastKey.indexOf(w+":")===0},
+    {k:"claims", label:"Waivers planned", auto:claimsGet().length>0 || !!manual.claims, manual:true},
+  ];
+  items.forEach(it=>{ it.done = it.auto || !!manual[it.k]; });
+  return {items, done:items.filter(i=>i.done).length, total:items.length, manual};
+}
+function checklistTick(k){
+  const w = curWeek();
+  let m = {}; try{ m = JSON.parse(localStorage.getItem(LS_KEY+"-ritual"+w)||"{}"); }catch(e){}
+  m[k] = !m[k];
+  try{ localStorage.setItem(LS_KEY+"-ritual"+w, JSON.stringify(m)); }catch(e){}
+}
+function checklistStreak(){                                                      // #816
+  try{ return +localStorage.getItem(LS_KEY+"-ritstreak")||0; }catch(e){ return 0; }
+}
+function checklistSweep(){                                                       // weekly: bank streak at week end
+  try{
+    const hist = seasonArchive(); if(!hist.length) return;
+    const wk = hist.length;
+    const k = LS_KEY+"-ritbank";
+    if(+localStorage.getItem(k)===wk) return;
+    localStorage.setItem(k, String(wk));
+    let m = {}; try{ m = JSON.parse(localStorage.getItem(LS_KEY+"-ritual"+wk)||"{}"); }catch(e){}
+    const full = m.lineup!==false && Object.keys(m).length>=2;                    // proxy: engaged with the ritual
+    const cur = checklistStreak();
+    localStorage.setItem(LS_KEY+"-ritstreak", String(full ? cur+1 : 0));
+  }catch(e){}
+}
+function goalsGet(){                                                             // #817
+  try{ return JSON.parse(localStorage.getItem(LS_KEY+"-goals")||'["playoffs","topPF","10wins"]'); }catch(e){ return ["playoffs"]; }
+}
+function goalsProgress(){
+  const out = [];
+  const ms = myStandingsRow(); if(!ms) return out;
+  const myRid = +S.settings.sleeperRosterId;
+  const odds = SEASON.lastOdds ? SEASON.lastOdds[myRid] : null;
+  const gp = ms.row.w+ms.row.l+ms.row.t;
+  goalsGet().forEach(g=>{
+    if(g==="playoffs") out.push({label:"Make the playoffs", pct:odds!=null?odds:Math.round(ms.place<=6?70:30), note:odds!=null?odds+"% odds":ordinal(ms.place)});
+    if(g==="topPF"){ const rank = ms.st.slice().sort((a,b)=>b.pf-a.pf).findIndex(r=>r.rid===myRid)+1;
+      out.push({label:"Lead the league in points", pct:Math.max(5, 100-(rank-1)*18), note:ordinal(rank)+" in PF"}); }
+    if(g==="10wins") out.push({label:"10 wins", pct:Math.min(100, Math.round(ms.row.w/10*100)), note:ms.row.w+" of 10"+(gp<14?" ("+(14-gp)+" games left)":"")});
+    if(g==="title") out.push({label:"Win it all", pct:odds!=null?Math.round(odds*0.35):15, note:"the only goal that matters"});
+  });
+  return out;
+}
+function mgmtGrade(){                                                            // #818
+  try{
+    const hist = seasonArchive(); if(!hist.length) return null;
+    const rows = myWeeklyRows(hist);
+    const last = rows[rows.length-1]; if(!last) return null;
+    let score = 0, parts = [];
+    const eff = last.eff ? last.eff.eff : null;
+    if(eff!=null){ score += Math.min(50, Math.max(0, (eff-70)/30*50)); parts.push("eff "+eff+"%"); }
+    const wk = rows.length;
+    let m = {}; try{ m = JSON.parse(localStorage.getItem(LS_KEY+"-ritual"+wk)||"{}"); }catch(e){}
+    const engaged = Object.keys(m).length>0;
+    score += engaged ? 15 : 5; parts.push(engaged?"ritual kept":"ritual skipped");
+    const jo = journalOutcomes(hist);
+    if(jo && (jo.meBetter+jo.engBetter)>0){ score += jo.meBetter>=jo.engBetter ? 20 : 10; parts.push("journal "+jo.meBetter+"–"+jo.engBetter); }
+    else score += 12;
+    const tx = claimsGet().length; score += Math.min(15, tx*5 + 5);
+    const letter = score>=85 ? "A" : score>=70 ? "B" : score>=55 ? "C" : score>=40 ? "D" : "F";
+    return {letter, score:Math.round(score), parts, w:wk};
+  }catch(e){ return null; }
+}
+function gradeHistory(){                                                         // #819
+  try{ return JSON.parse(localStorage.getItem(LS_KEY+"-grades")||"[]"); }catch(e){ return []; }
+}
+function gradeSweep(){
+  try{
+    const g = mgmtGrade(); if(!g) return;
+    const h = gradeHistory();
+    if(h.some(x=>x.w===g.w)) return;
+    h.push({w:g.w, letter:g.letter, score:g.score});
+    localStorage.setItem(LS_KEY+"-grades", JSON.stringify(h.slice(-18)));
+  }catch(e){}
+}
+function brightSide(){                                                           // #820
+  try{
+    const hist = seasonArchive(); if(!hist.length) return null;
+    const rows = myWeeklyRows(hist);
+    const last = rows[rows.length-1];
+    if(!last || !last.opp || last.m.points>=last.opp.points) return null;
+    const bits = [];
+    const myRid = +S.settings.sleeperRosterId;
+    const ap = allPlayStandings(hist, SCOREB.rosters, SCOREB.users).find(r=>r.rid===myRid);
+    if(ap && ap.luck<-0.5) bits.push("You're owed "+(-ap.luck)+" wins by variance — the math ALWAYS collects.");
+    const med = (hist[hist.length-1]||[]).map(x=>x.points||0).sort((a,b)=>a-b)[Math.floor(hist[hist.length-1].length/2)];
+    if(last.m.points>med) bits.push("You outscored more than half the league and still lost — that's a schedule loss, not a roster loss.");
+    if(last.eff && last.eff.eff>=93) bits.push("You played it "+last.eff.eff+"% perfectly. Nothing to fix. Their guy had a career day — happens.");
+    if(SEASON.avail && SEASON.avail.length) bits.push("Meanwhile "+SEASON.avail[0].name+" is heating on the wire and you have first shot.");
+    const md = WEEKST.mate;
+    if(md && md.opp){
+      const slop = sloppinessOf(md.opp.rid, hist);
+      if(slop && slop.eff<92) bits.push("Next up: a team running "+slop.eff+"% efficiency. They will hand you points.");
+    }
+    if(!bits.length) bits.push("Short memory. Best ability is availability, and your roster's still the deepest in the league.");
+    return bits;
+  }catch(e){ return null; }
+}
+function lossAutopsy(){                                                          // #827
+  try{
+    const hist = seasonArchive(); if(!hist.length) return null;
+    const rows = myWeeklyRows(hist);
+    const last = rows[rows.length-1];
+    if(!last || !last.opp || last.m.points>=last.opp.points) return null;
+    const gap = Math.round((last.opp.points-last.m.points)*10)/10;
+    const br = benchRegret([hist[hist.length-1]]);
+    if(br.total>gap) return "Autopsy: the "+br.total+" points on your bench were the whole "+gap+"-point loss. Fixable. Fixed by the sim next week.";
+    const byId = idIndex(), s2o = sleeperToOurs();
+    const perf = (last.m.starters||[]).map(sid=>({p:byId[s2o[String(sid)]], got:+last.m.players_points[sid]||0})).filter(x=>x.p&&x.p.pos!=="DEF");
+    const bust = perf.sort((a,b)=>(a.got-a.p.proj/16)-(b.got-b.p.proj/16))[0];
+    if(bust && (bust.p.proj/16-bust.got)>gap) return "Autopsy: "+bust.p.name+" ("+bust.got.toFixed(1)+" vs "+(bust.p.proj/16).toFixed(1)+" expected) was the loss by himself. Not a decision error — a variance tax.";
+    return "Autopsy: they outscored the median and you didn't. No smoking gun — reload, hit waivers, next.";
+  }catch(e){ return null; }
+}
+function deathWatch(){                                                           // #822
+  try{
+    const rs = +S.settings.rivalSlot, s2r = S.settings.slot2rid;
+    if(!rs || !s2r || !SEASON.lastOdds) return "";
+    const rrid = +s2r[String(rs)];
+    const odds = SEASON.lastOdds[rrid]; if(odds==null) return "";
+    const prev = +localStorage.getItem(LS_KEY+"-dwprev");
+    localStorage.setItem(LS_KEY+"-dwprev", String(odds));
+    const arrow = prev ? (odds<prev ? " ▼" : odds>prev ? " ▲" : "") : "";
+    const vibe = odds===0 ? "☠ ELIMINATED. Pour one out (do not)." : odds<25 ? "circling the drain" : odds<50 ? "sweating" : "annoyingly alive";
+    return '<div class="sbply"><span>😈 Death watch: '+esc(ridName(rrid))+'</span><b class="mono" style="color:var(--'+(odds<50?'green':'red')+')">'+odds+'%'+arrow+' <span class="dimtxt">'+vibe+'</span></b></div>';
+  }catch(e){ return ""; }
+}
+function elimTracker(){                                                          // #825
+  try{
+    if(!SEASON.lastOdds || !SCOREB.rosters) return [];
+    return standingsRows(SCOREB.rosters, SCOREB.users).filter(r=>SEASON.lastOdds[r.rid]===0).map(r=>r.name);
+  }catch(e){ return []; }
+}
+function confSet(v){                                                             // #823
+  const w = curWeek();
+  let c = []; try{ c = JSON.parse(localStorage.getItem(LS_KEY+"-conf")||"[]"); }catch(e){}
+  c = c.filter(x=>x.w!==w); c.push({w, v:+v});
+  try{ localStorage.setItem(LS_KEY+"-conf", JSON.stringify(c.slice(-18))); }catch(e){}
+}
+function confCalibration(){
+  let c = []; try{ c = JSON.parse(localStorage.getItem(LS_KEY+"-conf")||"[]"); }catch(e){ return null; }
+  const hist = seasonArchive(); if(!hist.length || !c.length) return null;
+  const rows = myWeeklyRows(hist);
+  const pairs = c.map(x=>{ const r = rows[x.w-1]; return r && r.opp ? {v:x.v, won:r.m.points>r.opp.points} : null; }).filter(Boolean);
+  if(pairs.length<2) return null;
+  const hiConf = pairs.filter(p=>p.v>=4), loConf = pairs.filter(p=>p.v<=2);
+  return {n:pairs.length,
+    hi:hiConf.length ? Math.round(hiConf.filter(p=>p.won).length/hiConf.length*100) : null,
+    lo:loConf.length ? Math.round(loConf.filter(p=>p.won).length/loConf.length*100) : null};
+}
+function streakSkin(){                                                           // #821
+  try{
+    const hist = seasonArchive();
+    const rows = hist.length ? myWeeklyRows(hist) : [];
+    let streak = 0;
+    for(let i=rows.length-1;i>=0;i--){ if(rows[i].opp && rows[i].m.points>rows[i].opp.points) streak++; else break; }
+    document.body.classList.toggle("heater", streak>=3);
+  }catch(e){}
+}
+function routineCard(){                                                          // #824
+  try{
+    if(!ritualCfg().checklist) return;
+    const d = new Date();
+    if(d.getDay()!==0 || d.getHours()<9 || d.getHours()>=13) return;
+    const k = LS_KEY+"-routine"+curWeek();
+    if(localStorage.getItem(k)) return;
+    localStorage.setItem(k, "1");
+    const cs = checklistState();
+    const {moves} = gamePlanMoves();
+    const top = moves[0];
+    alertFire("routine", "☕ Sunday routine: "+cs.done+"/"+cs.total+" checklist done",
+      top ? "Top move: "+top.txt.replace(/^[^\w]+/,"") : "All clear — enjoy the games");
+  }catch(e){}
+}
+function renderRituals(){                                                        // overlay: checklist + goals + grades + confidence
+  const old = document.getElementById("rtOverlay"); if(old){ old.remove(); return; }
+  const cs = checklistState();
+  const goals = ritualCfg().goals ? goalsProgress() : [];
+  const g = ritualCfg().grades ? mgmtGrade() : null;
+  const gh2 = gradeHistory();
+  const bs2 = ritualCfg().bright ? brightSide() : null;
+  const aut = lossAutopsy();
+  const cal = confCalibration();
+  const elim = elimTracker();
+  const streak = checklistStreak();
+  const w = curWeek();
+  let myConf = null; try{ myConf = (JSON.parse(localStorage.getItem(LS_KEY+"-conf")||"[]").find(x=>x.w===w)||{}).v||null; }catch(e){}
+  const ov = document.createElement("div"); ov.id = "rtOverlay"; ov.className = "snov";
+  let h = '<div class="sbcard" role="dialog" aria-label="Rituals"><button class="sbx" data-rtx="1">✕</button>';
+  h += '<div class="tag">🧘 THE RITUAL — week '+w+(streak>=2?' · 🔁 '+streak+'-week streak':'')+'</div>';
+  h += '<div class="benchhead">✅ Pregame checklist ('+cs.done+'/'+cs.total+')</div>'+cs.items.map(it=>
+    '<div class="sbply"'+(it.manual?' style="cursor:pointer" data-rtick="'+it.k+'"':'')+'><span>'+(it.done?'✅':'⬜')+' '+esc(it.label)+'</span>'+
+    (it.manual&&!it.done?'<span class="dimtxt">tap to tick</span>':'')+'</div>').join("");
+  h += '<div class="benchhead">🎚 Pregame confidence</div><div class="scarce">'+
+    [1,2,3,4,5].map(v=>'<span class="scpill" data-conf="'+v+'"'+(myConf===v?' style="color:var(--gold)"':'')+' role="button">'+"🔥".repeat(v)+'</span>').join("")+'</div>';
+  if(cal && (cal.hi!=null||cal.lo!=null)) h += '<div class="sbply"><span>calibration over '+cal.n+' weeks</span><b class="mono">'+
+    (cal.hi!=null?'confident: '+cal.hi+'% won':'')+(cal.lo!=null?' · nervous: '+cal.lo+'% won':'')+'</b></div>';
+  if(goals.length) h += '<div class="benchhead">🎯 Season goals</div>'+goals.map(x=>
+    '<div class="sbply"><span>'+esc(x.label)+' <span class="dimtxt">'+esc(x.note)+'</span></span></div>'+
+    '<div style="padding:0 12px 8px"><div style="height:6px;border-radius:3px;background:var(--line)"><div style="height:6px;border-radius:3px;width:'+Math.min(100,x.pct)+'%;background:var(--'+(x.pct>=60?'green':x.pct>=30?'gold':'red')+')"></div></div></div>').join("");
+  if(g) h += '<div class="benchhead">🎓 Management grade: <b style="color:var(--'+(g.letter==="A"?'green':g.letter>="C"?'gold':'red')+');font-size:16px">'+g.letter+'</b> <span class="dimtxt">('+g.parts.join(" · ")+')</span></div>';
+  if(gh2.length>1) h += '<div class="sbply"><span>transcript</span><b class="mono">'+gh2.map(x=>'W'+x.w+':'+x.letter).join(" ")+'</b></div>';
+  if(bs2) h += '<div class="benchhead" style="color:var(--gold)">🌤 The bright side</div>'+bs2.slice(0,3).map(b=>'<div class="sbply"><span>'+esc(b)+'</span></div>').join("");
+  if(aut) h += '<div class="sbply"><span class="dimtxt">'+esc(aut)+'</span></div>';
+  if(elim.length) h += '<div class="benchhead">☠ Mathematically dead: '+elim.map(esc).join(", ")+'</div>';
+  h += deathWatch();
+  h += '</div>';
+  ov.innerHTML = h;
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{
+    if(e.target===ov || e.target.closest("[data-rtx]")) return ov.remove();
+    const rt = e.target.closest("[data-rtick]");
+    if(rt){ checklistTick(rt.dataset.rtick); ov.remove(); renderRituals(); return; }
+    const cf = e.target.closest("[data-conf]");
+    if(cf){ confSet(cf.dataset.conf); toast("🎚 Confidence logged — we'll check the calibration later"); ov.remove(); renderRituals(); }
+  });
+}
+function ritualTick(){ checklistSweep(); gradeSweep(); streakSkin(); routineCard(); }
+
 window.__mod = window.__mod || []; window.__mod.push("win.js");

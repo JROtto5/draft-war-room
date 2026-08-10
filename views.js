@@ -517,6 +517,7 @@ const PALETTE_ACTIONS = [
   ["🗣 Trash talk", ()=>{ toast(trashTalk()); }],
   ["🕵️ Scout my opponent", ()=>scoutMyOpponent()],
   ["🎲 Simulate my matchup", ()=>renderSim()],
+  ["🧘 Rituals & goals", ()=>renderRituals()],
   ["🏆 Standings", ()=>renderScoreboard()],
   ["⚔ My matchup", ()=>renderScoreboard()],
   ["🩺 Injury Center", ()=>document.getElementById("injBtn").click()],

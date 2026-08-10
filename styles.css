@@ -603,3 +603,6 @@ body.seasonled.draftopen #shareBtn{display:inline-block}
 @keyframes tdpulse{0%{box-shadow:inset 0 -3px 0 var(--green)}50%{box-shadow:inset 0 -3px 0 transparent}100%{box-shadow:inset 0 -3px 0 var(--green)}}
 header.tdpulse{animation:tdpulse .6s ease 3}
 @media (prefers-reduced-motion: reduce){header.tdpulse{animation:none}}
+/* R50 heater skin */
+body.heater #seasonDeck .deckbtn{border-color:var(--gold)}
+body.heater .hero .tag{color:var(--gold)}

@@ -208,6 +208,20 @@ try {
     NFLSTATE.map={};
     return ok;
   }catch(e){ NFLSTATE.map={}; return false; }})()?"OK":"BAD"));
+  // Rituals & psychology offline (#829)
+  out.push("ritual:"+((()=>{try{
+    const cs=checklistState();
+    checklistTick("scout");
+    const cs2=checklistState();
+    const ok1 = cs.total===5 && cs2.items.find(i=>i.k==="scout").done===true;
+    checklistTick("scout");
+    confSet(4);
+    const gp=goalsProgress();
+    return ok1 && Array.isArray(gp) && (mgmtGrade()===null || typeof mgmtGrade().letter==="string") &&
+      (brightSide()===null || Array.isArray(brightSide())) && (lossAutopsy()===null || typeof lossAutopsy()==="string") &&
+      typeof deathWatch()==="string" && Array.isArray(elimTracker()) &&
+      typeof renderRituals==="function" && typeof ritualTick==="function" && typeof checklistStreak()==="number";
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // My Week math runs offline on fixtures (#654)
   out.push("week:"+((()=>{try{
     const byId=idIndex(); const ids=allPlayers().slice(0,30).map(p=>p.id);
