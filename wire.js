@@ -1151,6 +1151,12 @@ $("#settingsBtn").addEventListener("click", ()=>{
   qf.value = q.from; qt.value = q.to;
   $("#setHype").value = S.settings.hype||"standard";
   $("#setCalm").checked = !!S.settings.calm;
+  try{
+    const cm = JSON.parse(localStorage.getItem(LS_KEY+"-csvmeta")||"null");
+    const pinned = Object.keys(S.overrides).length;
+    $("#csvMeta").textContent = cm ? "last import: "+cm.f+" · "+cm.matched+" matched ("+cm.scale+")"+(cm.un?" · "+cm.un+" unmatched":"")+(pinned?" · "+pinned+" pinned now":"")
+      : (pinned ? pinned+" custom projections active" : "no custom data — baked projections in use");
+  }catch(e){}
   const rc = (typeof ritualCfg==="function") ? ritualCfg() : {checklist:true,goals:true,grades:true,bright:true};
   $("#rtChecklist").checked=rc.checklist; $("#rtGoals").checked=rc.goals;
   $("#rtGrades").checked=rc.grades; $("#rtBright").checked=rc.bright;

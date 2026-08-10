@@ -1342,6 +1342,7 @@ function sidebarSeasonHtml(byId){                                               
       avatarImg(p, 30)+
       (slotLab?'<span class="ssslot '+p.pos.toLowerCase()+'" data-slotchip="'+slotLab+'" role="button" tabindex="0" title="Fill the '+slotLab+' slot">'+slotLab+'</span>':'')+
       '<div class="ssnm">'+esc(p.name)+(nick?' <span class="ssnick" title="'+esc(nick)+'">★</span>':'')+
+      (S.overrides[p.id]!=null?' <span title="your custom projection">📌</span>':'')+
       (stagedOut.has(p.id)?'<span class="stagechip">OUT</span>':stagedIn.has(p.id)?'<span class="stagechip" style="background:var(--green)">IN</span>':'')+
       '<span class="sssub">'+(bye?'🚫 BYE':sv?'<span class="'+sv.cls+'">'+sv.label+'</span>':badge||p.team)+'</span></div>'+
       (swappable && p.pos!=="DEF" ? '<button class="swapbtn" data-swap="'+p.id+'" title="Swap '+esc(p.name)+' out" aria-label="Swap out">⇄</button>' : '')+
@@ -1812,5 +1813,138 @@ function whileYouWereOut(){                                                     
     ov.addEventListener("click", e=>{ if(e.target===ov || e.target.closest("[data-wyx]") || e.target.closest("[data-act]")) ov.remove(); });
   }catch(e){}
 }
+
+/* ---------- R61 Custom data: CSV projections (#982–#996) ---------- */
+function parseProjCsv(text){                                                     // pure (#983)
+  const lines = String(text||"").split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  if(!lines.length) return [];
+  const delim = (lines[0].match(/\t/g)||[]).length ? "\t" : (lines[0].match(/;/g)||[]).length > (lines[0].match(/,/g)||[]).length ? ";" : ",";
+  const rows = [];
+  lines.forEach((l,i)=>{
+    const parts = l.split(delim).map(x=>x.trim().replace(/^"(.*)"$/, "$1"));
+    if(parts.length<2) return;
+    const val = parseFloat(parts[parts.length-1].replace(/[^0-9.\-]/g,""));
+    const name = parts[0];
+    if(i===0 && isNaN(val)) return;                                              // header row
+    if(!name || isNaN(val)) return;
+    rows.push({name, val});
+  });
+  return rows;
+}
+function applyProjCsv(text, fname){                                              // #982/#984/#993
+  const rows = parseProjCsv(text);
+  if(!rows.length) return {matched:0, un:[], scale:"?", empty:true};
+  const avg = rows.reduce((a,r)=>a+r.val,0)/rows.length;
+  const scale = avg>60 ? "season" : "ppg";                                       // #993
+  const byNorm = {};
+  allPlayers().forEach(p=>{ byNorm[normName(p.name)] = p.id; });
+  let matched = 0; const un = [];
+  rows.forEach(r=>{
+    const id = byNorm[normName(r.name)];
+    if(!id){ un.push(r.name); return; }
+    const season = scale==="season" ? r.val : r.val*16;
+    if(season<2 || season>700){ un.push(r.name+" (value "+r.val+"?)"); return; }
+    S.overrides[id] = Math.round(season*10)/10;
+    matched++;
+  });
+  if(matched){
+    _memo = {key:null};
+    commit();
+    try{ localStorage.setItem(LS_KEY+"-csvmeta", JSON.stringify({f:fname||"pasted", t:Date.now(), matched, un:un.length, scale})); }catch(e){}
+    if(typeof renderNow==="function") renderNow();
+  }
+  return {matched, un, scale};
+}
+function csvReport(res, fname){                                                  // #984
+  const ov = document.createElement("div"); ov.className = "snov"; ov.id = "csvOverlay";
+  ov.innerHTML = '<div class="sbcard" role="dialog"><button class="sbx" data-cvx="1">✕</button>'+
+    '<div class="tag">📄 IMPORT: '+esc(fname||"projections")+'</div>'+
+    (res.empty ? '<div class="empty">No usable rows found — need name,number lines</div>' :
+    '<div class="sbply"><span>Matched (read as '+res.scale+')</span><b class="mono" style="color:var(--green)">'+res.matched+'</b></div>'+
+    (res.un.length ? '<div class="benchhead">Unmatched — fix the spelling and re-import</div><div class="sspad dim" style="font-size:12px">'+
+      res.un.slice(0,25).map(esc).join(" · ")+(res.un.length>25?' … +'+(res.un.length-25):'')+'</div>' :
+      '<div class="benchhead" style="color:var(--green)">Every row matched. Clean sheet.</div>'))+
+    '</div>';
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{ if(e.target===ov || e.target.closest("[data-cvx]")) ov.remove(); });
+}
+function exportProjCsv(){                                                        // #989
+  const csv = "name,ppg\n" + allPlayers().filter(p=>p.pos!=="DEF")
+    .map(p=>'"'+p.name.replace(/"/g,"")+'",'+(Math.round(p.proj/16*10)/10)).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv"}));
+  a.download = "war-room-projections.csv"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+  toast("⇩ Template downloaded — edit the ppg column and re-import");
+}
+function clearOverrides(){                                                       // #990
+  const n = Object.keys(S.overrides).length;
+  if(!n) return toast("No custom numbers set");
+  if(!confirm("Clear "+n+" custom projection"+(n>1?"s":"")+" and return to baked data?")) return;
+  S.overrides = {}; _memo = {key:null}; commit();
+  try{ localStorage.removeItem(LS_KEY+"-csvmeta"); }catch(e){}
+  if(typeof renderNow==="function") renderNow();
+  toast("↩ Back to baked projections");
+}
+async function sleeperPpgImport(){                                               // #992
+  try{
+    toast("📡 Pulling real season PPG from Sleeper…");
+    const yr = new Date().getFullYear();
+    const stats = await (await fetch("https://api.sleeper.app/v1/stats/nfl/regular/"+yr)).json();
+    const inv = {}; if(typeof HEADSHOT!=="undefined") for(const k in HEADSHOT) inv[HEADSHOT[k]] = k;
+    const byNorm = {}; allPlayers().forEach(p=>{ byNorm[normName(p.name)] = p.id; });
+    let matched = 0;
+    for(const sid in stats){
+      const st = stats[sid]; if(!st || !st.gp || !st.pts_ppr || st.gp<1) continue;
+      const key = inv[+sid]; if(!key) continue;
+      const id = byNorm[key]; if(!id) continue;
+      S.overrides[id] = Math.round(st.pts_ppr/st.gp*16*10)/10;
+      matched++;
+    }
+    if(!matched) return toast("No season stats yet — try after week 1 finals", {warn:true});
+    _memo = {key:null}; commit();
+    try{ localStorage.setItem(LS_KEY+"-csvmeta", JSON.stringify({f:"Sleeper "+yr+" PPG", t:Date.now(), matched, un:0, scale:"ppg"})); }catch(e){}
+    if(typeof renderNow==="function") renderNow();
+    toast("📡 "+matched+" players now projected from REAL "+yr+" PPG");
+  }catch(e){ toast("Sleeper stats fetch failed — try again later", {warn:true}); }
+}
+function setMyPpg(id){                                                           // #986
+  const p = idIndex()[id]; if(!p) return;
+  const cur = Math.round(p.proj/16*10)/10;
+  const v = prompt("Your PPG for "+p.name+" (now "+cur+"):", cur);
+  if(v==null) return;
+  const ppg = parseFloat(v);
+  if(isNaN(ppg) || ppg<0 || ppg>60) return toast("That's not a PPG", {warn:true});
+  S.overrides[id] = Math.round(ppg*16*10)/10;
+  _memo = {key:null}; commit(); renderNow();
+  toast("📌 "+p.name+" pinned at "+ppg+"/wk");
+}
+function boostFadePlayer(id, dir){                                               // #987
+  const p = idIndex()[id]; if(!p) return;
+  S.overrides[id] = Math.round(p.proj*(dir>0?1.1:0.9)*10)/10;
+  _memo = {key:null}; commit(); renderNow();
+  toast((dir>0?"📈 +10% ":"📉 −10% ")+p.name+" → "+Math.round(S.overrides[id]/16*10)/10+"/wk");
+}
+(function(){
+  const t1=document.getElementById("csvTplBtn"), t2=document.getElementById("csvClearBtn"), t3=document.getElementById("csvSleeperBtn");
+  if(t1) t1.addEventListener("click", exportProjCsv);
+  if(t2) t2.addEventListener("click", clearOverrides);
+  if(t3) t3.addEventListener("click", sleeperPpgImport);
+})();
+document.addEventListener("change", e=>{                                         // file input (#982)
+  if(e.target && e.target.id==="csvIn" && e.target.files && e.target.files[0]){
+    const f = e.target.files[0];
+    const rd = new FileReader();
+    rd.onload = ()=>{ csvReport(applyProjCsv(String(rd.result), f.name), f.name); };
+    rd.readAsText(f);
+    e.target.value = "";
+  }
+});
+document.addEventListener("click", e=>{                                          // card actions (#986/#987)
+  const sp2 = e.target.closest("[data-setppg]");
+  if(sp2){ e.preventDefault(); setMyPpg(sp2.dataset.setppg); return; }
+  const bf = e.target.closest("[data-boostf]");
+  if(bf){ e.preventDefault(); boostFadePlayer(bf.dataset.boostf, +bf.dataset.dir); }
+});
 
 window.__mod = window.__mod || []; window.__mod.push("win.js");

@@ -140,6 +140,22 @@ try {
     }
     return "OK";
   })()));
+  // CSV pipeline (#982–#996)
+  out.push("csv2:"+((()=>{try{
+    const nl=String.fromCharCode(10), qt=String.fromCharCode(34);
+    const p1=allPlayers()[5], p2=allPlayers()[6];
+    const csv="name,ppg"+nl+qt+p1.name+qt+",19.5"+nl+"No Such Guy,12";
+    const rows=parseProjCsv(csv);
+    const res=applyProjCsv(csv, "test.csv");
+    const after=allPlayers().find(x=>x.id===p1.id).proj;
+    const wk=weekProj(allPlayers().find(x=>x.id===p1.id), 3);
+    const seasonScale=applyProjCsv(p2.name+",250", "t2.csv");
+    const ok = rows.length===2 && res.matched===1 && res.un.length===1 && res.scale==="ppg" &&
+      Math.abs(after-312)<1 && wk>14 && wk<26 && seasonScale.scale==="season" &&
+      typeof exportProjCsv==="function" && typeof sleeperPpgImport==="function" && typeof setMyPpg==="function";
+    S.overrides={}; _memo={key:null}; commit();
+    return ok;
+  }catch(e){ S.overrides={}; return false; }})()?"OK":"BAD"));
   // Lineup lab: real click flow (#967–#981)
   out.push("lab:"+((()=>{try{
     localStorage.removeItem(LS_KEY+"-staged"+curWeek());

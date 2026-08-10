@@ -1669,6 +1669,9 @@ function openCard(id){
       ("webkitSpeechRecognition" in window ? '<button class="undo1" data-voicenote="'+id+'" title="Dictate a note">🎤</button>' : '')+
       '<button class="undo1" data-notetpl="'+id+'" title="Quick note: handcuff / flier / sleeper">📎</button>'+
       '<button class="undo1" data-cmpfrom="'+id+'">⚖</button>'+
+      '<button class="undo1" data-setppg="'+id+'" title="Set my PPG">✏️ ppg</button>'+
+      '<button class="undo1" data-boostf="'+id+'" data-dir="1" title="Boost 10%">📈</button>'+
+      '<button class="undo1" data-boostf="'+id+'" data-dir="-1" title="Fade 10%">📉</button>'+
       '<button class="undo1" data-pin="'+id+'">'+(window._pinned===id?"📌 pinned":"📌")+'</button>'+
       '<button class="undo1" data-keeper="'+id+'">👑</button>'+
       '<button class="undo1" data-queue="'+id+'">'+(S.queue.includes(id)?"★":"☆")+'</button>'+

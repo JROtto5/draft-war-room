@@ -221,6 +221,12 @@
         <select id="setQuietFrom"></select> → <select id="setQuietTo"></select></span></div>
       <div class="frow"><label>🧊 Calm mode (no decorative motion)</label><input type="checkbox" id="setCalm"></div>
       <div class="frow"><label>😤 Hype dial</label><select id="setHype"><option value="mild">mild</option><option value="standard">standard</option><option value="full">FULL SEND</option></select></div>
+      <div class="frow"><label>📄 My projections (CSV: name,ppg)</label><span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <input type="file" id="csvIn" accept=".csv,text/csv,text/plain" style="max-width:180px;font-size:11px">
+        <button class="hbtn" id="csvTplBtn" type="button">⇩ template</button>
+        <button class="hbtn" id="csvSleeperBtn" type="button">📡 real PPG</button>
+        <button class="hbtn danger" id="csvClearBtn" type="button">↩ clear</button></span></div>
+      <div class="frow"><label></label><span class="dimtxt" id="csvMeta" style="font-size:10.5px"></span></div>
       <div class="frow"><label>🧘 Rituals</label><span style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--dim)">
         <label><input type="checkbox" id="rtChecklist"> checklist</label>
         <label><input type="checkbox" id="rtGoals"> goals</label>
