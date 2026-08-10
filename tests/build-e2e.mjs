@@ -386,6 +386,44 @@ try {
     });
   }, 700);
 } catch(e){ out.push("ERR:"+e.message); }
+setTimeout(async ()=>{                                                    // 🕷 the button crawler (#1012–#1026)
+  const errs=[]; let crawled=0;
+  const oldErr=window.onerror; window.onerror=(m)=>{ errs.push("winerr:"+String(m).slice(0,40)); return true; };
+  const rejH=e=>{ errs.push("rej:"+String(e.reason).slice(0,80)); e.preventDefault(); };
+  window.addEventListener("unhandledrejection", rejH);
+  const oldPrompt=window.prompt; window.prompt=()=>null;
+  const realFetch2=window.fetch; window.fetch=()=>Promise.reject(new Error("crawl: no network"));
+  const clickAct=n=>{ const b=document.createElement("button"); b.dataset.act=n; document.body.appendChild(b); b.click(); b.remove(); };
+  const settle=()=>new Promise(r=>setTimeout(r,55));
+  const consequence=()=> !!document.querySelector(".snov,#sbOverlay,#swapSheet,#slotSheet") || !!document.querySelector("#toastWrap .toast");
+  const cleanup=()=>{ document.querySelectorAll(".snov,#sbOverlay,#swapSheet,#slotSheet").forEach(x=>x.remove()); const tw=document.getElementById("toastWrap"); if(tw) tw.innerHTML=""; };
+  const NOASSERT=["hypeCard","receiptsCard","pregameSpeech","copyWkText"];
+  const ACTS=["renderGamePlan","renderSim","renderScoreboard","renderWaivers","renderTrades","renderSeasonStats",
+    "renderRituals","egoDash","weeklyRecap2","renderAlertCenter","injuryDigest","scoutMyOpponent","moreSheet",
+    "analystReport","stageOptimal","stageWinProb","renderSeasonSim","togglePool","toggleDensity"].concat(NOASSERT);
+  for(const name of ACTS){
+    cleanup();
+    const p0=window._poolShow, d0=window._density;
+    try{ clickAct(name); }catch(e){ errs.push(name+":throw"); continue; }
+    await settle(); await settle(); await settle();
+    const ok = consequence() || window._poolShow!==p0 || window._density!==d0 || NOASSERT.includes(name);
+    if(!ok) errs.push(name); else crawled++;
+  }
+  cleanup();
+  clickAct("renderRituals"); await settle();                                    // Esc hygiene (#1016)
+  document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}));
+  await settle();
+  const escOk = !document.querySelector(".snov");
+  cleanup();
+  const cb=document.createElement("button"); cb.dataset.clickid="gradeBtn";     // clickid path (#1017)
+  document.body.appendChild(cb); cb.click(); cb.remove(); await settle();
+  const gradeOpen=document.getElementById("reportOverlay").classList.contains("show");
+  document.getElementById("reportOverlay").classList.remove("show");
+  let palOk=true; try{ PALETTE_ACTIONS.forEach(a=>{ if(typeof a[1]!=="function") palOk=false; }); }catch(e){ palOk=false; }   // #1018
+  cleanup();
+  window.onerror=oldErr; window.prompt=oldPrompt; window.fetch=realFetch2; window.removeEventListener("unhandledrejection", rejH);
+  out.push("crawl:"+((errs.length===0 && escOk && gradeOpen && palOk) ? "OK("+crawled+")" : "BAD["+errs.slice(0,6).join("+")+(escOk?"":"+esc")+(gradeOpen?"":"+clickid")+(palOk?"":"+pal")+"]"));
+}, 1200);
 document.title = "E2E|BOOTING";   // provisional: distinguishes "timers never fired" from "page never loaded"
 setTimeout(()=>{
   const verdict = "E2E|"+out.join("|");
@@ -395,7 +433,7 @@ setTimeout(()=>{
   const res = document.createElement("div");
   res.id = "e2eResult"; res.style.display = "none"; res.textContent = verdict;
   document.body.appendChild(res);
-}, 900);
+}, 8000);
 }, 100); });
 </scr` + `ipt>`;
 

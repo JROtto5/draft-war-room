@@ -749,7 +749,7 @@ async function renderWaivers(){
   const claims = claimsGet();
   const spy = rivalFaabSpy(fr);
   const bidHtml = p=>{ const b = bidSuggest(p, myFaab); return '<span class="dimtxt">bid ~'+b.pct+'%</span> <button class="undo1" data-claim="'+p.id+'" data-bid="'+b.bid+'">＋ claim</button>'; };
-  const ov = document.createElement("div"); ov.id = "wvOverlay";
+  const ov = document.createElement("div"); ov.id = "wvOverlay"; ov.className = "snov";
   let h = '<div class="sbcard" role="dialog" aria-label="Waiver wire"><button class="sbx" data-wvx="1" aria-label="Close">✕</button>';
   h += '<div class="tag">📥 WAIVER WIRE — week '+w+(myFaab!=null?' · my FAAB $'+myFaab:'')+'</div>';
   if(ups.length) h += '<div class="benchhead">🚀 Upgrades on the wire</div>'+ups.map(u=>
@@ -975,7 +975,7 @@ async function renderTrades(){
   const hm = strengthHeatmap();
   const finds = tradeFinder();
   const block = blockGet();
-  const ov = document.createElement("div"); ov.id = "trOverlay";
+  const ov = document.createElement("div"); ov.id = "trOverlay"; ov.className = "snov";
   const rosterChecks = (ids, kind)=>ids.map(id=>byId[id]).filter(Boolean).sort((a,b)=>b.proj-a.proj)
     .map(p=>'<label class="trlab"><input type="checkbox" data-tsel="'+kind+'" data-id="'+p.id+'"> '+esc(p.name)+' <span class="dimtxt">'+p.pos+' '+p.proj+(kind==="give"&&block.includes(p.id)?' 🏷':'')+'</span></label>').join("");
   const build = ()=>{
