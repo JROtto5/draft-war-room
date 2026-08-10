@@ -140,6 +140,11 @@ try {
     }
     return "OK";
   })()));
+  // One-tap season entry (#840–#842)
+  out.push("entry:"+((()=>{try{
+    const b=document.getElementById("seasonBtn");
+    return !!b && typeof enterSeasonMode==="function" && DEFAULT_LEAGUE==="1357910286874464256";
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // Season deck + shortcuts wiring (#738)
   out.push("deck:"+((()=>{try{
     const d = seasonDeckHtml();

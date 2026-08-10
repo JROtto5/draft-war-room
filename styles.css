@@ -606,3 +606,7 @@ header.tdpulse{animation:tdpulse .6s ease 3}
 /* R50 heater skin */
 body.heater #seasonDeck .deckbtn{border-color:var(--gold)}
 body.heater .hero .tag{color:var(--gold)}
+/* #842 season nudge pulse */
+@keyframes seasonPulse{0%,100%{box-shadow:0 0 0 0 rgba(240,180,41,.45)}50%{box-shadow:0 0 0 6px rgba(240,180,41,0)}}
+#seasonBtn.notyet{animation:seasonPulse 1.6s ease infinite}
+@media (prefers-reduced-motion: reduce){#seasonBtn.notyet{animation:none;outline:2px solid var(--gold)}}

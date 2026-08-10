@@ -1512,6 +1512,35 @@ function hqMondayLine(){                                                        
   }catch(e){ return ""; }
 }
 
+/* ---------- One-tap Season Mode (#840–#842) ---------- */
+const DEFAULT_LEAGUE = "1357910286874464256";                                    // Buck Breakers (#841)
+async function enterSeasonMode(){                                                // #840
+  if(SEASON.on){
+    const h2 = document.getElementById("hero");
+    if(h2) h2.scrollIntoView({behavior:"smooth", block:"start"});
+    if(typeof renderGamePlan==="function") renderGamePlan();
+    return;
+  }
+  toast("🏟 Flipping the war room to Season Mode…");
+  if(!(S.settings.sleeperLeagueId||"").trim()){ S.settings.sleeperLeagueId = DEFAULT_LEAGUE; commit(); }
+  const ok = await importCompletedDraft(false);
+  if(!ok && myIds().length >= S.settings.roster) startSeasonMode();
+  if(typeof renderNow==="function") renderNow();
+  const b = document.getElementById("seasonBtn");
+  if(b && SEASON.on) b.classList.remove("notyet");
+}
+(function(){
+  const b = document.getElementById("seasonBtn");
+  if(!b) return;
+  b.addEventListener("click", ()=>{ enterSeasonMode(); });
+  setTimeout(()=>{                                                              // #842 nudge
+    if(SEASON.on || (typeof E2E_MODE!=="undefined" && E2E_MODE)) return;
+    b.classList.add("notyet");
+    if(myIds().length < S.settings.roster)
+      toast("🏟 Draft's done? Tap the gold Season button — plan, sim, scoreboard, waivers, all of it.");
+  }, 10000);
+})();
+
 /* ---------- R44 Season nav & ship (#730–#739) ---------- */
 function seasonDeckHtml(){                                                       // #730
   const un = (typeof unreadAlerts==="function") ? unreadAlerts() : 0;
@@ -1534,6 +1563,8 @@ function seasonDeckHtml(){                                                      
     '</div>';
 }
 function applySeasonHeader(){                                                     // #732
+  const sb3 = document.getElementById("seasonBtn");
+  if(sb3){ sb3.classList.remove("notyet"); sb3.textContent = "🏟 HQ"; sb3.title = "Season HQ: jump to the Game Plan"; }
   if(document.getElementById("draftMenuBtn")) { document.body.classList.add("seasonled"); return; }
   document.body.classList.add("seasonled");
   const b = document.createElement("button");

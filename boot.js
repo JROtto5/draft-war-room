@@ -124,7 +124,11 @@ if(!E2E_MODE && location.protocol.indexOf("http")===0){
   // Season Mode is page 1 (#634): a finished Sleeper draft imports itself, then heat alerts run (#636/#637)
   setTimeout(()=>{ try{
     if(myIds().length >= S.settings.roster) startSeasonMode();
-    else if((S.settings.sleeperLeagueId||"").trim()) importCompletedDraft(true);
+    else {
+      // zero-config (#841): the app knows its own league
+      if(!(S.settings.sleeperLeagueId||"").trim() && typeof DEFAULT_LEAGUE!=="undefined"){ S.settings.sleeperLeagueId = DEFAULT_LEAGUE; commit(); }
+      if((S.settings.sleeperLeagueId||"").trim()) importCompletedDraft(true);
+    }
   }catch(e){} }, 2500);
   setInterval(()=>{ if(document.visibilityState==="visible") refreshInjuries(true); }, Math.max(2, S.settings.pollMins||5)*60e3);
   setInterval(()=>{ if(document.visibilityState==="visible") refreshTrending(); }, 15*60e3);
@@ -140,7 +144,7 @@ document.querySelectorAll(".modal").forEach((m,i)=>{
   const h3 = m.querySelector("h3");
   if(h3){ if(!h3.id) h3.id = "dlg"+i; m.setAttribute("aria-labelledby", h3.id); }
 });
-const BUILD = "12.0";
+const BUILD = "12.1";
 let _installEvt = null;
 window.addEventListener("beforeinstallprompt", e=>{
   e.preventDefault();
