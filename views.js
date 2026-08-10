@@ -128,6 +128,87 @@ function newsFor(p){
 }
 
 function physFor(p){ return (typeof PHYS!=="undefined" && PHYS[normName(p.name)]) || null; }
+
+/* ---------- My Week panel: the weekly command center (#643–#652) ---------- */
+function myWeekHtml(byId){
+  if(typeof bestStartersWeek!=="function") return "";
+  const w = curWeek();
+  const ids = rosterIds();
+  if(!ids.length) return "";
+  const bs = bestStartersWeek(ids, byId, w);
+  let cd = "";                                   // kickoff lock countdown (#649)
+  try{
+    const now = new Date();
+    const th = new Date(now); th.setHours(20,15,0,0);
+    th.setDate(th.getDate() + ((4 - th.getDay()) + 7) % 7);
+    if(th <= now) th.setDate(th.getDate() + 7);
+    const ms = th - now, dd = Math.floor(ms/86400000), hh = Math.floor(ms%86400000/3600000);
+    cd = ' · 🔒 locks in ' + (dd>0 ? dd+'d '+hh+'h' : hh+'h');
+  }catch(e){}
+  const live = (typeof SEASON_LIVE!=="undefined" && SEASON_LIVE.ids && SEASON_LIVE.ids.length);
+  let h = '<div class="benchhead">🗓 MY WEEK '+w+' — optimal '+fmt(bs.pts)+' proj'+cd+(live?'':' · <span style="color:var(--dim)">draft-day roster — link your league for live</span>')+'</div>';
+  h += '<div class="scarce">'+bs.line.map(sl=>{
+    if(!sl.p) return '<span class="scpill" style="color:var(--red)">'+sl.lab+': HOLE</span>';
+    const p = sl.p, bye = (typeof BYES!=="undefined" && BYES[p.team]===w);
+    const e = injuryOf(p), sv = e ? injSeverity(e.s) : null;
+    return '<span class="scpill" data-card="'+p.id+'" style="cursor:pointer" title="'+esc(p.name)+' — '+sl.wp+' proj">'+sl.lab+' '+
+      esc(p.name.split(" ").slice(-1)[0])+(bye?' 🚫':'')+(sv?' <span class="'+sv.cls+'">'+sv.code+'</span>':'')+
+      ' <b class="mono">'+sl.wp+'</b></span>';
+  }).join("")+'</div>';
+  // start/sit vs my ACTUAL Sleeper lineup (#644)
+  const md = (typeof WEEKST!=="undefined") ? WEEKST.mate : null;
+  if(md && md.me && md.me.starters && md.me.starters.filter(Boolean).length){
+    const actual = md.me.starters.filter(Boolean);
+    const actualSet = new Set(actual);
+    const actPts = actual.map(id=>byId[id]).filter(Boolean).reduce((a,p)=>a+weekProj(p,w),0);
+    const left = Math.round((bs.pts-actPts)*10)/10;
+    if(left > 1){
+      const outs = actual.filter(id=>!bs.starterIds.has(id)).map(id=>byId[id]).filter(Boolean);
+      const ins = [...bs.starterIds].filter(id=>!actualSet.has(id)).map(id=>byId[id]).filter(Boolean);
+      h += '<div class="benchhead" style="color:var(--red)">⚠ Sleeper lineup leaves <b class="mono">'+left+'</b> pts on the bench</div><div class="scarce">'+
+        ins.slice(0,4).map((p,i)=>'<span class="scpill">▲ '+esc(p.name)+(outs[i]?' <span style="color:var(--dim)">over '+esc(outs[i].name)+'</span>':'')+
+          ' <span style="color:var(--dim)">'+esc(startSitWhy(p, outs[i], w))+'</span></span>').join("")+'</div>';
+    } else {
+      h += '<div class="benchhead" style="color:var(--green)">✓ Sleeper lineup is optimal — nothing left on the bench</div>';
+    }
+  }
+  // superflex discipline guard (#652)
+  const sfx = bs.line.find(sl=>sl.lab==="SFLX");
+  if(sfx && sfx.p && sfx.p.pos!=="QB"){
+    const benchQB = ids.map(id=>byId[id]).filter(Boolean)
+      .filter(p=>p.pos==="QB" && !bs.starterIds.has(p.id) && weekProj(p,w)>0);
+    if(benchQB.length) h += '<div class="benchhead" style="color:var(--gold)">🎛 SFLX holds '+esc(sfx.p.name)+' while QB '+esc(benchQB[0].name)+' sits — 6-pt pass TDs usually say start the QB</div>';
+  }
+  // matchup preview + win prob (#646/#647)
+  if(md && md.opp){
+    const oppBs = bestStartersWeek(md.opp.ids, byId, w);
+    const wp = winProb(bs.pts, oppBs.pts);
+    const mx = Math.max(bs.pts, oppBs.pts, 1);
+    h += '<div class="benchhead">⚔ vs '+esc(md.opp.name)+' — win prob <b style="color:var(--gold)">'+Math.round(wp*100)+'%</b> · proj <b class="mono">'+fmt(bs.pts)+'–'+fmt(oppBs.pts)+'</b></div>'+
+      '<div style="padding:2px 12px 8px" aria-hidden="true">'+
+      '<div style="height:7px;border-radius:4px;background:var(--green);width:'+Math.round(bs.pts/mx*100)+'%"></div>'+
+      '<div style="height:7px;border-radius:4px;background:var(--red);width:'+Math.round(oppBs.pts/mx*100)+'%;margin-top:3px"></div></div>';
+  }
+  // flex agonizer (#651)
+  const flexSl = bs.line.find(sl=>sl.lab==="FLEX");
+  if(flexSl && flexSl.p){
+    const cands = ids.map(id=>byId[id]).filter(Boolean)
+      .filter(p=>["RB","WR","TE"].includes(p.pos) && (!bs.starterIds.has(p.id) || p.id===flexSl.p.id))
+      .map(p=>({p, wp:weekProj(p,w)})).sort((a,b)=>b.wp-a.wp).slice(0,4);
+    if(cands.length>1) h += '<div class="benchhead">🎲 Flex agonizer</div><div class="scarce">'+
+      cands.map(x=>'<span class="scpill'+(x.p.id===flexSl.p.id?'" style="color:var(--green)':'')+'" data-card="'+x.p.id+'">'+
+        (x.p.id===flexSl.p.id?'✓ ':'')+esc(x.p.name.split(" ").slice(-1)[0])+' <b class="mono">'+x.wp+'</b>'+
+        (x.p.id!==flexSl.p.id?' <span style="color:var(--dim)">−'+Math.round((flexSl.wp-x.wp)*10)/10+'</span>':'')+'</span>').join("")+'</div>';
+  }
+  // bye forecaster: the next 4 weeks of holes (#648)
+  const grid = [];
+  for(let fw=w+1; fw<=Math.min(14, w+4); fw++){
+    const outByes = ids.map(id=>byId[id]).filter(Boolean).filter(p=>typeof BYES!=="undefined" && BYES[p.team]===fw);
+    if(outByes.length) grid.push('<span class="scpill">W'+fw+': '+outByes.map(p=>esc(p.name.split(" ").slice(-1)[0])).join(", ")+'</span>');
+  }
+  if(grid.length) h += '<div class="benchhead">📆 Byes ahead</div><div class="scarce">'+grid.join("")+'</div>';
+  return h;
+}
 function tshareOf(p){ return (typeof TSHARE!=="undefined" && TSHARE[normName(p.name)]) || 0; }
 function snapTrendOf(p){ return (typeof SNAPTREND!=="undefined" && SNAPTREND[normName(p.name)]) || null; }
 function weatherRisk(team){
@@ -719,7 +800,7 @@ function renderBest(){
     const drops = bench2.slice().sort((a,b)=>a.proj-b.proj).slice(0,2);
     const irs = myIds().map(id2=>byIdH[id2]).filter(Boolean)
       .filter(p2=>{ const e2=injuryOf(p2); return e2 && injSeverity(e2.s).code==="IR"; });
-    let hq = "";
+    let hq = (typeof myWeekHtml==="function") ? myWeekHtml(byIdH) : "";
     {
       const nx = bsH.line.filter(sl=>sl.p).map(sl=>({p:sl.p, n:nextOpp(sl.p.team)})).filter(x=>x.n).slice(0,9);
       if(nx.length) hq += '<div class="benchhead">🗓 Next up</div><div class="scarce">'+

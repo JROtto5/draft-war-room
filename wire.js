@@ -1138,6 +1138,9 @@ $("#settingsBtn").addEventListener("click", ()=>{
   $("#setSleeperLeague").value=S.settings.sleeperLeagueId||"";
   $("#setHeat").checked = S.settings.heatAlerts!==false;
   $("#setHeatMin").value = String(S.settings.heatMin||1000);
+  const wkSel = $("#setWeek");
+  if(wkSel.options.length<2) for(let w2=1;w2<=18;w2++){ const o=document.createElement("option"); o.value=w2; o.textContent="week "+w2; wkSel.appendChild(o); }
+  wkSel.value = String(+S.settings.weekOverride||0);
   const rs=$("#setRival");
   rs.innerHTML='<option value="">none</option>'+Array.from({length:S.settings.teams},(_,i)=>i+1)
     .filter(s2=>s2!==S.settings.slot).map(s2=>'<option value="'+s2+'"'+(+S.settings.rivalSlot===s2?' selected':'')+'>'+esc(slotName(s2))+'</option>').join("");
@@ -1232,6 +1235,7 @@ $("#settingsSave").addEventListener("click", ()=>{
   }
   S.settings.heatAlerts = wantHeat;
   S.settings.heatMin = +$("#setHeatMin").value || 1000;
+  S.settings.weekOverride = +$("#setWeek").value || 0;
   S.settings.cols = {adp:$("#colADP").checked, edge:$("#colEdge").checked, rd:$("#colRd").checked};
   S.settings.fontSize = $("#setFont").value;
   S.settings.cbSafe = $("#setCbSafe").checked;

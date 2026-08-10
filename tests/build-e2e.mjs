@@ -69,6 +69,14 @@ try {
   out.push("booth2:"+((()=>{try{ if(S.log.length) boothLine(S.log[0],0); return snipeScan().constructor===Array; }catch(e){ return false; }})()?"OK":"BAD"));
   // season mode + heat alerts degrade offline (#634/#636)
   out.push("heat:"+((()=>{try{ const pr=heatScan(false); return typeof pr.then==="function" && SEASON.avail.constructor===Array && typeof importCompletedDraft==="function" && typeof startSeasonMode==="function"; }catch(e){ return false; }})()?"OK":"BAD"));
+  // My Week math runs offline on fixtures (#654)
+  out.push("week:"+((()=>{try{
+    const byId=idIndex(); const ids=allPlayers().slice(0,30).map(p=>p.id);
+    const fix={}; ids.forEach((id,i)=>fix[id]=30-i);
+    const bw=bestStartersWeek(ids, byId, 3, fix);
+    const wpOk = winProb(120,100)>0.5 && winProb(120,100)<1 && Math.abs(winProb(100,100)-0.5)<0.01;
+    return bw.line.length>=9 && bw.pts>0 && typeof weekProj(allPlayers()[0],3)==="number" && wpOk && typeof myWeekHtml==="function";
+  }catch(e){ return false; }})()?"OK":"BAD"));
   out.push("cine:"+((()=>{try{ markTaken(allPlayers()[9].id); storyMode(); const o=document.getElementById("storyOverlay"); const ok=!!o; if(o) o.remove(); undoLast(); return ok; }catch(e){ return false; }})()?"OK":"BAD"));
   // chunked mocks complete with progress (#312/#313)
   renderMocks();

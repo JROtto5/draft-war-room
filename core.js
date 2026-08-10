@@ -1319,13 +1319,167 @@ function startSeasonMode(){
   SEASON.on = true;
   clearInterval(SEASON.timer);
   const tick = ()=>{ if(document.visibilityState==="hidden") return;
-    heatScan(true).then(()=>{ if(typeof renderNow==="function") renderNow(); }); };
+    Promise.all([refreshWeek(), myLiveIds()]).then(()=>myWeekData())
+      .then(()=>heatScan(true))
+      .then(()=>{ lineupAlarm(); if(typeof renderNow==="function") renderNow(); }); };
   SEASON.timer = setInterval(tick, 5*60e3);
   document.addEventListener("visibilitychange", ()=>{
     if(document.visibilityState==="visible" && SEASON.on && Date.now()-SEASON.at > 5*60e3) tick();
   });
   tick();
 }
+
+/* ---------- R38 My Week: the weekly lineup command center (#640–#654) ---------- */
+const WEEKST = {week:0, at:0, mate:null, mw:0, matchAt:0};
+async function refreshWeek(){                                                   // #640
+  if(+S.settings.weekOverride){ WEEKST.week = +S.settings.weekOverride; window._nflWeek = WEEKST.week; return WEEKST.week; }
+  if(WEEKST.week && Date.now()-WEEKST.at < 30*60e3) return WEEKST.week;
+  try{
+    const st = await (await fetch(SYNC.base+"/state/nfl")).json();
+    WEEKST.week = st.season_type==="pre" ? 1 : Math.max(1, Math.min(18, +st.week || +st.leg || 1));
+    WEEKST.at = Date.now();
+    window._nflWeek = WEEKST.week;
+  }catch(e){ WEEKST.week = WEEKST.week || 1; }
+  return WEEKST.week;
+}
+function curWeek(){ return +S.settings.weekOverride || WEEKST.week || window._nflWeek || 1; }
+const SEASON_LIVE = {ids:null, at:0};
+async function myRosterId(){
+  if(S.settings.sleeperRosterId) return +S.settings.sleeperRosterId;
+  const lg = (S.settings.sleeperLeagueId||"").trim(); if(!lg) return null;
+  try{
+    let did = (S.settings.sleeperDraftId||"").trim();
+    if(!did){ const ds = await (await fetch(SYNC.base+"/league/"+lg+"/drafts")).json(); if(ds && ds[0]) did = ds[0].draft_id; }
+    if(did){
+      const dr = await (await fetch(SYNC.base+"/draft/"+did)).json();
+      const rid = (dr.slot_to_roster_id||{})[String(S.settings.slot)];
+      if(rid){ S.settings.sleeperRosterId = +rid; commit(); return +rid; }
+    }
+  }catch(e){}
+  return null;
+}
+async function myLiveIds(force){                                                // #641
+  const lg = (S.settings.sleeperLeagueId||"").trim(); if(!lg) return null;
+  if(!force && SEASON_LIVE.ids && Date.now()-SEASON_LIVE.at < 5*60e3) return SEASON_LIVE.ids;
+  try{
+    const rid = await myRosterId(); if(rid==null) return null;
+    const rosters = await (await fetch(SYNC.base+"/league/"+lg+"/rosters")).json();
+    const mine = (rosters||[]).find(r=>+r.roster_id===+rid); if(!mine) return null;
+    const map = sleeperToOurs();
+    SEASON_LIVE.ids = (mine.players||[]).map(id=>map[String(id)]).filter(Boolean);
+    SEASON_LIVE.at = Date.now();
+  }catch(e){}
+  return SEASON_LIVE.ids;
+}
+function rosterIds(){ return (SEASON_LIVE.ids && SEASON_LIVE.ids.length) ? SEASON_LIVE.ids : myIds(); }
+/* opponent-defense toughness: rank 1 (meanest) … 32 (softest) from DEF projections */
+function defToughRank(team){
+  const r = cached("deftough", ()=>{
+    const defs = allPlayers().filter(p=>p.pos==="DEF").sort((a,b)=>b.proj-a.proj);
+    const out = {}; defs.forEach((d,i)=>{ out[d.team] = i+1;
+      const slp = ({SFO:"SF",GBP:"GB",KCC:"KC",NEP:"NE",NOS:"NO",TBB:"TB",LVR:"LV",JAC:"JAX"})[d.team];
+      if(slp) out[slp] = i+1; });
+    return out;
+  });
+  return r[team] || 16;
+}
+function weekProj(p, w){                                                        // #642
+  if(typeof BYES!=="undefined" && BYES[p.team]===w) return 0;
+  const e = (typeof injuryOf==="function") ? injuryOf(p) : null;
+  const sev = e ? injSeverity(e.s) : null;
+  if(sev && (sev.code==="IR" || sev.code==="O")) return 0;
+  let pts = p.proj/16;
+  if(sev && sev.code==="D") pts *= 0.4;
+  else if(sev && sev.code==="Q") pts *= 0.85;
+  const opp = (typeof SCHED!=="undefined" && SCHED[p.team]) ? SCHED[p.team][w] : null;
+  if(!opp && p.pos!=="DEF" && typeof SCHED!=="undefined" && SCHED[p.team]) return 0;  // no game that week
+  if(opp && p.pos!=="DEF") pts *= 1 + (defToughRank(opp)-16.5)/110;              // soft matchup lean
+  return Math.round(pts*10)/10;
+}
+function bestStartersWeek(ids, byId, w, fixture){                               // #642/#654
+  const ps = ids.map(id=>byId[id]).filter(Boolean)
+    .map(p=>({p, wp: fixture ? (fixture[p.id]!=null?+fixture[p.id]:0) : weekProj(p, w)}))
+    .sort((a,b)=>b.wp-a.wp);
+  const used = new Set();
+  const take = poss=>{
+    for(const x of ps) if(!used.has(x.p.id) && poss.includes(x.p.pos) && x.wp>0){ used.add(x.p.id); return x; }
+    for(const x of ps) if(!used.has(x.p.id) && poss.includes(x.p.pos)){ used.add(x.p.id); return x; }
+    return null;
+  };
+  const sl = slotCfg(), defs = [];
+  const add = (n,lab,poss)=>{ for(let i=1;i<=n;i++) defs.push([n>1?lab+i:lab, poss]); };
+  add(sl.QB,"QB",["QB"]); add(sl.RB,"RB",["RB"]); add(sl.WR,"WR",["WR"]); add(sl.TE,"TE",["TE"]);
+  add(sl.FLEX,"FLEX",["RB","WR","TE"]); add(sl.SF,"SFLX",["QB","RB","WR","TE"]);
+  add(sl.DEF,"DEF",["DEF"]); add(sl.K,"K",["K"]);
+  const line = defs.map(([lab,poss])=>{ const x = take(poss); return {lab, p:x?x.p:null, wp:x?x.wp:0}; });
+  return {line, starterIds:new Set([...used]), pts:Math.round(line.reduce((a,s)=>a+s.wp,0)*10)/10};
+}
+function winProb(a, b){ const s = Math.max(10, 0.16*(a+b)/2); return 1/(1+Math.exp(-(a-b)/s)); }   // #647
+async function myWeekData(force){                                               // #644/#646
+  const lg = (S.settings.sleeperLeagueId||"").trim(); if(!lg) return null;
+  const w = curWeek();
+  if(!force && WEEKST.mate && WEEKST.mw===w && Date.now()-WEEKST.matchAt < 5*60e3) return WEEKST.mate;
+  try{
+    const rid = await myRosterId(); if(rid==null) return null;
+    const [mus, rosters, users] = await Promise.all([
+      fetch(SYNC.base+"/league/"+lg+"/matchups/"+w).then(r=>r.json()),
+      fetch(SYNC.base+"/league/"+lg+"/rosters").then(r=>r.json()),
+      fetch(SYNC.base+"/league/"+lg+"/users").then(r=>r.json())
+    ]);
+    const mine = (mus||[]).find(m=>+m.roster_id===+rid);
+    const opp = mine ? (mus||[]).find(m=>m.matchup_id===mine.matchup_id && +m.roster_id!==+rid) : null;
+    const rmap = {}; (rosters||[]).forEach(r=>rmap[r.roster_id]=r);
+    const umap = {}; (users||[]).forEach(u=>umap[u.user_id]=u.display_name);
+    const map = sleeperToOurs();
+    const conv = m=>m ? {rid:m.roster_id, pts:m.points||0,
+      name:umap[(rmap[m.roster_id]||{}).owner_id] || ("Team "+m.roster_id),
+      starters:(m.starters||[]).map(id=>map[String(id)]||null),
+      ids:(m.players||[]).map(id=>map[String(id)]).filter(Boolean),
+      ppts:m.players_points||{}} : null;
+    WEEKST.mate = {w, me:conv(mine), opp:conv(opp)};
+    WEEKST.mw = w; WEEKST.matchAt = Date.now();
+  }catch(e){}
+  return WEEKST.mate;
+}
+function startSitWhy(inn, out, w){                                              // #650
+  const bits = [];
+  if(out){
+    if(typeof BYES!=="undefined" && BYES[out.team]===w) bits.push(out.name.split(" ").slice(-1)[0]+" is on bye");
+    else { const e = injuryOf(out); if(e){ const sv = injSeverity(e.s); if(sv) bits.push(out.name.split(" ").slice(-1)[0]+" is "+sv.label.toLowerCase()); } }
+  }
+  if(inn && inn.pos!=="DEF" && typeof SCHED!=="undefined" && SCHED[inn.team] && SCHED[inn.team][w]){
+    const rk = defToughRank(SCHED[inn.team][w]);
+    if(rk>=22) bits.push("soft matchup vs "+SCHED[inn.team][w]);
+  }
+  if(!bits.length && inn && typeof buzzOf==="function" && buzzOf(inn)>1000) bits.push("trending up");
+  return bits.length ? "— "+bits[0] : "";
+}
+function lineupAlarm(){                                                          // #645
+  try{
+    if(!SEASON.on || S.settings.heatAlerts===false) return;
+    const md = WEEKST.mate; if(!md || !md.me || !md.me.starters) return;
+    const w = curWeek(), byId = idIndex();
+    const actual = md.me.starters.filter(Boolean);
+    if(!actual.length) return;
+    const bs = bestStartersWeek(rosterIds(), byId, w);
+    const actPts = actual.map(id=>byId[id]).filter(Boolean).reduce((a,p)=>a+weekProj(p,w),0);
+    const left = Math.round((bs.pts-actPts)*10)/10;
+    const dead = actual.map(id=>byId[id]).filter(Boolean)
+      .filter(p=>weekProj(p,w)===0).map(p=>p.name);
+    if(left<=3 && !dead.length) return;
+    const k = LS_KEY+"-lineupalarm";
+    if(localStorage.getItem(k)===String(w)) return;
+    localStorage.setItem(k, String(w));
+    const msg = dead.length ? "🚨 "+dead[0]+" is in your Sleeper lineup but projects ZERO (bye/out)"
+      : "⚠ Your Sleeper lineup leaves "+left+" pts on the bench";
+    toast(msg, {warn:true});
+    if("Notification" in window && Notification.permission==="granted" && document.visibilityState==="hidden"){
+      try{ new Notification("📋 Lineup check — week "+w, {body:msg.replace(/^[^\w]+/,""), icon:"icon-192.png", tag:"lineup"}); }catch(e2){}
+    }
+  }catch(e){}
+}
+
+/* ---------- Season HQ actions ---------- */
 
 /* ---------- Season HQ actions ---------- */
 async function weekRecap(){
