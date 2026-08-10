@@ -552,3 +552,25 @@ body.ultra .avatar{display:none}
 @media (max-width:640px){
   td:nth-child(2), th:nth-child(2){position:sticky; left:0; background:var(--panel); z-index:2}
 }
+
+/* ---------- R39 scoreboard overlay (#655–#667) ---------- */
+#sbOverlay{position:fixed;inset:0;z-index:320;background:rgba(11,15,20,.94);overflow-y:auto;padding:26px 12px;animation:toastIn .2s}
+#sbOverlay .sbcard{max-width:760px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px 24px;position:relative}
+#sbOverlay .sbx{position:absolute;top:10px;right:12px;background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer}
+#sbOverlay .sbx:hover{color:var(--text)}
+.sbrow{padding:8px 2px;border-bottom:1px solid var(--line)}
+.sbrow.sbmine{background:linear-gradient(90deg,rgba(240,180,41,.06),transparent)}
+.sbteam{display:flex;justify-content:space-between;font-size:13px;padding:1px 0}
+.sbbar{height:5px;border-radius:3px;background:var(--line);margin:2px 0 4px}
+.sbbar i{display:block;height:100%;border-radius:3px;background:var(--green)}
+.sbbar.red i{background:var(--red)}
+.sbmeta{font-size:10.5px;color:var(--dim)}
+.sbcols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:560px){.sbcols{grid-template-columns:1fr}}
+.sbply{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:3px 2px;border-bottom:1px dotted var(--line)}
+.sbtab{width:100%;border-collapse:collapse;font-size:12.5px}
+.sbtab th{text-align:left;color:var(--dim);font-weight:600;padding:3px 6px}
+.sbtab td{padding:3px 6px;border-top:1px solid var(--line)}
+.sbtab tr.sbme td{color:var(--gold)}
+:root[data-theme="light"] #sbOverlay{background:rgba(238,242,247,.96)}
+@media (prefers-reduced-motion: reduce){#sbOverlay{animation:none}}

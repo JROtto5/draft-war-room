@@ -207,7 +207,125 @@ function myWeekHtml(byId){
     if(outByes.length) grid.push('<span class="scpill">W'+fw+': '+outByes.map(p=>esc(p.name.split(" ").slice(-1)[0])).join(", ")+'</span>');
   }
   if(grid.length) h += '<div class="benchhead">📆 Byes ahead</div><div class="scarce">'+grid.join("")+'</div>';
+  // rival tracker (#661)
+  try{
+    const rs = +S.settings.rivalSlot, s2r = S.settings.slot2rid;
+    if(rs && s2r && typeof SCOREB!=="undefined" && SCOREB.mus){
+      const rrid = +s2r[String(rs)];
+      const rows = scoreboardRows(SCOREB, byId);
+      for(const [a,b] of rows){
+        const hit = a.rid===rrid ? [a,b] : (b.rid===rrid ? [b,a] : null);
+        if(hit){
+          const st = standingsRows(SCOREB.rosters, SCOREB.users);
+          const rrec = st.find(r2=>r2.rid===rrid);
+          h += '<div class="benchhead">😈 Rival watch: '+esc(hit[0].name)+(rrec?' ('+rrec.w+'-'+rrec.l+')':'')+
+            ' — <b class="mono">'+hit[0].live+'</b> vs '+esc(hit[1].name)+' <b class="mono">'+hit[1].live+'</b> · proj '+hit[0].proj+'–'+hit[1].proj+'</div>';
+          break;
+        }
+      }
+    }
+  }catch(e){}
   return h;
+}
+
+/* ---------- League scoreboard overlay (#655–#664, #667) ---------- */
+async function renderScoreboard(){
+  const old = document.getElementById("sbOverlay"); if(old){ old.remove(); return; }
+  const sb = await leagueWeekData(false);
+  if(!sb) return toast("Link your Sleeper league in Settings first", {warn:true});
+  const hist = await leagueHistory();
+  const byId = idIndex();
+  const rows = scoreboardRows(sb, byId);
+  const st = standingsRows(sb.rosters, sb.users);
+  const pr = powerRankings();
+  const ap = allPlayStandings(hist, sb.rosters, sb.users);
+  const aw = hist.length ? weeklyAwards(hist[hist.length-1], sb) : null;
+  const myRid = +S.settings.sleeperRosterId || null;
+  const mine = r=>r.rid===myRid ? ' style="color:var(--gold)"' : '';
+  const ov = document.createElement("div"); ov.id = "sbOverlay";
+  let h = '<div class="sbcard" role="dialog" aria-label="League scoreboard"><button class="sbx" data-sbx="1" aria-label="Close">✕</button>';
+  h += '<div class="tag">📊 WEEK '+sb.w+' SCOREBOARD</div>';
+  rows.forEach(([a,b])=>{
+    const wp = winProb(a.proj, b.proj);
+    const mx = Math.max(a.proj, b.proj, 1);
+    h += '<div class="sbrow'+((a.rid===myRid||b.rid===myRid)?' sbmine':'')+'">'+
+      '<div class="sbteam"><span'+mine(a)+'>'+esc(a.name)+'</span><b class="mono">'+a.live.toFixed(1)+'</b></div>'+
+      '<div class="sbbar"><i style="width:'+Math.round(a.proj/mx*100)+'%"></i></div>'+
+      '<div class="sbteam"><span'+mine(b)+'>'+esc(b.name)+'</span><b class="mono">'+b.live.toFixed(1)+'</b></div>'+
+      '<div class="sbbar red"><i style="width:'+Math.round(b.proj/mx*100)+'%"></i></div>'+
+      '<div class="sbmeta">proj '+a.proj.toFixed(0)+'–'+b.proj.toFixed(0)+' · '+esc(a.name)+' '+Math.round(wp*100)+'%</div></div>';
+  });
+  // my matchup player-by-player (#656)
+  const md = (typeof WEEKST!=="undefined") ? WEEKST.mate : null;
+  if(md && md.me){
+    const s2o = sleeperToOurs();
+    const inv = {}; for(const k2 in s2o) inv[s2o[k2]] = k2;
+    const plist = (side,label)=>{
+      if(!side) return "";
+      let t2 = '<div class="benchhead">'+label+'</div>';
+      side.starters.filter(Boolean).forEach(id=>{
+        const p = byId[id]; if(!p) return;
+        const got = +side.ppts[inv[id]]||0;
+        const played = got!==0;
+        t2 += '<div class="sbply"><span>'+esc(p.name)+' <span class="dimtxt">'+p.pos+'</span></span><b class="mono"'+(played?'':' class="dimtxt"')+'>'+
+          (played ? got.toFixed(1) : "~"+weekProj(p, sb.w).toFixed(1))+'</b></div>';
+      });
+      return t2;
+    };
+    h += '<div class="sbcols"><div>'+plist(md.me, "🏈 "+esc(md.me.name||"Me"))+'</div><div>'+plist(md.opp, "⚔ "+esc(md.opp?md.opp.name:""))+'</div></div>';
+  }
+  // standings (#658)
+  h += '<div class="tag" style="margin-top:14px">🏆 STANDINGS</div><table class="sbtab"><tr><th></th><th>team</th><th>W-L</th><th>PF</th><th>PA</th><th>strk</th></tr>'+
+    st.map((r,i)=>'<tr'+(r.rid===myRid?' class="sbme"':'')+'><td>'+(i+1)+'</td><td>'+esc(r.name)+'</td><td class="mono">'+r.w+'-'+r.l+(r.t?'-'+r.t:'')+'</td><td class="mono">'+r.pf+'</td><td class="mono">'+r.pa+'</td><td>'+esc(r.streak)+'</td></tr>').join("")+'</table>';
+  // power rankings (#659)
+  if(pr.length) h += '<div class="tag" style="margin-top:14px">⚡ POWER RANKINGS</div>'+pr.map((r,i)=>
+    '<div class="sbply"'+(r.rid===myRid?' style="color:var(--gold)"':'')+'><span>'+(i+1)+'. '+esc(r.name)+
+    (r.move>0?' <span style="color:var(--green)">▲'+r.move+'</span>':r.move<0?' <span style="color:var(--red)">▼'+(-r.move)+'</span>':'')+
+    '</span><b class="mono">'+Math.round(r.score*100)+'</b></div>').join("");
+  // luck / all-play (#662)
+  if(ap.length && hist.length) h += '<div class="tag" style="margin-top:14px">🍀 LUCK (all-play)</div>'+ap.map(r=>
+    '<div class="sbply"'+(r.rid===myRid?' style="color:var(--gold)"':'')+'><span>'+esc(r.name)+' <span class="dimtxt">'+r.apw+'-'+r.apl+' all-play</span></span>'+
+    '<b class="mono" style="color:'+(r.luck>0.5?'var(--green)':r.luck<-0.5?'var(--red)':'var(--dim)')+'">'+(r.luck>0?'+':'')+r.luck+'</b></div>').join("");
+  // last week's awards (#663)
+  if(aw) h += '<div class="tag" style="margin-top:14px">🎖 LAST WEEK</div><div class="scarce">'+
+    '<span class="scpill">🥇 high: '+esc(aw.hi.name)+' '+aw.hi.pts+'</span>'+
+    '<span class="scpill">🥶 low: '+esc(aw.lo.name)+' '+aw.lo.pts+'</span>'+
+    (aw.blow?'<span class="scpill">🔨 blowout: '+esc(aw.blow.name)+' by '+aw.blow.d+'</span>':'')+
+    (aw.nail?'<span class="scpill">😅 nail-biter: '+esc(aw.nail.name)+' by '+aw.nail.d+'</span>':'')+'</div>';
+  // my lineup efficiency across the season (#664)
+  if(hist.length && myRid){
+    const effs = hist.map(wm=>{ const m = (wm||[]).find(x=>+x.roster_id===myRid); return m ? lineupEffOf(m, byId) : null; }).filter(Boolean);
+    if(effs.length){
+      const avg = Math.round(effs.reduce((a,e2)=>a+e2.eff,0)/effs.length);
+      h += '<div class="tag" style="margin-top:14px">🎯 MY LINEUP EFFICIENCY</div><div class="sbply"><span>avg '+avg+'% of the perfect lineup</span><span class="dimtxt">'+
+        effs.map((e2,i)=>'W'+(i+1)+' '+e2.eff+'%').join(" · ")+'</span></div>';
+    }
+  }
+  h += '<div id="sbOdds" class="dimtxt" style="padding:8px 2px">🎲 computing playoff odds…</div></div>';
+  ov.innerHTML = h;
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{ if(e.target===ov || e.target.closest("[data-sbx]")) ov.remove(); });
+  playoffOdds(300).then(po=>{                                                    // #660
+    const el = document.getElementById("sbOdds"); if(!el || !po) { if(el) el.remove(); return; }
+    el.innerHTML = '<div class="tag" style="margin-top:6px">🎲 PLAYOFF ODDS (300 sims)</div>'+
+      st.slice().sort((a,b2)=>(po[b2.rid]||0)-(po[a.rid]||0)).map(r=>'<div class="sbply"'+(r.rid===myRid?' style="color:var(--gold)"':'')+'><span>'+esc(r.name)+'</span><b class="mono">'+(po[r.rid]||0)+'%</b></div>').join("");
+  }).catch(()=>{});
+}
+function seasonHeroBits(){                                                       // #666
+  try{
+    if(typeof SCOREB==="undefined" || !SCOREB.rosters) return "";
+    const st = standingsRows(SCOREB.rosters, SCOREB.users);
+    const myRid = +S.settings.sleeperRosterId || null;
+    const me = st.find(r=>r.rid===myRid); if(!me) return "";
+    const place = st.indexOf(me)+1;
+    let liveBit = "";
+    const rows = scoreboardRows(SCOREB, idIndex());
+    for(const [a,b] of rows){
+      if(a.rid===myRid) liveBit = ' · this wk <b class="mono">'+a.live.toFixed(1)+'–'+b.live.toFixed(1)+'</b>';
+      else if(b.rid===myRid) liveBit = ' · this wk <b class="mono">'+b.live.toFixed(1)+'–'+a.live.toFixed(1)+'</b>';
+    }
+    return ' · 📊 <b>'+me.w+'-'+me.l+(me.t?'-'+me.t:'')+'</b> ('+ordinal(place)+')'+liveBit;
+  }catch(e){ return ""; }
 }
 function tshareOf(p){ return (typeof TSHARE!=="undefined" && TSHARE[normName(p.name)]) || 0; }
 function snapTrendOf(p){ return (typeof SNAPTREND!=="undefined" && SNAPTREND[normName(p.name)]) || null; }
@@ -583,6 +701,9 @@ function renderPool(){
 
 /* Command palette (Ctrl+K) */
 const PALETTE_ACTIONS = [
+  ["📊 League scoreboard", ()=>renderScoreboard()],
+  ["🏆 Standings", ()=>renderScoreboard()],
+  ["⚔ My matchup", ()=>renderScoreboard()],
   ["🩺 Injury Center", ()=>document.getElementById("injBtn").click()],
   ["🎲 Mock drafts", ()=>document.getElementById("mocksBtn").click()],
   ["🗂 Draft board", ()=>document.getElementById("boardBtn").click()],
@@ -753,7 +874,7 @@ function renderBest(){
       '<div class="tag">🏟 SEASON HQ'+(kd>0?' · 🏈 kickoff in '+kd+'d':'')+'</div>'+
       '<div class="name">'+esc(S.settings.flair||slotName(S.settings.slot))+'</div>'+
       '<div class="meta">Draft complete · optimal starters <b class="mono" style="color:var(--green)">'+fmt(bsH.pts)+'</b> · projected <b>'+ordinal(myRank)+'</b> of '+st.rows.length+
-      (hurtN?' · 🩹 '+hurtN+' with injury flags':' · roster healthy ✓')+
+      (hurtN?' · 🩹 '+hurtN+' with injury flags':' · roster healthy ✓')+seasonHeroBits()+
       ((()=>{ // title odds: softmax over projected starters, with draft-long history (#564)
         const temps = st.rows.map(r2=>Math.exp(r2.pts/120));
         const z = temps.reduce((a,b)=>a+b,0);
@@ -775,6 +896,7 @@ function renderBest(){
         return ' · 🏆 title odds ~<b>'+Math.round(mine2*100)+'%</b>'+spark;
       })())+'</div>'+
       '<div class="actions">'+
+        '<button class="hbtn" onclick="renderScoreboard()">📊 Scoreboard</button>'+
         '<button class="hbtn" onclick="document.getElementById(\'gradeBtn\').click()">🎓 Report</button>'+
         '<button class="hbtn" onclick="document.getElementById(\'injBtn\').click()">🩺 Injuries</button>'+
         '<button class="hbtn" onclick="document.getElementById(\'recapBtn\').click()">📤 Share</button>'+

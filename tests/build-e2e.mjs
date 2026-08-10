@@ -69,6 +69,21 @@ try {
   out.push("booth2:"+((()=>{try{ if(S.log.length) boothLine(S.log[0],0); return snipeScan().constructor===Array; }catch(e){ return false; }})()?"OK":"BAD"));
   // season mode + heat alerts degrade offline (#634/#636)
   out.push("heat:"+((()=>{try{ const pr=heatScan(false); return typeof pr.then==="function" && SEASON.avail.constructor===Array && typeof importCompletedDraft==="function" && typeof startSeasonMode==="function"; }catch(e){ return false; }})()?"OK":"BAD"));
+  // Scoreboard math runs offline on fixtures (#669)
+  out.push("sb:"+((()=>{try{
+    const byId=idIndex();
+    const rosters=[{roster_id:1,owner_id:"u1",settings:{wins:3,losses:1,fpts:480,fpts_against:400}},
+                   {roster_id:2,owner_id:"u2",settings:{wins:1,losses:3,fpts:420,fpts_against:470}}];
+    const users=[{user_id:"u1",display_name:"Alpha"},{user_id:"u2",display_name:"Beta"}];
+    const mus=[{matchup_id:1,roster_id:1,points:88.4,starters:[],players:[],players_points:{}},
+               {matchup_id:1,roster_id:2,points:71.2,starters:[],players:[],players_points:{}}];
+    const rows=scoreboardRows({mus,rosters,users,w:3}, byId);
+    const st=standingsRows(rosters,users);
+    const aw=weeklyAwards(mus,{rosters,users});
+    const ap=allPlayStandings([mus],rosters,users);
+    return rows.length===1 && rows[0][0].live===88.4 && st[0].name==="Alpha" && st[0].w===3 &&
+      aw && aw.hi.pts===88.4 && ap.length===2 && typeof renderScoreboard==="function" && typeof seasonHeroBits==="function";
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // My Week math runs offline on fixtures (#654)
   out.push("week:"+((()=>{try{
     const byId=idIndex(); const ids=allPlayers().slice(0,30).map(p=>p.id);
