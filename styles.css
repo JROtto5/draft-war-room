@@ -837,3 +837,9 @@ body.calm *,body.calm *::before,body.calm *::after{animation:none !important;tra
 .snov,#sbOverlay{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}                 /* #937 */
 .ssrow:active,.sscard:active{background:rgba(240,180,41,.07)}                                  /* #935 */
 @media (prefers-reduced-motion: reduce){.snov .sbcard,.mssheet{animation:none}}
+
+/* ---------- P0 hotfix round (#949–#956) ---------- */
+body.seasonled .right{display:none}                        /* #952 draft-era roster panel is a /draft thing */
+body.seasonled .wrap{grid-template-columns:360px 1fr}      /* #954 two-pane season layout */
+@media (max-width:1100px){ body.seasonled .wrap{grid-template-columns:320px 1fr} }
+@media (max-width:900px){ body.seasonled .wrap{grid-template-columns:1fr} body.seasonled .left .panel{position:static;max-height:none} }

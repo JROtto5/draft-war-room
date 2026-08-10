@@ -1,6 +1,15 @@
 import { readFileSync, statSync } from "node:fs";
 const fail = m => { console.error("LINT FAIL: " + m); process.exit(1); };
 const app = ["core.js","views.js","wire.js","boot.js"].map(f=>readFileSync(f,"utf8")).join("\n");
+// inline event handlers are dead in production — CSP script-src 'self' blocks them (#950)
+{
+  const mods = ["core.js","season.js","win.js","views.js","wire.js","boot.js"];
+  for (const f of mods){
+    const src = readFileSync(f,"utf8");
+    const m = src.match(/on(click|input|change|submit|mouseover)=\\?"/);
+    if (m) fail("inline on"+m[1]+"= handler in "+f+" — CSP blocks these; use data-act + the dispatcher");
+  }
+}
 // duplicate top-level function names across modules shadow each other silently (#835)
 {
   const mods = ["engine.js","core.js","season.js","win.js","views.js","wire.js","boot.js"];

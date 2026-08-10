@@ -1366,7 +1366,7 @@ async function weekRecap(){
     window._wkText = "📅 Week "+wk+" — "+(S.settings.flair||"my team")+":\n"+rows.map(x=>"• "+x.p.name+": "+(x.pts==null?"—":x.pts.toFixed(1))).join("\n");
     $("#cardBody").innerHTML = '<div class="chead"><div class="cid"><div class="cname">📅 Week '+wk+' recap</div></div></div>'+
       rows.map(x=>'<div class="cintel">'+posBadge(x.p.pos)+' '+esc(x.p.name)+' — <b class="mono">'+(x.pts==null?"—":x.pts.toFixed(1))+'</b></div>').join("")+
-      '<div class="cacts"><button class="hbtn" onclick="navigator.clipboard.writeText(window._wkText).then(()=>toast(\'📋 Recap copied\'))">📋 Copy</button></div>';
+      '<div class="cacts"><button class="hbtn" data-act="copyWkText">📋 Copy</button></div>';
     $("#cardOverlay").classList.add("show");
   }catch(e){ toast("Week recap needs a connection", {warn:true}); }
 }

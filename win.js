@@ -269,9 +269,9 @@ function egoDash(){                                                             
     '<div class="benchhead" style="font-size:14px;color:var(--gold)">'+esc(hypeLine())+'</div>'+
     items.map(x=>'<div class="sbply"><span>'+x[0]+'</span><b>'+esc(x[1])+'</b></div>').join("")+
     '<div style="padding:10px 0;display:flex;gap:8px;flex-wrap:wrap">'+
-    '<button class="hbtn" onclick="hypeCard()">🔥 Hype card</button>'+
-    '<button class="hbtn" onclick="receiptsCard()">🧾 Receipts</button>'+
-    '<button class="hbtn" onclick="pregameSpeech()">🎙 Speech</button>'+
+    '<button class="hbtn" data-act="hypeCard">🔥 Hype card</button>'+
+    '<button class="hbtn" data-act="receiptsCard">🧾 Receipts</button>'+
+    '<button class="hbtn" data-act="pregameSpeech">🎙 Speech</button>'+
     '<button class="hbtn" id="ttBtn">🗣 Trash talk</button></div><div id="ttOut"></div></div>';
   document.body.appendChild(ov);
   ov.addEventListener("click", e=>{
@@ -1169,8 +1169,8 @@ function seasonPageHtml(){                                                      
   let h = '<div class="spbar"><div class="spbt"><b>WEEK '+w+'</b>'+
     (ms?' <span class="mono">'+ms.row.w+'-'+ms.row.l+(ms.row.t?'-'+ms.row.t:'')+'</span> · '+ordinal(ms.place):'')+'</div>'+
     '<div class="spbtns">'+
-    '<button class="hbtn" onclick="window._density=!window._density;document.body.classList.toggle(\'compact\',window._density);try{localStorage.setItem(LS_KEY+\'-dense\',window._density?1:\'\')}catch(e){}">▤</button>'+
-    '<button class="hbtn" onclick="window._poolShow=!window._poolShow;renderSeasonPage()">🗂 '+(window._poolShow?'Hide pool':'Pool')+'</button>'+
+    '<button class="hbtn" data-act="toggleDensity" title="Comfortable / compact">▤</button>'+
+    '<button class="hbtn" data-act="togglePool">🗂 '+(window._poolShow?'Hide pool':'Pool')+'</button>'+
     '<a class="hbtn" href="/draft" style="text-decoration:none">✏️ Draft room</a></div></div>';
   try{ if(typeof hypeLine==="function" && hypeOn("mild")) h += '<div class="benchhead" style="color:var(--gold)">😤 '+esc(hypeLine())+'</div>'; }catch(e){}
   // hero (#879/#884/#885)
@@ -1241,7 +1241,7 @@ function seasonPageHtml(){                                                      
     ((typeof elimTracker==="function" && elimTracker().length) ? '<div class="benchhead">☠ Dead: '+elimTracker().map(esc).join(", ")+'</div>' : '')+
     '</div></div>';
   // wire card (#888)
-  h += '<div class="sscard" id="spWire"><div class="sshead">🔥 THE WIRE<span><button class="undo1" onclick="renderWaivers()">open →</button></span></div>';
+  h += '<div class="sscard" id="spWire"><div class="sshead">🔥 THE WIRE<span><button class="undo1" data-act="renderWaivers">open →</button></span></div>';
   h += (SEASON.avail && SEASON.avail.length)
     ? SEASON.avail.slice(0,5).map(p=>ssPRow(p, p.pos+" · "+((typeof buzzOf==="function")?buzzOf(p).toLocaleString():"")+" adds", "＋", true)).join("")
     : '<div class="sspad"><div class="empty">nobody heating right now — good, nothing to panic-add</div></div>';
@@ -1320,10 +1320,10 @@ function sidebarSeasonHtml(byId){                                               
     '</div>';
   // — quick rail (#854)
   hero += '<div class="ssquick" role="navigation" aria-label="Quick actions">'+
-    '<button onclick="renderGamePlan()" title="Game plan — G"><span>🏆</span>Plan</button>'+
-    '<button onclick="renderSim()" title="Simulator — M"><span>🎲</span>Sim</button>'+
-    '<button onclick="renderWaivers()" title="Waiver wire — V"><span>📥</span>Wire</button>'+
-    '<button onclick="scoutMyOpponent()" title="Scout this week\'s opponent"><span>🕵️</span>Scout</button>'+
+    '<button data-act="renderGamePlan" title="Game plan — G"><span>🏆</span>Plan</button>'+
+    '<button data-act="renderSim" title="Simulator — M"><span>🎲</span>Sim</button>'+
+    '<button data-act="renderWaivers" title="Waiver wire — V"><span>📥</span>Wire</button>'+
+    '<button data-act="scoutMyOpponent" title="Scout this week\'s opponent"><span>🕵️</span>Scout</button>'+
     '</div>';
   hero += (typeof seasonDeckHtml==="function") ? seasonDeckHtml() : '';
   hero += '</div>';
@@ -1363,12 +1363,12 @@ function sidebarSeasonHtml(byId){                                               
       const actPts = actual.map(id=>byId[id]).filter(Boolean).reduce((a,p)=>a+weekProj(p,w),0);
       const left = Math.round((bs.pts-actPts)*10)/10;
       if(left > 1) list += '<div class="sscard warn"><div class="sshead">⚠ LINEUP<span class="mono">−'+left+'</span></div>'+
-        '<div class="sspad">Your Sleeper lineup leaves <b>'+left+'</b> on the bench — open the <a href="#" onclick="renderGamePlan();return false">Game Plan</a>.</div></div>';
+        '<div class="sspad">Your Sleeper lineup leaves <b>'+left+'</b> on the bench — open the <a href="#" data-act="renderGamePlan">Game Plan</a>.</div></div>';
     }
   }catch(e){}
   // — heating radar cards (#856)
   if(SEASON.avail && SEASON.avail.length){
-    list += '<div class="sscard"><div class="sshead">🔥 HEATING · YOUR LEAGUE<span><button class="undo1" onclick="renderWaivers()">wire →</button></span></div>'+
+    list += '<div class="sscard"><div class="sshead">🔥 HEATING · YOUR LEAGUE<span><button class="undo1" data-act="renderWaivers">wire →</button></span></div>'+
       SEASON.avail.slice(0,4).map(p=>'<div class="ssrow" data-card="'+p.id+'" tabindex="0" role="button">'+avatarImg(p,30)+
         '<div class="ssnm">'+esc(p.name)+'<span class="sssub">'+p.pos+' · '+((typeof buzzOf==="function")?buzzOf(p).toLocaleString():'')+' adds/24h</span></div>'+
         '<b class="ssval mono" style="color:var(--gold)">+</b></div>').join("")+'</div>';
@@ -1504,15 +1504,39 @@ function countUp(el, to, ms){                                                   
   }catch(e){ el.textContent = String(to); }
 }
 
+/* ---------- P0: CSP-safe action dispatcher (#949) ---------- */
+function togglePool(){ window._poolShow = !window._poolShow; renderSeasonPage(); }
+function toggleDensity(){
+  window._density = !window._density;
+  document.body.classList.toggle("compact", window._density);
+  try{ localStorage.setItem(LS_KEY+"-dense", window._density?1:""); }catch(e){}
+}
+function copyWkText(){ try{ navigator.clipboard.writeText(window._wkText).then(()=>toast("📋 Recap copied")); }catch(e){} }
+const ACT_OK = ["renderGamePlan","renderSim","renderScoreboard","renderWaivers","renderTrades","renderSeasonStats",
+  "renderRituals","egoDash","weeklyRecap2","renderAlertCenter","injuryDigest","scoutMyOpponent","moreSheet",
+  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText"];
+document.addEventListener("click", e=>{
+  const t = e.target.closest("[data-act],[data-scout],[data-clickid]");
+  if(!t) return;
+  if(t.dataset.clickid){ const el = document.getElementById(t.dataset.clickid); if(el){ e.preventDefault(); el.click(); } return; }
+  if(t.dataset.scout){ e.preventDefault(); scoutReport(+t.dataset.scout); return; }
+  const name = t.dataset.act;
+  if(!ACT_OK.includes(name)) return;
+  e.preventDefault();
+  const sheet = t.closest("#moreSheet"); if(sheet) sheet.remove();
+  const fn = window[name];                       // top-level function declarations are window properties; eval is CSP-blocked too
+  if(typeof fn==="function") fn();
+});
+
 /* ---------- R57 Mobile app feel (#924–#938) ---------- */
 function mobileNavHtml(){                                                        // #924
-  const tab = (fn, ico, lab)=>'<button data-tab="'+lab+'" onclick="'+fn+'"><span>'+ico+'</span>'+lab+'</button>';
+  const tab = (fn, ico, lab)=>'<button data-tab="'+lab+'" data-act="'+fn.replace("()","")+'"><span>'+ico+'</span>'+lab+'</button>';
   return tab("renderGamePlan()","🏆","Plan")+tab("renderSim()","🎲","Sim")+
     tab("renderScoreboard()","📊","Scores")+tab("renderWaivers()","📥","Wire")+
     tab("moreSheet()","⋯","More");
 }
 function moreSheetHtml(){                                                        // #925
-  const b = (fn, ico, lab)=>'<button onclick="'+fn+';document.getElementById(\'moreSheet\').remove()"><span>'+ico+'</span>'+lab+'</button>';
+  const b = (fn, ico, lab)=>'<button data-act="'+fn.replace("()","")+'"><span>'+ico+'</span>'+lab+'</button>';
   return b("renderTrades()","🔁","Trades")+b("renderSeasonStats()","📈","Season")+
     b("renderRituals()","🧘","Ritual")+b("egoDash()","😤","Ego")+
     b("weeklyRecap2()","📖","Recap")+b("renderAlertCenter()","🔔","Alerts")+

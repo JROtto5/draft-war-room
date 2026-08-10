@@ -140,6 +140,15 @@ try {
     }
     return "OK";
   })()));
+  // CSP-safe dispatcher (#949–#955): data-act clicks call through; no inline handlers in generated html
+  out.push("csp:"+((()=>{try{
+    const deck=seasonDeckHtml(), rail=sidebarSeasonHtml(idIndex());
+    const clean=[deck, rail.hero, rail.list, seasonPageHtml(), mobileNavHtml(), moreSheetHtml()].every(h=>!/onclick=/.test(h));
+    window._poolShow=false;
+    const b2=document.createElement("button"); b2.dataset.act="togglePool"; document.body.appendChild(b2);
+    b2.click(); const flipped=window._poolShow===true; b2.remove(); window._poolShow=false;
+    return clean && flipped && deck.includes("data-clickid");
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // Mobile nav structure (#924–#938)
   out.push("mobile:"+((()=>{try{
     const nav=mobileNavHtml(), sheet=moreSheetHtml();

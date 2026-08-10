@@ -938,7 +938,7 @@ function seasonDossierHtml(slot){                                               
     return '<div class="cintel" style="border-top:1px solid var(--line);margin-top:8px;padding-top:10px"><b>📅 Season form</b> · '+
       me.w+'-'+me.l+(me.t?'-'+me.t:'')+' ('+ordinal(place)+') · PF '+me.pf+(me.streak?' · '+esc(me.streak):'')+
       (tx.length?'<br>🗞 '+tx.map(t=>(t.adds.length?'➕'+t.adds[0]:'')+(t.drops.length?' ➖'+t.drops[0]:'')).join(" · "):'')+
-      ' <button class="undo1" onclick="scoutReport('+rid+')">🕵️ full scout</button></div>';
+      ' <button class="undo1" data-scout="'+rid+'">🕵️ full scout</button></div>';
   }catch(e){ return ""; }
 }
 function tradeCardPng(ev, giveNames, getNames, teamName){                        // #695
@@ -1533,7 +1533,7 @@ function hqMondayLine(){                                                        
       ' '+(last.m.points||0).toFixed(1)+'–'+(last.opp?last.opp.points.toFixed(1):"?")+'</span>'+
       (last.eff?' · eff '+last.eff.eff+'%':'')+
       (hot?' · wire: '+esc(hot.name)+' is heating':'')+
-      ' · <a href="#" onclick="weeklyRecap2();return false">full story</a></div>';
+      ' · <a href="#" data-act="weeklyRecap2">full story</a></div>';
   }catch(e){ return ""; }
 }
 
@@ -1584,10 +1584,13 @@ async function enterSeasonMode(){                                               
 /* ---------- R44 Season nav & ship (#730–#739) ---------- */
 function seasonDeckHtml(){                                                       // #730
   const un = (typeof unreadAlerts==="function") ? unreadAlerts() : 0;
-  const btn = (fn, ico, lab, title)=>'<button class="hbtn deckbtn" onclick="'+fn+'" title="'+(title||lab)+'"><span class="dicon">'+ico+'</span><span class="dlab">'+lab+'</span></button>';
+  const btn = (fn, ico, lab, title)=>{
+    const attr = /^document\.getElementById/.test(fn)
+      ? 'data-clickid="'+fn.match(/getElementById\('([^']+)'\)/)[1]+'"'
+      : 'data-act="'+fn.replace("()","")+'"';
+    return '<button class="hbtn deckbtn" '+attr+' title="'+(title||lab)+'"><span class="dicon">'+ico+'</span><span class="dlab">'+lab+'</span></button>';
+  };
   return '<div class="actions" id="seasonDeck" role="navigation" aria-label="Season navigation">'+
-    btn("renderGamePlan()","🏆","Plan","This week's game plan — G")+
-    btn("renderSim()","🎲","Sim","1,000 simulated Sundays — M")+
     btn("renderScoreboard()","📊","Scores","League scoreboard, standings, playoff odds — S")+
     btn("renderWaivers()","📥","Waivers","Waiver wire war room — V")+
     btn("renderTrades()","🔁","Trades","Trade center — D")+
@@ -1608,12 +1611,9 @@ function applySeasonHeader(){                                                   
   if(document.getElementById("draftMenuBtn")) { document.body.classList.add("seasonled"); return; }
   document.body.classList.add("seasonled");
   const b = document.createElement("button");
-  b.className = "hbtn"; b.id = "draftMenuBtn"; b.title = "Draft-day tools (mocks, board, compare, sheet)";
-  b.textContent = "🗂 Draft ▾";
-  b.addEventListener("click", ()=>{
-    const open = document.body.classList.toggle("draftopen");
-    b.textContent = open ? "🗂 Draft ▴" : "🗂 Draft ▾";
-  });
+  b.className = "hbtn"; b.id = "draftMenuBtn"; b.title = "Open the draft room (/draft)";
+  b.textContent = "✏️ Draft";
+  b.addEventListener("click", ()=>{ location.href = "/draft"; });
   const anchor = document.getElementById("mocksBtn");
   if(anchor && anchor.parentNode) anchor.parentNode.insertBefore(b, anchor);
 }
@@ -1784,7 +1784,7 @@ async function renderGamePlan(){                                                
     (md && md.opp ? 'vs '+esc(md.opp.name)+' · win prob '+wpPct+'%' : 'no matchup data yet')+
     (mode.mode==="ceiling" ? ' — YOU\'RE THE DOG. We go down swinging: boom-bust lineup, maximum variance. 🎢' :
      mode.mode==="floor" ? ' — you\'re favored. Protect the lead: floor plays, no heroics. 🧱' : ' — dead even. Best players play. ⚖')+
-    (md && md.opp ? ' <span id="gpSimWp" class="dimtxt"></span> <button class="undo1" onclick="scoutMyOpponent()">🕵️ scout them</button>' : '')+'</div>';
+    (md && md.opp ? ' <span id="gpSimWp" class="dimtxt"></span> <button class="undo1" data-act="scoutMyOpponent">🕵️ scout them</button>' : '')+'</div>';
   h += moves.length ? '<div class="benchhead">📋 The moves ('+moves.filter(m=>ticks[m.k]).length+'/'+moves.length+' done)</div>'+
     moves.map(m=>'<div class="sbply" style="cursor:pointer'+(ticks[m.k]?';opacity:.5':'')+'" data-tick="'+m.k+'">'+
       '<span>'+(ticks[m.k]?'✅ ':'⬜ ')+esc(m.txt)+'</span><b style="color:var(--'+m.tag.c+')">'+m.tag.t+'</b></div>').join("")
