@@ -1150,6 +1150,9 @@ $("#settingsBtn").addEventListener("click", ()=>{
   const q = S.settings.quietHours||{from:23,to:8};
   qf.value = q.from; qt.value = q.to;
   $("#setHype").value = S.settings.hype||"standard";
+  const rc = (typeof ritualCfg==="function") ? ritualCfg() : {checklist:true,goals:true,grades:true,bright:true};
+  $("#rtChecklist").checked=rc.checklist; $("#rtGoals").checked=rc.goals;
+  $("#rtGrades").checked=rc.grades; $("#rtBright").checked=rc.bright;
   const rs=$("#setRival");
   rs.innerHTML='<option value="">none</option>'+Array.from({length:S.settings.teams},(_,i)=>i+1)
     .filter(s2=>s2!==S.settings.slot).map(s2=>'<option value="'+s2+'"'+(+S.settings.rivalSlot===s2?' selected':'')+'>'+esc(slotName(s2))+'</option>').join("");
@@ -1250,6 +1253,8 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.scoreDelta = Math.min(20, Math.max(2, +$("#setScoreDelta").value||5));
   S.settings.quietHours = {from:+$("#setQuietFrom").value||23, to:+$("#setQuietTo").value===0?0:(+$("#setQuietTo").value||8)};
   S.settings.hype = $("#setHype").value||"standard";
+  S.settings.rituals = {checklist:$("#rtChecklist").checked, goals:$("#rtGoals").checked,
+    grades:$("#rtGrades").checked, bright:$("#rtBright").checked};
   S.settings.cols = {adp:$("#colADP").checked, edge:$("#colEdge").checked, rd:$("#colRd").checked};
   S.settings.fontSize = $("#setFont").value;
   S.settings.cbSafe = $("#setCbSafe").checked;

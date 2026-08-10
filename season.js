@@ -1523,10 +1523,10 @@ function seasonDeckHtml(){                                                      
     btn("renderWaivers()","📥","Waivers","Waiver wire war room — V")+
     btn("renderTrades()","🔁","Trades","Trade center — D")+
     btn("renderSeasonStats()","📈","Season","Efficiency, luck, ROI, ghost season — X")+
-    btn("weeklyRecap2()","📖","Recap","Last week's story + share card")+
-    btn("renderAlertCenter()","🔔",un?String(un):"Alerts","Alert center")+
     btn("renderRituals()","🧘","Ritual","Checklist, goals, grades, bright side")+
     btn("egoDash()","😤","Ego","The ego dashboard: hype card, receipts, speech, trash talk")+
+    btn("weeklyRecap2()","📖","Recap","Last week's story + share card")+
+    btn("renderAlertCenter()","🔔",un?String(un):"Alerts","Alert center")+
     btn("document.getElementById('gradeBtn').click()","🎓","Report","Draft report")+
     btn("document.getElementById('injBtn').click()","🩺","Health","Injury center")+
     '<button class="hbtn deckbtn" id="weekRecapBtn"><span class="dicon">📅</span><span class="dlab">Weeks</span></button>'+

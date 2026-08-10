@@ -70,3 +70,22 @@ Draft's over — here's the weekly rhythm the app runs with you:
 5. **Deck keys**: `s` scores · `v` waivers · `d` trades · `x` season · `w` top.
 
 Draft-day tools live behind 🗂 Draft ▾ in the header all season.
+
+## 🏆 The Win Machine (v12)
+
+Five weapons, one loop (see WINNING.md for the doctrine):
+
+- **🏆 Plan (`g`)** — the one-pager. Moves ranked by win-prob gain with
+  LOCK/LEAN/COIN-FLIP confidence, what the game is worth in playoff odds,
+  path to playoffs, deadline stance. Tick moves off; it nags Sunday if you don't.
+- **🎲 Sim (`m`)** — 1,000 simulated Sundays with stack correlation. Trust the
+  win rate over the projection: sometimes the "worse" flex wins more games.
+- **🕵️ Scout** — every opponent's sloppiness, thin rooms, infirmary, and
+  tendencies. Share the beatdown bars when appropriate. It's always appropriate.
+- **😤 Ego** — hype card, draft receipts, trash talk with citations, and the
+  pregame speech (FULL SEND only). The humility guard mutes it 48h after a loss.
+- **🧘 Ritual** — checklist, goals, management grade, confidence calibration,
+  and the bright side when it stings. Streaks reward the process.
+
+Game day runs itself: real NFL clocks on every player, live win probability,
+scenario ticker, two-minute-drill pings, and the late-window verdict.

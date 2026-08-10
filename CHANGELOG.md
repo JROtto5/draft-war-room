@@ -1,5 +1,21 @@
 # Changelog — Draft War Room
 
+## v12.0 (2026-08-10) — The Win Hundred (#740–#839)
+Built to win it all, and loud about it. 🏆 Game Plan: every move ranked by
+win-prob gain with LOCK/LEAN/COIN-FLIP confidence, floor-when-favored /
+ceiling-when-chasing lineups, must-win playoff-swing pricing, path to
+playoffs, deadline stance · 🎲 1,000-Sunday Monte Carlo with stack
+correlation, p10/p90 honesty bars, leverage men, lineup variants judged by
+WIN RATE · 🕵️ opponent scouting: sloppiness index, exploit windows, tendency
+board, H2H ledger, beatdown share card · 😤 hype engine: ego dashboard, hype
+card, draft receipts, cited trash talk, TTS pregame speech, humility guard ·
+📡 live war room v2: real ESPN game clocks per player, live re-sim win prob
+with the rollercoaster sparkline, scenario ticker, two-minute-drill pings,
+garbage-time detection · 🧘 rituals: auto-detecting checklist with streaks,
+goal progress bars, A–F management grades, bright-side + autopsy after
+losses, confidence calibration, rival death-watch, heater skin. New win.js
+module, duplicate-global lint, 42 E2E checks.
+
 ## v11.0 (2026-08-10) — Season Mode (#634–#739)
 The draft ended; the app didn't. 🏁 finished Sleeper drafts import
 themselves and Season HQ becomes page 1 · 🗓 My Week: live roster, week-aware
