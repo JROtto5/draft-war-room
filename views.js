@@ -506,6 +506,7 @@ function renderPool(){
 const PALETTE_ACTIONS = [
   ["📊 League scoreboard", ()=>renderScoreboard()],
   ["📥 Waiver wire", ()=>renderWaivers()],
+  ["🔁 Trade center", ()=>renderTrades()],
   ["🏆 Standings", ()=>renderScoreboard()],
   ["⚔ My matchup", ()=>renderScoreboard()],
   ["🩺 Injury Center", ()=>document.getElementById("injBtn").click()],
@@ -702,6 +703,7 @@ function renderBest(){
       '<div class="actions">'+
         '<button class="hbtn" onclick="renderScoreboard()">📊 Scoreboard</button>'+
         '<button class="hbtn" onclick="renderWaivers()">📥 Waivers</button>'+
+        '<button class="hbtn" onclick="renderTrades()">🔁 Trades</button>'+
         '<button class="hbtn" onclick="document.getElementById(\'gradeBtn\').click()">🎓 Report</button>'+
         '<button class="hbtn" onclick="document.getElementById(\'injBtn\').click()">🩺 Injuries</button>'+
         '<button class="hbtn" onclick="document.getElementById(\'recapBtn\').click()">📤 Share</button>'+

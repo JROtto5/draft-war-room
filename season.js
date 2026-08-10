@@ -754,4 +754,243 @@ async function renderWaivers(){
   });
 }
 
+/* ---------- R41 Trade machine (#685–#699) ---------- */
+function leagueRosterIds(rid){
+  const map = sleeperToOurs();
+  const ro = (SCOREB.rosters||[]).find(r=>+r.roster_id===+rid);
+  return ro ? (ro.players||[]).map(id=>map[String(id)]).filter(Boolean) : [];
+}
+function tradeEvalRoster(mineOut, theirsOut, rid, myPool, theirPool){                  // pure-ish (#686)
+  const byId = idIndex();
+  const myNow = myPool || rosterIds(), theirNow = theirPool || leagueRosterIds(rid);
+  const b = ids=>bestStarters(ids, byId).pts;
+  const myAfter = myNow.filter(id=>!mineOut.includes(id)).concat(theirsOut);
+  const theirAfter = theirNow.filter(id=>!theirsOut.includes(id)).concat(mineOut);
+  const me = {before:b(myNow), after:b(myAfter)};
+  const them = {before:b(theirNow), after:b(theirAfter)};
+  me.delta = Math.round((me.after-me.before)*10)/10;
+  them.delta = Math.round((them.after-them.before)*10)/10;
+  const rawOut = mineOut.reduce((a,id)=>a+((byId[id]||{}).proj||0),0);
+  const rawIn = theirsOut.reduce((a,id)=>a+((byId[id]||{}).proj||0),0);
+  return {me, them, rawOut:Math.round(rawOut), rawIn:Math.round(rawIn), verdict:fairnessVerdict(me.delta, them.delta)};
+}
+function fairnessVerdict(meD, themD){                                            // pure (#687)
+  if(meD>3 && themD<-3) return {label:"🔪 FLEECE — they should decline", cls:"green"};
+  if(meD>1 && themD>=-1.5) return {label:"🤝 WIN-WIN — send it", cls:"green"};
+  if(Math.abs(meD)<=1.5 && Math.abs(themD)<=1.5) return {label:"⚖ FAIR — comes down to preference", cls:"gold"};
+  if(meD<-3) return {label:"🎁 DONATION — decline this", cls:"red"};
+  if(meD<0) return {label:"👎 Slight loss for you — counter", cls:"red"};
+  return {label:"🙂 Lean win for you", cls:"gold"};
+}
+function tradeFinder(){                                                          // #688
+  const byId = idIndex(), myRid = +S.settings.sleeperRosterId||0, out = [];
+  const myNow = rosterIds();
+  const myBs = bestStarters(myNow, byId);
+  const myBench = myNow.filter(id=>byId[id] && !myBs.starterIds.has(id) && byId[id].pos!=="DEF");
+  (SCOREB.rosters||[]).forEach(ro=>{
+    if(+ro.roster_id===myRid) return;
+    const theirNow = leagueRosterIds(ro.roster_id);
+    if(!theirNow.length) return;
+    const thBs = bestStarters(theirNow, byId);
+    const thBench = theirNow.filter(id=>byId[id] && !thBs.starterIds.has(id) && byId[id].pos!=="DEF");
+    myBench.slice(0,5).forEach(mid=>{
+      thBench.slice(0,5).forEach(tid=>{
+        if(byId[mid].pos===byId[tid].pos) return;
+        const ev = tradeEvalRoster([mid],[tid],ro.roster_id, myNow, theirNow);
+        if(ev.me.delta>0.5 && ev.them.delta>-1) out.push({rid:ro.roster_id, give:mid, get:tid, ev});
+      });
+    });
+  });
+  return out.sort((a,b)=>b.ev.me.delta-a.ev.me.delta).slice(0,6);
+}
+function packageSuggest(rid){                                                    // #689
+  const byId = idIndex(), out = [];
+  const myNow = rosterIds(), theirNow = leagueRosterIds(rid);
+  if(!theirNow.length) return out;
+  const myBs = bestStarters(myNow, byId);
+  const myMids = myNow.filter(id=>byId[id] && byId[id].pos!=="DEF")
+    .sort((a,b)=>byId[b].proj-byId[a].proj).slice(2,8);
+  const theirStuds = theirNow.filter(id=>byId[id] && byId[id].pos!=="DEF")
+    .sort((a,b)=>byId[b].proj-byId[a].proj).slice(0,3);
+  for(let i=0;i<myMids.length;i++) for(let j=i+1;j<myMids.length;j++){
+    for(const stud of theirStuds){
+      const ev = tradeEvalRoster([myMids[i],myMids[j]],[stud], rid, myNow, theirNow);
+      if(ev.me.delta>1 && ev.them.delta>-2.5) out.push({give:[myMids[i],myMids[j]], get:stud, ev});
+    }
+  }
+  return out.sort((a,b)=>b.ev.me.delta-a.ev.me.delta).slice(0,4);
+}
+function strengthHeatmap(){                                                      // pure-ish (#690)
+  const byId = idIndex();
+  return (SCOREB.rosters||[]).map(ro=>{
+    const ids = leagueRosterIds(ro.roster_id);
+    const ps = ids.map(id=>byId[id]).filter(Boolean);
+    const top = (pos,n)=>ps.filter(p=>p.pos===pos).sort((a,b)=>b.proj-a.proj).slice(0,n).reduce((a,p)=>a+p.proj,0);
+    return {rid:ro.roster_id, name:ridName(ro.roster_id), QB:Math.round(top("QB",2)), RB:Math.round(top("RB",3)),
+      WR:Math.round(top("WR",3)), TE:Math.round(top("TE",2))};
+  });
+}
+function buyLowSellHigh(hist, byId){                                             // pure (#691)
+  const inv = {}; const s2o = sleeperToOurs(); for(const k in s2o) inv[s2o[k]] = k;
+  const myRid = +S.settings.sleeperRosterId||0;
+  const got = {}, games = {}, owner = {};
+  (hist||[]).forEach(wm=>(wm||[]).forEach(m=>{
+    for(const sid in (m.players_points||{})){
+      const oid = s2o[String(sid)]; if(!oid) continue;
+      got[oid] = (got[oid]||0) + m.players_points[sid];
+      games[oid] = (games[oid]||0) + 1;
+      owner[oid] = m.roster_id;
+    }
+  }));
+  const rows = [];
+  for(const oid in got){
+    const p = byId[oid]; if(!p || p.pos==="DEF" || !games[oid]) continue;
+    const exp = p.proj/16, act = got[oid]/games[oid];
+    if(exp < 6) continue;
+    rows.push({p, exp:Math.round(exp*10)/10, act:Math.round(act*10)/10, diff:Math.round((act-exp)*10)/10, mine:owner[oid]===myRid});
+  }
+  return {buyLow: rows.filter(r=>!r.mine && r.diff<-2.5).sort((a,b)=>a.diff-b.diff).slice(0,5),
+          sellHigh: rows.filter(r=>r.mine && r.diff>2.5).sort((a,b)=>b.diff-a.diff).slice(0,5)};
+}
+function blockGet(){ try{ return JSON.parse(localStorage.getItem(LS_KEY+"-tblock")||"[]"); }catch(e){ return []; } }
+function blockToggle(id){                                                        // #692
+  const b = blockGet(), i = b.indexOf(id);
+  if(i>=0) b.splice(i,1); else b.push(id);
+  try{ localStorage.setItem(LS_KEY+"-tblock", JSON.stringify(b)); }catch(e){}
+  return b;
+}
+async function tradeOddsImpact(mineOut, theirsOut, rid){                         // #693
+  const myRid = +S.settings.sleeperRosterId; if(!myRid) return null;
+  const base = await playoffOdds(200); if(!base) return null;
+  const byId = idIndex();
+  const b = ids=>bestStarters(ids, byId).pts;
+  const save = rosterStrengthOf;
+  const myAfter = b(rosterIds().filter(id=>!mineOut.includes(id)).concat(theirsOut));
+  const theirAfter = b(leagueRosterIds(rid).filter(id=>!theirsOut.includes(id)).concat(mineOut));
+  try{
+    window.rosterStrengthOf = r2=> +r2===+myRid ? myAfter : (+r2===+rid ? theirAfter : save(r2));
+    const after = await playoffOdds(200);
+    return after ? {before:base[myRid], after:after[myRid]} : null;
+  } finally { window.rosterStrengthOf = save; }
+}
+function notesGet(){ try{ return JSON.parse(localStorage.getItem(LS_KEY+"-tnotes")||"{}"); }catch(e){ return {}; } }
+function noteSet(rid, txt){                                                      // #697
+  const n = notesGet(); if(txt) n[rid]=txt; else delete n[rid];
+  try{ localStorage.setItem(LS_KEY+"-tnotes", JSON.stringify(n)); }catch(e){}
+}
+function keeperValue(p){                                                         // #698
+  const m = (typeof metaFor==="function") ? metaFor(p) : null;
+  const age = m && m[0] ? +m[0] : 26;
+  let f = age<24 ? 1.08 : age<27 ? 1.03 : age<30 ? 0.96 : 0.84;
+  if(typeof spikeRate==="function" && spikeRate(p)>=0.4) f += 0.04;
+  return Math.round(p.proj*f);
+}
+function seasonDossierHtml(slot){                                                // #694
+  try{
+    const s2r = S.settings.slot2rid; if(!s2r || typeof SCOREB==="undefined" || !SCOREB.rosters) return "";
+    const rid = +s2r[String(slot)]; if(!rid) return "";
+    const st = standingsRows(SCOREB.rosters, SCOREB.users);
+    const me = st.find(r=>r.rid===rid); if(!me) return "";
+    const place = st.indexOf(me)+1;
+    const tx = (WAIV.tx||[]).filter(t=>t.rid===rid).slice(0,3);
+    return '<div class="cintel" style="border-top:1px solid var(--line);margin-top:8px;padding-top:10px"><b>📅 Season form</b> · '+
+      me.w+'-'+me.l+(me.t?'-'+me.t:'')+' ('+ordinal(place)+') · PF '+me.pf+(me.streak?' · '+esc(me.streak):'')+
+      (tx.length?'<br>🗞 '+tx.map(t=>(t.adds.length?'➕'+t.adds[0]:'')+(t.drops.length?' ➖'+t.drops[0]:'')).join(" · "):'')+'</div>';
+  }catch(e){ return ""; }
+}
+function tradeCardPng(ev, giveNames, getNames, teamName){                        // #695
+  const c = document.createElement("canvas"); c.width = 1000; c.height = 640;
+  const x = c.getContext("2d");
+  x.fillStyle = "#0b0f14"; x.fillRect(0,0,1000,640);
+  x.fillStyle = "#2fd47a"; x.font = "bold 40px sans-serif"; x.fillText("TRADE PROPOSAL", 40, 70);
+  x.fillStyle = "#8b98a9"; x.font = "24px sans-serif"; x.fillText("Otto5  ⇄  "+teamName, 40, 115);
+  x.fillStyle = "#e8eef5"; x.font = "bold 26px sans-serif";
+  x.fillText("I send:", 40, 180); x.fillText("I get:", 520, 180);
+  x.font = "24px sans-serif";
+  giveNames.forEach((n,i)=>x.fillText("• "+n, 60, 220+i*38));
+  getNames.forEach((n,i)=>x.fillText("• "+n, 540, 220+i*38));
+  x.fillStyle = "#f0b429"; x.font = "bold 28px sans-serif";
+  x.fillText(ev.verdict.label.replace(/^[^\s]+\s/,""), 40, 520);
+  x.fillStyle = "#8b98a9"; x.font = "20px sans-serif";
+  x.fillText("my lineup "+(ev.me.delta>=0?"+":"")+ev.me.delta+" pts · theirs "+(ev.them.delta>=0?"+":"")+ev.them.delta+" pts · draft-war-room", 40, 560);
+  c.toBlob(b=>{
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(b); a.download = "trade-proposal.png"; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+  });
+}
+/* trade center overlay (#685) */
+async function renderTrades(){
+  const old = document.getElementById("trOverlay"); if(old){ old.remove(); return; }
+  if(!SCOREB.rosters) await leagueWeekData(false);
+  if(!SCOREB.rosters) return toast("Link your Sleeper league in Settings first", {warn:true});
+  const byId = idIndex(), myRid = +S.settings.sleeperRosterId||0;
+  const others = (SCOREB.rosters||[]).filter(r=>+r.roster_id!==myRid);
+  const sel = {rid:+((others[0]||{}).roster_id||0), give:new Set(), get:new Set()};
+  const hist = await leagueHistory();
+  const bl = buyLowSellHigh(hist, byId);
+  const hm = strengthHeatmap();
+  const finds = tradeFinder();
+  const block = blockGet();
+  const ov = document.createElement("div"); ov.id = "trOverlay";
+  const rosterChecks = (ids, kind)=>ids.map(id=>byId[id]).filter(Boolean).sort((a,b)=>b.proj-a.proj)
+    .map(p=>'<label class="trlab"><input type="checkbox" data-tsel="'+kind+'" data-id="'+p.id+'"> '+esc(p.name)+' <span class="dimtxt">'+p.pos+' '+p.proj+(kind==="give"&&block.includes(p.id)?' 🏷':'')+'</span></label>').join("");
+  const build = ()=>{
+    let h = '<div class="sbcard" role="dialog" aria-label="Trade center"><button class="sbx" data-trx="1" aria-label="Close">✕</button>';
+    h += '<div class="tag">🔁 TRADE CENTER</div>';
+    h += '<div class="frow"><label>Trade with</label><select id="trTeam">'+others.map(r=>'<option value="'+r.roster_id+'"'+(+r.roster_id===sel.rid?' selected':'')+'>'+esc(ridName(r.roster_id))+'</option>').join("")+'</select></div>';
+    h += '<div class="sbcols"><div><div class="benchhead">I give</div>'+rosterChecks(rosterIds(),"give")+'</div>'+
+      '<div><div class="benchhead">I get</div>'+rosterChecks(leagueRosterIds(sel.rid),"get")+'</div></div>';
+    h += '<div style="padding:10px 0"><button class="hbtn" id="trEval">⚖ Evaluate</button> <button class="hbtn" id="trPng" style="display:none">📤 PNG</button></div><div id="trOut"></div>';
+    if(finds.length) h += '<div class="benchhead">🔍 Trade finder (helps both sides)</div>'+finds.map(f=>
+      '<div class="sbply"><span>'+esc(byId[f.give].name)+' → '+esc(ridName(f.rid))+' for <b>'+esc(byId[f.get].name)+'</b></span><b style="color:var(--green)">+'+f.ev.me.delta+'</b></div>').join("");
+    h += '<div class="benchhead">🌡 Roster strength (top QB2/RB3/WR3/TE2)</div><table class="sbtab"><tr><th>team</th><th>QB</th><th>RB</th><th>WR</th><th>TE</th></tr>'+
+      hm.map(r=>'<tr'+(r.rid===myRid?' class="sbme"':'')+'><td>'+esc(r.name)+'</td><td class="mono">'+r.QB+'</td><td class="mono">'+r.RB+'</td><td class="mono">'+r.WR+'</td><td class="mono">'+r.TE+'</td></tr>').join("")+'</table>';
+    if(bl.buyLow.length) h += '<div class="benchhead">📉 Buy low around the league</div><div class="scarce">'+
+      bl.buyLow.map(r=>'<span class="scpill" data-card="'+r.p.id+'">'+esc(r.p.name)+' '+r.diff+'/wk vs proj</span>').join("")+'</div>';
+    if(bl.sellHigh.length) h += '<div class="benchhead">📈 Sell high from my roster</div><div class="scarce">'+
+      bl.sellHigh.map(r=>'<span class="scpill" data-card="'+r.p.id+'">'+esc(r.p.name)+' +'+r.diff+'/wk · keeper’val '+keeperValue(r.p)+'</span>').join("")+'</div>';
+    h += '<div class="benchhead">🏷 My trade block (tap to toggle)</div><div class="scarce">'+
+      rosterIds().map(id=>byId[id]).filter(Boolean).filter(p=>p.pos!=="DEF").map(p=>
+      '<span class="scpill" data-block="'+p.id+'" style="cursor:pointer'+(block.includes(p.id)?';color:var(--gold)':'')+'">'+esc(p.name.split(" ").slice(-1)[0])+(block.includes(p.id)?' 🏷':'')+'</span>').join("")+'</div>';
+    h += '<div class="benchhead">📝 Note on '+esc(ridName(sel.rid))+'</div><textarea id="trNote" rows="2" style="width:100%">'+esc(notesGet()[sel.rid]||"")+'</textarea>';
+    h += '</div>';
+    return h;
+  };
+  ov.innerHTML = build();
+  document.body.appendChild(ov);
+  let lastEv = null;
+  ov.addEventListener("change", e=>{
+    if(e.target.id==="trTeam"){ sel.rid = +e.target.value; sel.give.clear(); sel.get.clear(); ov.innerHTML = build(); return; }
+    const t = e.target.closest("[data-tsel]");
+    if(t){ const set = t.dataset.tsel==="give" ? sel.give : sel.get; t.checked ? set.add(t.dataset.id) : set.delete(t.dataset.id); }
+    if(e.target.id==="trNote") noteSet(sel.rid, e.target.value.trim());
+  });
+  ov.addEventListener("click", e=>{
+    if(e.target===ov || e.target.closest("[data-trx]")) return ov.remove();
+    const bb = e.target.closest("[data-block]");
+    if(bb){ blockToggle(bb.dataset.block); const keep={r:sel.rid}; ov.innerHTML = build(); sel.give.clear(); sel.get.clear(); return; }
+    if(e.target.id==="trEval"){
+      const give = [...sel.give], get = [...sel.get];
+      if(!give.length && !get.length) return toast("Tick players on at least one side", {warn:true});
+      lastEv = tradeEvalRoster(give, get, sel.rid);
+      const o = document.getElementById("trOut");
+      o.innerHTML = '<div class="benchhead" style="color:var(--'+lastEv.verdict.cls+')">'+lastEv.verdict.label+'</div>'+
+        '<div class="sbply"><span>my lineup/wk</span><b class="mono" style="color:var(--'+(lastEv.me.delta>=0?'green':'red')+')">'+(lastEv.me.delta>=0?'+':'')+lastEv.me.delta+'</b></div>'+
+        '<div class="sbply"><span>their lineup/wk</span><b class="mono">'+(lastEv.them.delta>=0?'+':'')+lastEv.them.delta+'</b></div>'+
+        '<div class="sbply"><span>season value out/in</span><b class="mono">'+lastEv.rawOut+' / '+lastEv.rawIn+'</b></div>'+
+        '<div class="sbply" id="trOddsRow"><span>playoff odds impact</span><b class="mono">…</b></div>';
+      document.getElementById("trPng").style.display = "";
+      tradeOddsImpact(give, get, sel.rid).then(oi=>{                             // #693
+        const row = document.getElementById("trOddsRow");
+        if(row) row.innerHTML = '<span>playoff odds impact</span><b class="mono">'+(oi ? oi.before+'% → '+oi.after+'%' : 'n/a')+'</b>';
+      }).catch(()=>{});
+      return;
+    }
+    if(e.target.id==="trPng" && lastEv){
+      tradeCardPng(lastEv, [...sel.give].map(id=>byId[id].name), [...sel.get].map(id=>byId[id].name), ridName(sel.rid));
+    }
+  });
+}
+
 window.__mod = window.__mod || []; window.__mod.push("season.js");

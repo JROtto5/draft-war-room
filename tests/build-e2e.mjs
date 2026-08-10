@@ -98,6 +98,16 @@ try {
     localStorage.removeItem(LS_KEY+"-claims");
     return ok;
   }catch(e){ return false; }})()?"OK":"BAD"));
+  // Trade math runs offline on fixtures (#699)
+  out.push("trade:"+((()=>{try{
+    const ids=allPlayers().slice(0,16).map(p=>p.id), theirs=allPlayers().slice(16,32).map(p=>p.id);
+    const ev=tradeEvalRoster([ids[15]],[theirs[0]], 99, ids, theirs);
+    const v1=fairnessVerdict(5,-5), v2=fairnessVerdict(-5,5), v3=fairnessVerdict(0,0);
+    return ev && typeof ev.me.delta==="number" && ev.verdict && v1.label.includes("FLEECE") &&
+      v2.label.includes("DONATION") && v3.label.includes("FAIR") &&
+      typeof keeperValue(allPlayers()[0])==="number" && Array.isArray(blockToggle("zz")) && Array.isArray(blockToggle("zz")) &&
+      typeof renderTrades==="function" && typeof tradeCardPng==="function" && typeof seasonDossierHtml==="function";
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // My Week math runs offline on fixtures (#654)
   out.push("week:"+((()=>{try{
     const byId=idIndex(); const ids=allPlayers().slice(0,30).map(p=>p.id);

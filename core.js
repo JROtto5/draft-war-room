@@ -1426,6 +1426,7 @@ function openTeamPage(slot){
       }
       return h2;
     })() : '')+
+    (typeof seasonDossierHtml==="function" ? seasonDossierHtml(slot) : '')+   // season form (#694)
     '<div class="cacts"></div>';
   $("#cardOverlay").classList.add("show");
 }
