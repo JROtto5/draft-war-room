@@ -907,7 +907,8 @@ function seasonDossierHtml(slot){                                               
     const tx = (WAIV.tx||[]).filter(t=>t.rid===rid).slice(0,3);
     return '<div class="cintel" style="border-top:1px solid var(--line);margin-top:8px;padding-top:10px"><b>📅 Season form</b> · '+
       me.w+'-'+me.l+(me.t?'-'+me.t:'')+' ('+ordinal(place)+') · PF '+me.pf+(me.streak?' · '+esc(me.streak):'')+
-      (tx.length?'<br>🗞 '+tx.map(t=>(t.adds.length?'➕'+t.adds[0]:'')+(t.drops.length?' ➖'+t.drops[0]:'')).join(" · "):'')+'</div>';
+      (tx.length?'<br>🗞 '+tx.map(t=>(t.adds.length?'➕'+t.adds[0]:'')+(t.drops.length?' ➖'+t.drops[0]:'')).join(" · "):'')+
+      ' <button class="undo1" onclick="scoutReport('+rid+')">🕵️ full scout</button></div>';
   }catch(e){ return ""; }
 }
 function tradeCardPng(ev, giveNames, getNames, teamName){                        // #695
@@ -1691,7 +1692,8 @@ async function renderGamePlan(){                                                
   h += '<div class="benchhead" style="font-size:14px;color:var(--'+(wpPct>=55?'green':wpPct<=45?'red':'gold')+')">'+
     (md && md.opp ? 'vs '+esc(md.opp.name)+' · win prob '+wpPct+'%' : 'no matchup data yet')+
     (mode.mode==="ceiling" ? ' — YOU\'RE THE DOG. We go down swinging: boom-bust lineup, maximum variance. 🎢' :
-     mode.mode==="floor" ? ' — you\'re favored. Protect the lead: floor plays, no heroics. 🧱' : ' — dead even. Best players play. ⚖')+'</div>';
+     mode.mode==="floor" ? ' — you\'re favored. Protect the lead: floor plays, no heroics. 🧱' : ' — dead even. Best players play. ⚖')+
+    (md && md.opp ? ' <button class="undo1" onclick="scoutMyOpponent()">🕵️ scout them</button>' : '')+'</div>';
   h += moves.length ? '<div class="benchhead">📋 The moves ('+moves.filter(m=>ticks[m.k]).length+'/'+moves.length+' done)</div>'+
     moves.map(m=>'<div class="sbply" style="cursor:pointer'+(ticks[m.k]?';opacity:.5':'')+'" data-tick="'+m.k+'">'+
       '<span>'+(ticks[m.k]?'✅ ':'⬜ ')+esc(m.txt)+'</span><b style="color:var(--'+m.tag.c+')">'+m.tag.t+'</b></div>').join("")

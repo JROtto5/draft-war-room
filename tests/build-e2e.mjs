@@ -169,6 +169,18 @@ try {
       typeof hypeCard==="function" && typeof receiptsCard==="function" && typeof egoDash==="function" &&
       typeof pregameSpeech==="function" && typeof entranceSplash==="function" && typeof titleChaseHtml()==="string";
   }catch(e){ return false; }})()?"OK":"BAD"));
+  // Scouting math runs offline on fixtures (#784)
+  out.push("scout:"+((()=>{try{
+    const hist=[[{matchup_id:1,roster_id:1,points:100,starters:["1"],players:["1"],players_points:{"1":0}},
+                 {matchup_id:1,roster_id:2,points:90,starters:[],players:[],players_points:{}}]];
+    const tend=leagueTendencies([{type:"waiver",rids:[1],bid:12},{type:"trade",rids:[1,2]}], hist);
+    const h2h=h2hLedger(hist);
+    return Array.isArray(tend) && typeof h2hLedger==="function" && typeof h2h==="object" &&
+      (sloppinessOf(99,[])===null) && Array.isArray(strengthDelta(1)) &&
+      (kryptonite([])===null || typeof kryptonite([])==="object") &&
+      typeof scoutReport==="function" && typeof scoutCard==="function" && typeof scoutMyOpponent==="function" &&
+      Array.isArray(exploitFinder(1)) && typeof benchVsBench(1)==="object";
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // My Week math runs offline on fixtures (#654)
   out.push("week:"+((()=>{try{
     const byId=idIndex(); const ids=allPlayers().slice(0,30).map(p=>p.id);

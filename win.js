@@ -306,6 +306,191 @@ function entranceSplash(){                                                      
     ov.addEventListener("click", e=>{ if(e.target===ov || e.target.closest("[data-entgo]")) ov.remove(); });
   }catch(e){}
 }
-function hypeTick(){ streakChipUpdate(); victoryLap(); oppCrumbleWatch(); entranceSplash(); }
+function hypeTick(){ streakChipUpdate(); victoryLap(); oppCrumbleWatch(); entranceSplash(); scoutDigest(); }
+
+/* ---------- R47 Opponent scouting (#770–#784) ---------- */
+function sloppinessOf(rid, hist){                                                // pure (#772)
+  const byId = idIndex();
+  const effs = (hist||[]).map(wm=>(wm||[]).find(x=>+x.roster_id===+rid)).filter(Boolean)
+    .map(m=>lineupEffOf(m, byId)).filter(Boolean);
+  if(!effs.length) return null;
+  const avg = Math.round(effs.reduce((a,e2)=>a+e2.eff,0)/effs.length);
+  const left = Math.round(effs.reduce((a,e2)=>a+(e2.opt-e2.actual),0)*10)/10;
+  return {eff:avg, left, weeks:effs.length};
+}
+function posStrengthOf(ids, byId){
+  const ps = ids.map(id=>byId[id]).filter(Boolean);
+  const top = (pos,n)=>ps.filter(p=>p.pos===pos).sort((a,b)=>b.proj-a.proj).slice(0,n).reduce((a,p)=>a+p.proj,0);
+  return {QB:top("QB",2), RB:top("RB",3), WR:top("WR",3), TE:top("TE",2)};
+}
+function strengthDelta(rid){                                                     // #778
+  const byId = idIndex();
+  const mine = posStrengthOf(rosterIds(), byId);
+  const theirs = posStrengthOf(leagueRosterIds(rid), byId);
+  return ["QB","RB","WR","TE"].map(pos=>({pos, me:Math.round(mine[pos]), them:Math.round(theirs[pos]),
+    d:Math.round(mine[pos]-theirs[pos])}));
+}
+function benchVsBench(rid){                                                      // #779
+  const byId = idIndex();
+  const mineBs = bestStarters(rosterIds(), byId);
+  const theirIds = leagueRosterIds(rid);
+  const theirBs = bestStarters(theirIds, byId);
+  const myBench = rosterIds().map(id=>byId[id]).filter(Boolean).filter(p=>!mineBs.starterIds.has(p.id)&&p.pos!=="DEF");
+  const wouldStart = myBench.filter(b=>{
+    const theirWorst = [...theirBs.starterIds].map(id=>byId[id]).filter(Boolean).filter(p=>p.pos===b.pos).sort((a,b2)=>a.proj-b2.proj)[0];
+    return theirWorst && b.proj>theirWorst.proj;
+  });
+  return {myBenchN:myBench.length, wouldStart};
+}
+function exploitFinder(rid){                                                     // #773
+  const byId = idIndex(), w = curWeek(), out = [];
+  const theirIds = leagueRosterIds(rid).map(id=>byId[id]).filter(Boolean);
+  for(let fw=Math.max(w,5); fw<=14; fw++){
+    const outP = theirIds.filter(p=>typeof BYES!=="undefined" && BYES[p.team]===fw);
+    if(outP.length>=3) out.push({w:fw, kind:"bye crunch", note:outP.length+" starters-ish on bye ("+outP.slice(0,3).map(p=>p.name.split(" ").slice(-1)[0]).join(", ")+")"});
+  }
+  const sd = strengthDelta(rid);
+  const weakest = sd.slice().sort((a,b)=>a.them-b.them)[0];
+  if(weakest) out.push({w:null, kind:"thin room", note:"weakest at "+weakest.pos+" — dangle "+weakest.pos+" depth in trades, overprice it"});
+  return out.slice(0,4);
+}
+function leagueTendencies(txAll, hist){                                          // pure (#774)
+  const byId = idIndex();
+  const rows = {};
+  (SCOREB.rosters||[]).forEach(r=>{ rows[r.roster_id] = {rid:r.roster_id, name:ridName(r.roster_id), faab:0, claims:0, trades:0, zeros:0}; });
+  (txAll||[]).forEach(t=>{
+    const rid = t.rids && t.rids[0];
+    if(!rows[rid]) return;
+    if(t.type==="trade") t.rids.forEach(r2=>{ if(rows[r2]) rows[r2].trades++; });
+    else { rows[rid].claims++; rows[rid].faab += t.bid||0; }
+  });
+  const s2o = sleeperToOurs();
+  (hist||[]).forEach(wm=>(wm||[]).forEach(m=>{
+    if(!rows[m.roster_id] || !m.players_points) return;
+    (m.starters||[]).forEach(sid=>{
+      const oid = s2o[String(sid)];
+      if(oid && (+m.players_points[sid]||0)===0) rows[m.roster_id].zeros++;
+    });
+  }));
+  return Object.values(rows);
+}
+function h2hLedger(hist){                                                        // pure (#775)
+  const myRid = +S.settings.sleeperRosterId, out = {};
+  (hist||[]).forEach((wm,wi)=>{
+    const m = (wm||[]).find(x=>+x.roster_id===myRid); if(!m) return;
+    const opp = (wm||[]).find(x=>x.matchup_id===m.matchup_id && +x.roster_id!==myRid); if(!opp) return;
+    const o = out[opp.roster_id] = out[opp.roster_id] || {rid:opp.roster_id, w:0, l:0, games:[]};
+    if(m.points>opp.points) o.w++; else if(m.points<opp.points) o.l++;
+    o.games.push("W"+(wi+1)+" "+(m.points>opp.points?"W":"L")+" "+m.points.toFixed(0)+"–"+opp.points.toFixed(0));
+  });
+  return out;
+}
+function kryptonite(hist){                                                       // #776
+  const myRid = +S.settings.sleeperRosterId, byId = idIndex(), s2o = sleeperToOurs();
+  const mine = {}, minG = {};
+  (hist||[]).forEach(wm=>{
+    const m = (wm||[]).find(x=>+x.roster_id===myRid); if(!m || !m.players_points) return;
+    (m.starters||[]).forEach(sid=>{
+      const p = byId[s2o[String(sid)]]; if(!p) return;
+      mine[p.pos] = (mine[p.pos]||0) + (+m.players_points[sid]||0);
+      minG[p.pos] = (minG[p.pos]||0) + 1;
+    });
+  });
+  const rows = Object.keys(mine).filter(pos=>pos!=="DEF" && minG[pos]>=3)
+    .map(pos=>({pos, avg:Math.round(mine[pos]/minG[pos]*10)/10}));
+  if(!rows.length) return null;
+  return rows.sort((a,b)=>a.avg-b.avg)[0];
+}
+async function scoutReport(rid){                                                 // #770
+  const old = document.getElementById("scOverlay"); if(old){ old.remove(); return; }
+  if(!SCOREB.rosters) await leagueWeekData(false);
+  if(!SCOREB.rosters) return toast("Link your Sleeper league first", {warn:true});
+  const byId = idIndex(), w = curWeek();
+  const hist = await leagueHistory();
+  const txAll = await txHistory();
+  const name = ridName(rid);
+  const theirIds = leagueRosterIds(rid);
+  const theirBs = bestStartersWeek(theirIds, byId, w);
+  const slop = sloppinessOf(rid, hist);
+  const sd = strengthDelta(rid);
+  const bb = benchVsBench(rid);
+  const exps = exploitFinder(rid);
+  const tend = leagueTendencies(txAll, hist).find(r=>+r.rid===+rid);
+  const h2h = h2hLedger(hist)[rid];
+  const hurt = theirIds.map(id=>byId[id]).filter(Boolean).map(p=>({p, e:injuryOf(p)})).filter(x=>x.e)
+    .map(x=>({...x, sv:injSeverity(x.e.s)}));
+  const kr = kryptonite(hist);
+  const mx = Math.max(...sd.map(x=>Math.max(x.me, x.them)), 1);
+  const ov = document.createElement("div"); ov.id = "scOverlay"; ov.className = "snov";
+  let h = '<div class="sbcard" role="dialog" aria-label="Scouting report"><button class="sbx" data-scx="1">✕</button>';
+  h += '<div class="tag">🕵️ SCOUTING REPORT: '+esc(name)+'</div>';
+  h += '<div class="sbply"><span>week '+w+' optimal projection</span><b class="mono">'+fmt(theirBs.pts)+'</b></div>';
+  if(slop) h += '<div class="sbply"><span>😴 Sloppiness index</span><b>'+slop.eff+'% efficiency · '+slop.left+' pts left on bench over '+slop.weeks+' wks</b></div>';
+  if(h2h && (h2h.w+h2h.l)>0) h += '<div class="sbply"><span>📒 Head-to-head</span><b>'+h2h.w+'-'+h2h.l+' <span class="dimtxt">'+esc(h2h.games.join(" · "))+'</span></b></div>';
+  h += '<div class="benchhead">⚖ Position by position (me ▲ vs them ▼)</div>'+sd.map(x=>
+    '<div class="sbrow"><div class="sbteam"><span>'+x.pos+'</span><b class="mono" style="color:var(--'+(x.d>=0?'green':'red')+')">'+(x.d>=0?'+':'')+x.d+'</b></div>'+
+    '<div class="sbbar"><i style="width:'+Math.round(x.me/mx*100)+'%"></i></div>'+
+    '<div class="sbbar red"><i style="width:'+Math.round(x.them/mx*100)+'%"></i></div></div>').join("");
+  if(bb.wouldStart.length) h += '<div class="benchhead">🪑 My bench players who would START for them: '+bb.wouldStart.map(p=>esc(p.name.split(" ").slice(-1)[0])).join(", ")+'</div>';
+  if(hurt.length) h += '<div class="benchhead">🩹 Their infirmary</div><div class="scarce">'+
+    hurt.map(x=>'<span class="scpill">'+esc(x.p.name)+' <span class="'+x.sv.cls+'">'+x.sv.code+'</span></span>').join("")+'</div>';
+  if(exps.length) h += '<div class="benchhead">🎯 Exploits</div>'+exps.map(x=>
+    '<div class="sbply"><span>'+(x.w?'W'+x.w+' — ':'')+x.kind+'</span><span class="dimtxt">'+esc(x.note)+'</span></div>').join("");
+  if(tend) h += '<div class="sbply"><span>🎰 Tendencies</span><b>$'+tend.faab+' FAAB spent · '+tend.claims+' claims · '+tend.trades+' trades'+(tend.zeros?' · '+tend.zeros+' zero-point starters(!)':'')+'</b></div>';
+  if(kr) h += '<div class="sbply"><span>☠ My kryptonite (self-scout)</span><b>'+kr.pos+' averaging '+kr.avg+'/start — feed it or fix it</b></div>';
+  h += '<div style="padding:10px 0"><button class="hbtn" id="scPng">📤 Share the beatdown</button> <button class="hbtn" id="scTalk">🗣 Talk</button></div><div id="scOut"></div></div>';
+  ov.innerHTML = h;
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{
+    if(e.target===ov || e.target.closest("[data-scx]")) return ov.remove();
+    if(e.target.id==="scPng") scoutCard(name, sd, slop);                          // #781
+    if(e.target.id==="scTalk"){
+      const line = slop && slop.eff<92 ? esc(name)+" has donated "+slop.left+" points to their own bench this season. Charity is beautiful."
+        : trashTalk();
+      document.getElementById("scOut").innerHTML = '<div class="benchhead">'+line+'</div>';
+    }
+  });
+}
+function scoutCard(name, sd, slop){                                              // #781
+  const c = document.createElement("canvas"); c.width = 1000; c.height = 700;
+  const x = c.getContext("2d");
+  x.fillStyle = "#0b0f14"; x.fillRect(0,0,1000,700);
+  x.fillStyle = "#e5484d"; x.font = "bold 46px sans-serif"; x.fillText("SCOUTED: "+name, 40, 80);
+  x.fillStyle = "#8b98a9"; x.font = "24px sans-serif"; x.fillText("by the Otto5 war room · week "+curWeek(), 40, 118);
+  const mx = Math.max(...sd.map(r=>Math.max(r.me, r.them)), 1);
+  sd.forEach((r,i)=>{
+    const y2 = 190+i*110;
+    x.fillStyle = "#e8eef5"; x.font = "bold 30px sans-serif"; x.fillText(r.pos, 40, y2);
+    x.fillStyle = "#2fd47a"; x.fillRect(130, y2-24, Math.round(r.me/mx*700), 22);
+    x.fillStyle = "#e5484d"; x.fillRect(130, y2+4, Math.round(r.them/mx*700), 22);
+    x.fillStyle = r.d>=0 ? "#2fd47a" : "#e5484d"; x.font = "bold 26px sans-serif";
+    x.fillText((r.d>=0?"+":"")+r.d, 860, y2+4);
+  });
+  x.fillStyle = "#f0b429"; x.font = "bold 30px sans-serif";
+  x.fillText(slop && slop.eff<92 ? "They also left "+slop.left+" pts on their bench this year. 😴" : "The bars don't lie.", 40, 660);
+  c.toBlob(b=>{
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(b); a.download = "scout-"+name.replace(/\W+/g,"-")+".png"; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+  });
+  toast("📤 Scout card downloaded");
+}
+function scoutMyOpponent(){                                                      // #771
+  const md = WEEKST.mate;
+  if(!md || !md.opp) return toast("No opponent found this week", {warn:true});
+  scoutReport(md.opp.rid);
+}
+function scoutDigest(){                                                          // #783
+  try{
+    if(new Date().getDay()!==3) return;
+    const md = WEEKST.mate; if(!md || !md.opp) return;
+    const k = LS_KEY+"-scdig"+curWeek();
+    if(localStorage.getItem(k)) return;
+    localStorage.setItem(k, "1");
+    const slop = sloppinessOf(md.opp.rid, seasonArchive());
+    alertFire("scout", "🕵️ Scout ready: "+md.opp.name,
+      slop ? "They run at "+slop.eff+"% lineup efficiency — the read is in the Ego deck" : "Full report in the war room");
+  }catch(e){}
+}
 
 window.__mod = window.__mod || []; window.__mod.push("win.js");

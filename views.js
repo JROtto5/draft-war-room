@@ -515,6 +515,7 @@ const PALETTE_ACTIONS = [
   ["😤 Ego dashboard", ()=>egoDash()],
   ["🔥 Hype card", ()=>hypeCard()],
   ["🗣 Trash talk", ()=>{ toast(trashTalk()); }],
+  ["🕵️ Scout my opponent", ()=>scoutMyOpponent()],
   ["🏆 Standings", ()=>renderScoreboard()],
   ["⚔ My matchup", ()=>renderScoreboard()],
   ["🩺 Injury Center", ()=>document.getElementById("injBtn").click()],
