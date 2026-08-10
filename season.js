@@ -1155,6 +1155,7 @@ function oppNewsAlert(){                                                        
 function gameDayChecks(){                                                         // called from the scoreboard loop
   inactiveSweep(); scoreAlerts(); closeGameAlert(); oppNewsAlert(); updateActionBadge();
   if(typeof planNag==='function') planNag();
+  if(typeof journalRecord==='function') journalRecord();
 }
 function seasonTicker(){                                                          // #701
   let tk = document.getElementById("ticker");
@@ -1501,6 +1502,7 @@ function seasonDeckHtml(){                                                      
   const btn = (fn, ico, lab, title)=>'<button class="hbtn deckbtn" onclick="'+fn+'" title="'+(title||lab)+'"><span class="dicon">'+ico+'</span><span class="dlab">'+lab+'</span></button>';
   return '<div class="actions" id="seasonDeck" role="navigation" aria-label="Season navigation">'+
     btn("renderGamePlan()","🏆","Plan","This week's game plan — G")+
+    btn("renderSim()","🎲","Sim","1,000 simulated Sundays — M")+
     btn("renderScoreboard()","📊","Scores","League scoreboard, standings, playoff odds — S")+
     btn("renderWaivers()","📥","Waivers","Waiver wire war room — V")+
     btn("renderTrades()","🔁","Trades","Trade center — D")+
@@ -1538,6 +1540,7 @@ document.addEventListener("keydown", e=>{                                       
   else if(k==="v"){ e.preventDefault(); renderWaivers(); }
   else if(k==="d"){ e.preventDefault(); renderTrades(); }
   else if(k==="x"){ e.preventDefault(); renderSeasonStats(); }
+  else if(k==="m"){ e.preventDefault(); e.stopImmediatePropagation(); if(typeof renderSim==="function") renderSim(); }
   else if(k==="w"){ e.preventDefault(); const h2 = document.getElementById("hero"); if(h2) h2.scrollIntoView({behavior:"smooth", block:"start"}); }
 });
 
@@ -1693,7 +1696,7 @@ async function renderGamePlan(){                                                
     (md && md.opp ? 'vs '+esc(md.opp.name)+' · win prob '+wpPct+'%' : 'no matchup data yet')+
     (mode.mode==="ceiling" ? ' — YOU\'RE THE DOG. We go down swinging: boom-bust lineup, maximum variance. 🎢' :
      mode.mode==="floor" ? ' — you\'re favored. Protect the lead: floor plays, no heroics. 🧱' : ' — dead even. Best players play. ⚖')+
-    (md && md.opp ? ' <button class="undo1" onclick="scoutMyOpponent()">🕵️ scout them</button>' : '')+'</div>';
+    (md && md.opp ? ' <span id="gpSimWp" class="dimtxt"></span> <button class="undo1" onclick="scoutMyOpponent()">🕵️ scout them</button>' : '')+'</div>';
   h += moves.length ? '<div class="benchhead">📋 The moves ('+moves.filter(m=>ticks[m.k]).length+'/'+moves.length+' done)</div>'+
     moves.map(m=>'<div class="sbply" style="cursor:pointer'+(ticks[m.k]?';opacity:.5':'')+'" data-tick="'+m.k+'">'+
       '<span>'+(ticks[m.k]?'✅ ':'⬜ ')+esc(m.txt)+'</span><b style="color:var(--'+m.tag.c+')">'+m.tag.t+'</b></div>').join("")
@@ -1723,6 +1726,10 @@ async function renderGamePlan(){                                                
       (sw2.swing>=25 ? '🔥 '+sw2.swing+'% playoff swing — SEASON GAME' : sw2.swing+'% playoff swing (W: '+sw2.win+'% · L: '+sw2.lose+'%)')+'</b>';
     else if(row) row.remove();
   }).catch(()=>{ const row = document.getElementById("gpSwing"); if(row) row.remove(); });
+  try{ const sr = (typeof simMatchup==="function") ? simMatchup(600) : null;      // #794
+    const el = document.getElementById("gpSimWp");
+    if(el && sr) el.textContent = "· sim says "+Math.round(sr.wp*100)+"%";
+  }catch(e2){}
   ov.addEventListener("click", e=>{
     if(e.target===ov || e.target.closest("[data-gpx]")) return ov.remove();
     const tk = e.target.closest("[data-tick]");

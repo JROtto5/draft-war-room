@@ -493,4 +493,241 @@ function scoutDigest(){                                                         
   }catch(e){}
 }
 
+/* ---------- R48 Matchup Monte Carlo (#785–#799) ---------- */
+const SIM = {cache:{}, lastKey:null};
+function normSample(rng){ return (rng()+rng()+rng()+rng()-2)*1.732; }            // ~N(0,1), cheap (#797)
+function buildSimLine(bs){                                                       // #786 stack correlation flags
+  const teams = {};
+  bs.line.filter(sl=>sl.p && sl.wp>0).forEach(sl=>{ teams[sl.p.team] = (teams[sl.p.team]||0)+1; });
+  return bs.line.filter(sl=>sl.p && sl.wp>0).map(sl=>({
+    name:sl.p.name, mu:sl.wp, sd:Math.min(playerVariance(sl.p), Math.max(2, sl.wp*1.1)),
+    team:sl.p.team, corr:teams[sl.p.team]>1
+  }));
+}
+function simSides(myLine, oppLine, n, seed){                                     // pure core (#785)
+  const rng = (typeof mulberry32==="function") ? mulberry32(seed==null?1234:seed) : Math.random;
+  const my = new Float64Array(n), opp = new Float64Array(n);
+  let wins = 0;
+  const mN = myLine.length, oN = oppLine.length;
+  const aboveN = new Float64Array(mN), aboveW = new Float64Array(mN);
+  for(let s2=0; s2<n; s2++){
+    const shA = {}, shB = {};
+    let a = 0, b = 0;
+    for(let i=0; i<mN; i++){
+      const pl = myLine[i];
+      let z = normSample(rng);
+      if(pl.corr){ if(shA[pl.team]==null) shA[pl.team] = normSample(rng); z = 0.75*z + 0.55*shA[pl.team]; }
+      const v = Math.max(0, pl.mu + z*pl.sd);
+      a += v;
+      if(v>pl.mu) aboveN[i]++;
+    }
+    for(let i=0; i<oN; i++){
+      const pl = oppLine[i];
+      let z = normSample(rng);
+      if(pl.corr){ if(shB[pl.team]==null) shB[pl.team] = normSample(rng); z = 0.75*z + 0.55*shB[pl.team]; }
+      b += Math.max(0, pl.mu + z*pl.sd);
+    }
+    my[s2] = a; opp[s2] = b;
+    if(a>b){ wins++; for(let i=0;i<mN;i++){ const pl=myLine[i]; /* re-derive above? cheap flag: */ } }
+  }
+  // second pass for leverage (#791): correlate "player beat his mean" with wins
+  const wp = wins/n;
+  // percentile + margins
+  const sortedMy = Array.from(my).sort((x,y)=>x-y);
+  let blow = 0, blown = 0, close = 0;
+  for(let s2=0; s2<n; s2++){
+    const d = my[s2]-opp[s2];
+    if(d>=30) blow++; else if(d<=-30) blown++;
+    if(Math.abs(d)<=9) close++;
+  }
+  return {wp, n,
+    p10:Math.round(sortedMy[Math.floor(n*0.1)]*10)/10,
+    p50:Math.round(sortedMy[Math.floor(n*0.5)]*10)/10,
+    p90:Math.round(sortedMy[Math.floor(n*0.9)]*10)/10,
+    blow:Math.round(blow/n*100), blown:Math.round(blown/n*100), close:Math.round(close/n*100),
+    my, opp};
+}
+function simLeverage(myLine, oppLine, n, seed){                                  // #791
+  const rng = (typeof mulberry32==="function") ? mulberry32((seed==null?1234:seed)+7) : Math.random;
+  const mN = myLine.length;
+  const upN = new Float64Array(mN), upW = new Float64Array(mN);
+  let wins = 0;
+  for(let s2=0; s2<n; s2++){
+    const shA = {}, shB = {}, vals = new Float64Array(mN);
+    let a = 0, b = 0;
+    for(let i=0; i<mN; i++){
+      const pl = myLine[i];
+      let z = normSample(rng);
+      if(pl.corr){ if(shA[pl.team]==null) shA[pl.team] = normSample(rng); z = 0.75*z + 0.55*shA[pl.team]; }
+      vals[i] = Math.max(0, pl.mu + z*pl.sd); a += vals[i];
+    }
+    for(let i=0; i<oppLine.length; i++){
+      const pl = oppLine[i];
+      let z = normSample(rng);
+      if(pl.corr){ if(shB[pl.team]==null) shB[pl.team] = normSample(rng); z = 0.75*z + 0.55*shB[pl.team]; }
+      b += Math.max(0, pl.mu + z*pl.sd);
+    }
+    const won = a>b; if(won) wins++;
+    for(let i=0; i<mN; i++) if(vals[i]>myLine[i].mu){ upN[i]++; if(won) upW[i]++; }
+  }
+  const wp = wins/n;
+  return myLine.map((pl,i)=>({name:pl.name, lev:Math.round(((upN[i]?upW[i]/upN[i]:wp)-wp)*1000)/10}))
+    .sort((x,y)=>y.lev-x.lev);
+}
+function simKey(){
+  const md = WEEKST.mate;
+  const ids = (md && md.opp) ? rosterIds().join(",")+"|"+md.opp.ids.join(",") : "solo";
+  return curWeek()+":"+ids.length+":"+ids.slice(0,80);
+}
+function simMatchup(n, fresh){                                                   // #785/#796
+  const md = WEEKST.mate;
+  if(!md || !md.opp) return null;
+  const key = simKey()+":"+n;
+  if(!fresh && SIM.cache[key]) return SIM.cache[key];
+  const byId = idIndex(), w = curWeek();
+  const myBs = bestStartersWeek(rosterIds(), byId, w);
+  const opBs = bestStartersWeek(md.opp.ids, byId, w);
+  const myLine = buildSimLine(myBs), opLine = buildSimLine(opBs);
+  if(!myLine.length || !opLine.length) return null;
+  const seed = w*1000 + myLine.length*17 + opLine.length;
+  const r = simSides(myLine, opLine, n||1000, seed);
+  r.lev = simLeverage(myLine, opLine, Math.min(600, n||600), seed);
+  r.myBs = myBs; r.opBs = opBs;
+  SIM.cache[key] = r; SIM.lastKey = key;
+  return r;
+}
+function simBestLineup(){                                                        // #788
+  const md = WEEKST.mate;
+  if(!md || !md.opp) return null;
+  const byId = idIndex(), w = curWeek();
+  const opLine = buildSimLine(bestStartersWeek(md.opp.ids, byId, w));
+  const base = bestStartersWeek(rosterIds(), byId, w);
+  const variants = [{label:"projection-optimal", bs:base}];
+  ["FLEX","SFLX"].forEach(lab=>{
+    const slot = base.line.find(sl=>sl.lab===lab);
+    if(!slot || !slot.p) return;
+    const poss = lab==="FLEX" ? ["RB","WR","TE"] : ["QB","RB","WR","TE"];
+    rosterIds().map(id=>byId[id]).filter(Boolean)
+      .filter(p=>poss.includes(p.pos) && !base.starterIds.has(p.id) && weekProj(p,w)>0)
+      .sort((a,b)=>weekProj(b,w)-weekProj(a,w)).slice(0,2)
+      .forEach(p=>{
+        const fix = {};
+        rosterIds().map(id=>byId[id]).filter(Boolean).forEach(q=>{ fix[q.id] = weekProj(q,w); });
+        fix[slot.p.id] = 0; fix[p.id] = Math.max(fix[p.id], 0.1);
+        const bs2 = bestStartersWeek(rosterIds(), byId, w, fix);
+        bs2.line.forEach(sl=>{ if(sl.p) sl.wp = weekProj(sl.p, w); });
+        variants.push({label:lab+": "+p.name.split(" ").slice(-1)[0]+" over "+slot.p.name.split(" ").slice(-1)[0], bs:bs2});
+      });
+  });
+  const seed = w*991;
+  return variants.map(v=>{
+    const line = buildSimLine(v.bs);
+    const r = simSides(line, opLine, 400, seed);
+    return {label:v.label, wp:Math.round(r.wp*1000)/10, pts:Math.round(v.bs.line.reduce((a,s)=>a+(s.wp||0),0)*10)/10};
+  }).sort((a,b)=>b.wp-a.wp);
+}
+function journalRecord(){                                                        // #792
+  try{
+    if(new Date().getDay()!==0) return;
+    const md = WEEKST.mate; if(!md || !md.me || !md.me.starters) return;
+    const w = curWeek(), k = LS_KEY+"-djournal";
+    let j = []; try{ j = JSON.parse(localStorage.getItem(k)||"[]"); }catch(e){}
+    if(j.some(x=>x.w===w)) return;
+    const byId = idIndex();
+    const bs = bestStartersWeek(rosterIds(), byId, w);
+    const actual = new Set(md.me.starters.filter(Boolean));
+    const diffs = [...bs.starterIds].filter(id=>!actual.has(id)).map(id=>({eng:id, mine:null}));
+    const mineOnly = [...actual].filter(id=>!bs.starterIds.has(id));
+    diffs.forEach((d,i)=>{ d.mine = mineOnly[i]||null; });
+    j.push({w, agree:diffs.length===0, diffs:diffs.filter(d=>d.mine)});
+    localStorage.setItem(k, JSON.stringify(j.slice(-18)));
+  }catch(e){}
+}
+function journalOutcomes(hist){                                                  // #792
+  let j = []; try{ j = JSON.parse(localStorage.getItem(LS_KEY+"-djournal")||"[]"); }catch(e){ return null; }
+  if(!j.length) return null;
+  const pw = playerWeekly(hist||seasonArchive());
+  let meBetter = 0, engBetter = 0;
+  j.forEach(x=>x.diffs.forEach(d=>{
+    const mp = (pw[d.mine]||[])[x.w-1], ep = (pw[d.eng]||[])[x.w-1];
+    if(mp==null || ep==null) return;
+    if(mp>ep) meBetter++; else if(ep>mp) engBetter++;
+  }));
+  return {logged:j.length, meBetter, engBetter};
+}
+function benchRegret(hist){                                                      // pure (#793)
+  const myRid = +S.settings.sleeperRosterId, s2o = sleeperToOurs(), byId = idIndex();
+  let total = 0; const rows = [];
+  (hist||[]).forEach((wm,wi)=>{
+    const m = (wm||[]).find(x=>+x.roster_id===myRid); if(!m || !m.players_points) return;
+    const st = new Set(m.starters||[]);
+    const benched = (m.players||[]).filter(sid=>!st.has(sid)).map(sid=>({sid, got:+m.players_points[sid]||0, p:byId[s2o[String(sid)]]})).filter(x=>x.p && x.p.pos!=="DEF");
+    const started = (m.starters||[]).map(sid=>({sid, got:+m.players_points[sid]||0, p:byId[s2o[String(sid)]]})).filter(x=>x.p && x.p.pos!=="DEF");
+    if(!benched.length || !started.length) return;
+    const bestB = benched.sort((a,b)=>b.got-a.got)[0];
+    const worstS = started.filter(x=>["RB","WR","TE"].includes(x.p.pos)||bestB.p.pos===x.p.pos).sort((a,b)=>a.got-b.got)[0];
+    if(bestB && worstS && bestB.got>worstS.got+2){
+      total += bestB.got-worstS.got;
+      rows.push({w:wi+1, txt:"W"+(wi+1)+": "+bestB.p.name+" ("+bestB.got.toFixed(1)+") rode pine over "+worstS.p.name+" ("+worstS.got.toFixed(1)+")"});
+    }
+  });
+  return {total:Math.round(total*10)/10, rows:rows.slice(-4)};
+}
+function simHistSvg(r){                                                          // #787
+  const BINS = 26;
+  const all = [...r.my, ...r.opp];
+  let mn = Infinity, mx = -Infinity;
+  all.forEach(v=>{ if(v<mn) mn = v; if(v>mx) mx = v; });
+  const span = Math.max(1, mx-mn);
+  const bin = arr=>{
+    const b = new Array(BINS).fill(0);
+    arr.forEach(v=>{ b[Math.min(BINS-1, Math.floor((v-mn)/span*BINS))]++; });
+    return b;
+  };
+  const bm = bin(r.my), bo = bin(r.opp);
+  const peak = Math.max(...bm, ...bo, 1);
+  const W = 300, H = 70, bw = W/BINS;
+  const bars = (b,color,op)=>b.map((v,i)=>'<rect x="'+Math.round(i*bw)+'" y="'+Math.round(H-(v/peak*H))+'" width="'+Math.ceil(bw-1)+'" height="'+Math.round(v/peak*H)+'" fill="'+color+'" opacity="'+op+'"/>').join("");
+  return '<svg width="100%" viewBox="0 0 '+W+' '+(H+16)+'" role="img" aria-label="score distributions">'+
+    bars(bo,"var(--red)",0.55)+bars(bm,"var(--green)",0.6)+
+    '<text x="2" y="'+(H+12)+'" fill="var(--dim)" font-size="9">'+Math.round(mn)+'</text>'+
+    '<text x="'+(W-24)+'" y="'+(H+12)+'" fill="var(--dim)" font-size="9">'+Math.round(mx)+'</text></svg>';
+}
+async function renderSim(){                                                      // #795
+  const old = document.getElementById("simOverlay"); if(old){ old.remove(); return; }
+  await Promise.all([refreshWeek(), myLiveIds(), myWeekData()]);
+  const r = simMatchup(1000);
+  if(!r) return toast("Need a matchup to simulate — link your league", {warn:true});
+  const md = WEEKST.mate;
+  const hist = seasonArchive();
+  const variants = simBestLineup();
+  const jo = journalOutcomes(hist);
+  const br = hist.length ? benchRegret(hist) : null;
+  const wpPct = Math.round(r.wp*1000)/10;
+  const ov = document.createElement("div"); ov.id = "simOverlay"; ov.className = "snov";
+  let h = '<div class="sbcard" role="dialog" aria-label="Matchup simulator"><button class="sbx" data-smx="1">✕</button>';
+  h += '<div class="tag">🎲 1,000 SIMULATED SUNDAYS — vs '+esc(md.opp.name)+'</div>';
+  h += '<div class="benchhead" style="font-size:16px;color:var(--'+(wpPct>=55?'green':wpPct<=45?'red':'gold')+')">You win '+wpPct+'% of them</div>';
+  h += simHistSvg(r);
+  h += '<div class="sbply"><span>your range (p10 / median / p90)</span><b class="mono">'+r.p10+' / '+r.p50+' / '+r.p90+'</b></div>';
+  h += '<div class="sbply"><span>💥 blowout W'+r.blow+'% · 😱 blowout L '+r.blown+'% · 😰 one-score '+r.close+'%</span></div>';
+  if(r.lev && r.lev.length) h += '<div class="benchhead">🎯 Highest leverage: '+esc(r.lev[0].name)+' (+'+r.lev[0].lev+'% win when he beats his number)'+
+    (r.lev[1]?' · '+esc(r.lev[1].name)+' +'+r.lev[1].lev+'%':'')+'</div>';
+  if(variants && variants.length>1){
+    h += '<div class="benchhead">🧪 Lineup variants, judged by WIN RATE not points</div>'+variants.slice(0,4).map((v,i)=>
+      '<div class="sbply"'+(i===0?' style="color:var(--green)"':'')+'><span>'+(i===0?'✓ ':'')+esc(v.label)+' <span class="dimtxt">'+v.pts+' proj</span></span><b class="mono">'+v.wp+'%</b></div>').join("");
+    if(variants[0].label!=="projection-optimal") h += '<div class="benchhead" style="color:var(--gold)">⚡ The sim disagrees with raw projections — variance is strategy</div>';
+  }
+  if(jo && (jo.meBetter+jo.engBetter)>0) h += '<div class="sbply"><span>📓 Decision journal (you vs engine)</span><b class="mono">'+jo.meBetter+'–'+jo.engBetter+'</b></div>';
+  if(br && br.rows.length) h += '<div class="benchhead">😭 Bench regret: '+br.total+' pts this season</div>'+
+    br.rows.map(x=>'<div class="sbply"><span class="dimtxt">'+esc(x.txt)+'</span></div>').join("");
+  h += '<div style="padding:10px 0"><button class="hbtn" id="simRerun">🎲 Re-run fresh</button></div></div>';
+  ov.innerHTML = h;
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{
+    if(e.target===ov || e.target.closest("[data-smx]")) return ov.remove();
+    if(e.target.id==="simRerun"){ SIM.cache = {}; ov.remove(); renderSim(); }
+  });
+}
+
 window.__mod = window.__mod || []; window.__mod.push("win.js");

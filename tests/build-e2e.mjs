@@ -181,6 +181,18 @@ try {
       typeof scoutReport==="function" && typeof scoutCard==="function" && typeof scoutMyOpponent==="function" &&
       Array.isArray(exploitFinder(1)) && typeof benchVsBench(1)==="object";
   }catch(e){ return false; }})()?"OK":"BAD"));
+  // Simulator determinism on fixtures (#799)
+  out.push("sim:"+((()=>{try{
+    const L1=[{name:"A",mu:20,sd:6,team:"BUF",corr:false},{name:"B",mu:15,sd:5,team:"KC",corr:true},{name:"C",mu:12,sd:8,team:"KC",corr:true}];
+    const L2=[{name:"D",mu:18,sd:6,team:"SF",corr:false},{name:"E",mu:16,sd:7,team:"DAL",corr:false}];
+    const r1=simSides(L1,L2,800,7), r2=simSides(L1,L2,800,7);
+    const lev=simLeverage(L1,L2,300,7);
+    const br=benchRegret([]);
+    return r1.wp===r2.wp && r1.wp>0 && r1.wp<1 && r1.p10<r1.p90 &&
+      Array.isArray(lev) && lev.length===3 && typeof simHistSvg(r1)==="string" &&
+      typeof renderSim==="function" && typeof simBestLineup==="function" &&
+      br.total===0 && (journalOutcomes([])===null || typeof journalOutcomes([])==="object");
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // My Week math runs offline on fixtures (#654)
   out.push("week:"+((()=>{try{
     const byId=idIndex(); const ids=allPlayers().slice(0,30).map(p=>p.id);

@@ -516,6 +516,7 @@ const PALETTE_ACTIONS = [
   ["🔥 Hype card", ()=>hypeCard()],
   ["🗣 Trash talk", ()=>{ toast(trashTalk()); }],
   ["🕵️ Scout my opponent", ()=>scoutMyOpponent()],
+  ["🎲 Simulate my matchup", ()=>renderSim()],
   ["🏆 Standings", ()=>renderScoreboard()],
   ["⚔ My matchup", ()=>renderScoreboard()],
   ["🩺 Injury Center", ()=>document.getElementById("injBtn").click()],
