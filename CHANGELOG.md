@@ -1,5 +1,20 @@
 # Changelog — Draft War Room
 
+## v14.0 (2026-08-10) — The Functional Hundred (#967–#1066)
+Everything clicks, provably. ⇄ Lineup lab: swap sheets with ranked bench
+deltas, slot editors with cross-slot bumps, ⚡ stage-optimal / 🎲 stage-win-
+prob one-taps, kicked-off locks, staged diffs with per-move ✕ and Sleeper
+commit links · 📄 your own data: in-app CSV projections with match reports,
+✏️ per-player PPG pins, 📈/📉 boost/fade, real-Sleeper-PPG pull, template
+export — one override-aware pipeline (DATA-FLOW.md) proven by the E2E truth
+matrix · 🔮 500 simulated seasons: record/seed distributions, bracket-real
+title odds, the road strip, lineup-discipline priced in wins · 🕷 the button
+crawler: every action click-verified in CI with error hooks (caught the
+un-Escapable waiver/trade overlays and an unhandled clipboard rejection) ·
+forms & flows: inline bid edits with budget guard, trade column filters,
+scout-any-team, scout→trade handoff, goal pills, sim-variant staging, card
+claims, test-alert button. 55 E2E checks. FUNCTIONAL.md.
+
 ## v13.0 (2026-08-10) — The Badass Update (#849–#948)
 The interface catches up to the engine. 🏟 The Rail: broadcast scorebug,
 stat tiles, quick actions, Starting Nine with headshots and slot chips, bench

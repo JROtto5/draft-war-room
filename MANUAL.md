@@ -101,3 +101,15 @@ scenario ticker, two-minute-drill pings, and the late-window verdict.
 - **Phone: the tab bar.** Plan · Sim · Scores · Wire · More (everything else).
   Overlays slide up as sheets. Pull down at the top to refresh.
 - **Calm mode** (Settings) turns off every decorative animation.
+
+## ⚙️ v14: the app does things now
+
+- **Swap:** ⇄ on any starter (rail or hero) → ranked bench with deltas →
+  staged with OUT/IN chips → one tap to commit in Sleeper (auto-clears when
+  matched). ⚡ Stage optimal does the whole lineup at once; slot chips open
+  the per-slot editor; locked (kicked-off) players are excluded.
+- **Your numbers:** Settings → 📄 drop a name,ppg CSV (or pull real Sleeper
+  PPG). Pins (📌) flow through literally everything — see DATA-FLOW.md.
+- **The crystal ball:** 🔮 Future (or `y`) = 500 simulated seasons: record
+  distribution, seed odds, title chain, the road week by week, and what your
+  lineup sloppiness costs in wins.
