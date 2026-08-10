@@ -67,6 +67,8 @@ try {
   out.push("ghost2:"+((()=>{try{ const n0=S.ghost.length; pickMine(allPlayers()[8].id); const ok=S.ghost.length===n0+1; undoLast(); return ok; }catch(e){ return false; }})()?"OK":"BAD"));
   out.push("wp:"+((()=>{try{ const w=warPlan(); return w===null||Array.isArray(w); }catch(e){ return false; }})()?"OK":"BAD"));
   out.push("booth2:"+((()=>{try{ if(S.log.length) boothLine(S.log[0],0); return snipeScan().constructor===Array; }catch(e){ return false; }})()?"OK":"BAD"));
+  // season mode + heat alerts degrade offline (#634/#636)
+  out.push("heat:"+((()=>{try{ const pr=heatScan(false); return typeof pr.then==="function" && SEASON.avail.constructor===Array && typeof importCompletedDraft==="function" && typeof startSeasonMode==="function"; }catch(e){ return false; }})()?"OK":"BAD"));
   out.push("cine:"+((()=>{try{ markTaken(allPlayers()[9].id); storyMode(); const o=document.getElementById("storyOverlay"); const ok=!!o; if(o) o.remove(); undoLast(); return ok; }catch(e){ return false; }})()?"OK":"BAD"));
   // chunked mocks complete with progress (#312/#313)
   renderMocks();

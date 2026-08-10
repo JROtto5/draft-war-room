@@ -1242,6 +1242,91 @@ function setSync(on){
 }
 document.getElementById("syncBtn").addEventListener("click", ()=>setSync(!SYNC.on));
 
+/* ---------- Season Mode: league-true availability + heat alerts (#634–#637) ---------- */
+const SEASON = {on:false, rostered:null, at:0, avail:[], hot:{}, timer:null};
+async function leagueRosteredSet(force){
+  const lg = (S.settings.sleeperLeagueId||"").trim();
+  if(!lg) return null;
+  if(!force && SEASON.rostered && Date.now()-SEASON.at < 5*60e3) return SEASON.rostered;
+  const rosters = await (await fetch(SYNC.base+"/league/"+lg+"/rosters")).json();
+  if(!Array.isArray(rosters)) throw 0;
+  const map = sleeperToOurs(), set = new Set();
+  rosters.forEach(r=>(r.players||[]).forEach(id=>{ const o=map[String(id)]; if(o) set.add(o); }));
+  SEASON.rostered = set; SEASON.at = Date.now();
+  return set;
+}
+async function heatScan(fire){
+  try{
+    await refreshTrending();
+    const rostered = await leagueRosteredSet().catch(()=>null);
+    const min = +S.settings.heatMin || 1000;
+    const gone = rostered ? (p=>rostered.has(p.id)) : (p=>offBoard(p.id));
+    SEASON.avail = allPlayers()
+      .filter(p=>p.pos!=="DEF" && !gone(p) && buzzOf(p)>=min)
+      .sort((a,b)=>buzzOf(b)-buzzOf(a)).slice(0,8);
+    if(fire && S.settings.heatAlerts!==false && SEASON.avail.length){
+      const k = LS_KEY+"-heatseen";
+      let seen = {}; try{ seen = JSON.parse(localStorage.getItem(k)||"{}"); }catch(e){}
+      const fresh = SEASON.avail.filter(p=>!seen[p.id]);
+      if(fresh.length){
+        fresh.forEach(p=>{ seen[p.id]=Date.now(); SEASON.hot[p.id]=true; });
+        try{ localStorage.setItem(k, JSON.stringify(seen)); }catch(e){}
+        toast("🔥 Heating up & available: "+fresh.map(p=>p.name).join(", ").slice(0,90));
+        if("Notification" in window && Notification.permission==="granted" && document.visibilityState==="hidden"){
+          try{ new Notification("🔥 "+fresh[0].name+" is heating up",
+            {body:buzzOf(fresh[0]).toLocaleString()+" adds in 24h — and he's a free agent in your league",
+             icon:"icon-192.png", tag:"heat"}); }catch(e2){}
+        }
+        if(navigator.setAppBadge) navigator.setAppBadge(fresh.length).catch(()=>{});
+      }
+    }
+    return SEASON.avail;
+  }catch(e){ return SEASON.avail; }
+}
+async function importCompletedDraft(auto){
+  try{
+    const lg = (S.settings.sleeperLeagueId||"").trim();
+    let did = (S.settings.sleeperDraftId||"").trim();
+    if(!did && lg){
+      const drafts = await (await fetch(SYNC.base+"/league/"+lg+"/drafts")).json();
+      const done = (drafts||[]).find(d=>d.status==="complete") || (drafts||[])[0];
+      if(done){ did = done.draft_id; S.settings.sleeperDraftId = did; }
+    }
+    if(!did){ if(!auto) toast("Set a Sleeper league or draft ID in Settings first", {warn:true}); return false; }
+    const dr = await (await fetch(SYNC.base+"/draft/"+did)).json();
+    if(auto && dr.status!=="complete") return false;
+    const picks = await (await fetch(SYNC.base+"/draft/"+did+"/picks")).json();
+    if(!Array.isArray(picks) || !picks.length) throw 0;
+    const map = sleeperToOurs();
+    let applied = 0;
+    picks.forEach(pk=>{
+      const ours = map[String(pk.player_id)];
+      if(ours && !offBoard(ours)){
+        if(+pk.draft_slot === +S.settings.slot){ S.mine.push(ours); S.log.push({id:ours, who:"me", t:Date.now()}); }
+        else { S.taken[ours]=true; S.log.push({id:ours, who:"other", t:Date.now()}); }
+        applied++;
+      }
+    });
+    if(applied){ redoStack.length=0; pruneQueue(); _memo={key:null}; commit(); }
+    toast(applied ? "🏁 Draft imported ("+applied+" picks) — welcome to Season Mode" : "Draft already on the board");
+    startSeasonMode();
+    if(typeof renderNow==="function") renderNow();
+    return applied>0;
+  }catch(e){ if(!auto) toast("Draft import failed — check the ID", {warn:true}); return false; }
+}
+function startSeasonMode(){
+  if(SEASON.on || myIds().length < S.settings.roster) return;
+  SEASON.on = true;
+  clearInterval(SEASON.timer);
+  const tick = ()=>{ if(document.visibilityState==="hidden") return;
+    heatScan(true).then(()=>{ if(typeof renderNow==="function") renderNow(); }); };
+  SEASON.timer = setInterval(tick, 5*60e3);
+  document.addEventListener("visibilitychange", ()=>{
+    if(document.visibilityState==="visible" && SEASON.on && Date.now()-SEASON.at > 5*60e3) tick();
+  });
+  tick();
+}
+
 /* ---------- Season HQ actions ---------- */
 async function weekRecap(){
   try{

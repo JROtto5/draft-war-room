@@ -202,6 +202,9 @@
       <div class="sechead">Sleeper live sync</div>
       <div class="frow"><label>Sleeper draft ID (picks auto-mark while 🔄 Sync is on)</label><input class="wide" type="text" id="setSleeperDraft" placeholder="123456789012345678"></div>
       <div class="frow"><label>Sleeper league ID (imports names + finds the draft)</label><input class="wide" type="text" id="setSleeperLeague" placeholder="123456789012345678"></div>
+      <div class="frow"><label>🏁 Finished drafting on Sleeper?</label><button class="hbtn" id="importDraftBtn" type="button">📥 Import completed draft</button></div>
+      <div class="frow"><label>🔥 Heat alerts (trending + available in your league)</label><input type="checkbox" id="setHeat"></div>
+      <div class="frow"><label>🔥 Heat threshold (adds per 24h)</label><select id="setHeatMin"><option value="500">500</option><option value="1000">1,000</option><option value="2500">2,500</option><option value="5000">5,000</option></select></div>
       <div class="frow"><label>⏲ Pick timer seconds (0 = off)</label><input type="number" id="setTimer" min="0" max="600" step="15"></div>
       <div class="frow"><label>🔊 Volume</label><input type="range" id="setVol" min="0" max="1" step="0.1" style="width:120px"></div>
       <div class="frow"><label>⌨ Keys: mine / taken / queue</label><span style="display:flex;gap:6px">

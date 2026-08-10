@@ -808,6 +808,7 @@ $("#reportPng").addEventListener("click", ()=>{
 });
 $("#gradeBtn").addEventListener("click", buildReport);
 $("#storyBtn").addEventListener("click", ()=>{ $("#reportOverlay").classList.remove("show"); storyMode(); });
+$("#importDraftBtn").addEventListener("click", ()=>importCompletedDraft(false));   // 🏁 season mode (#634)
 $("#pocketBtn").addEventListener("click", ()=>{   // 📱 pocket cheat card (#612)
   const byId = idIndex();
   const c = document.createElement("canvas"); c.width = 1080; c.height = 1920;
@@ -1135,6 +1136,8 @@ $("#settingsBtn").addEventListener("click", ()=>{
   $("#hqIr").checked=hw.ir!==false; $("#hqDrops").checked=hw.drops!==false;
   $("#setSleeperDraft").value=S.settings.sleeperDraftId||"";
   $("#setSleeperLeague").value=S.settings.sleeperLeagueId||"";
+  $("#setHeat").checked = S.settings.heatAlerts!==false;
+  $("#setHeatMin").value = String(S.settings.heatMin||1000);
   const rs=$("#setRival");
   rs.innerHTML='<option value="">none</option>'+Array.from({length:S.settings.teams},(_,i)=>i+1)
     .filter(s2=>s2!==S.settings.slot).map(s2=>'<option value="'+s2+'"'+(+S.settings.rivalSlot===s2?' selected':'')+'>'+esc(slotName(s2))+'</option>').join("");
@@ -1223,6 +1226,12 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.sleeperDraftId = $("#setSleeperDraft").value.trim();
   const lg = $("#setSleeperLeague").value.trim();
   if(lg && lg!==S.settings.sleeperLeagueId){ S.settings.sleeperLeagueId = lg; syncImportLeague(lg); }
+  const wantHeat = $("#setHeat").checked;
+  if(wantHeat && S.settings.heatAlerts===false && "Notification" in window && Notification.permission==="default"){
+    Notification.requestPermission();
+  }
+  S.settings.heatAlerts = wantHeat;
+  S.settings.heatMin = +$("#setHeatMin").value || 1000;
   S.settings.cols = {adp:$("#colADP").checked, edge:$("#colEdge").checked, rd:$("#colRd").checked};
   S.settings.fontSize = $("#setFont").value;
   S.settings.cbSafe = $("#setCbSafe").checked;

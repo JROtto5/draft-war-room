@@ -700,13 +700,17 @@ function renderBest(){
         '<button class="hbtn" id="weekRecapBtn">📅 Week recap</button>'+
         '<button class="hbtn" id="healthDigestBtn">🩹 Health digest</button>'+
       '</div></div>';
-    // waiver radar: hot adds that nobody in this league rosters
-    const rostered = new Set();
-    Object.values(teamRosters()).forEach(ids=>ids.forEach(id2=>rostered.add(id2)));
-    myIds().forEach(id2=>rostered.add(id2));
-    const radar = allPlayers()
-      .filter(p2=>!rostered.has(p2.id) && buzzOf(p2)>500)
-      .sort((a,b)=>buzzOf(b)-buzzOf(a)).slice(0,5);
+    // waiver radar: hot adds that nobody in this league rosters (#635 — league-true when Sleeper is linked)
+    let radar, radarSrc = "local board";
+    if(typeof SEASON!=="undefined" && SEASON.avail.length){ radar = SEASON.avail.slice(0,6); radarSrc = "your league"; }
+    else {
+      const rostered = new Set();
+      Object.values(teamRosters()).forEach(ids=>ids.forEach(id2=>rostered.add(id2)));
+      myIds().forEach(id2=>rostered.add(id2));
+      radar = allPlayers()
+        .filter(p2=>!rostered.has(p2.id) && buzzOf(p2)>500)
+        .sort((a,b)=>buzzOf(b)-buzzOf(a)).slice(0,5);
+    }
     // my-player headlines
     const myNews = myIds().map(id2=>byIdH[id2]).filter(Boolean)
       .map(p2=>({p:p2, n:newsFor(p2)})).filter(x=>x.n).slice(0,4);
@@ -722,9 +726,9 @@ function renderBest(){
         nx.map(x=>'<span class="scpill" title="'+esc(x.p.name)+'">'+esc(x.p.name.split(" ").slice(-1)[0])+' W'+x.n.w+' vs '+esc(x.n.opp)+'</span>').join("")+'</div>';
     }
     const hqCfg = S.settings.hqWidgets || {};
-    if(hqCfg.radar!==false && radar.length) hq += '<div class="benchhead">📡 Waiver radar (unrostered, trending)</div>'+
+    if(hqCfg.radar!==false && radar.length) hq += '<div class="benchhead">📡 Heating up ('+radarSrc+', trending)</div>'+
       radar.map(p2=>'<div class="barow" data-card="'+p2.id+'">'+avatarImg(p2,22)+posBadge(p2.pos)+
-        '<div class="info"><div class="nm">'+p2.name+'</div><div class="sm">📈 '+buzzOf(p2).toLocaleString()+' adds/24h · FAAB ~'+
+        '<div class="info"><div class="nm">'+p2.name+(typeof SEASON!=="undefined"&&SEASON.hot[p2.id]?' <span title="new heat alert">🔥</span>':'')+'</div><div class="sm">📈 '+buzzOf(p2).toLocaleString()+' adds/24h · FAAB ~'+
         Math.min(40, Math.max(1, Math.round((p2.proj-(replacementLevels(allPlayers())[p2.pos]||0))/4)))+'%</div></div></div>').join("");
     if(hqCfg.news && myNews.length) hq += '<div class="benchhead">📰 Your players in the news</div>'+
       myNews.map(x=>'<div class="barow" data-card="'+x.p.id+'">'+avatarImg(x.p,22)+
