@@ -140,6 +140,13 @@ try {
     }
     return "OK";
   })()));
+  // Motion & calm mode (#909–#923)
+  out.push("motion:"+((()=>{try{
+    applyCalm(true);
+    const on=document.body.classList.contains("calm");
+    applyCalm(false);
+    return on && !document.body.classList.contains("calm") && typeof countUp==="function";
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // Chart kit (#894–#908)
   out.push("charts:"+((()=>{try{
     const a=chartArea([10,20,15,30,25],{ref:20,label:"t"});

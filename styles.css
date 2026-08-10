@@ -757,3 +757,41 @@ body.compact .sspad{padding:6px 10px}
 .pfbar{display:block;height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin:2px 0}
 .pfbar i{display:block;height:100%;background:var(--green);border-radius:2px}
 .pfbar.pa i{background:var(--red);opacity:.6}
+
+/* ---------- R56 motion (#909–#923) ---------- */
+#seasonPage.chor .sscard, #seasonPage.chor .spbar{animation:cardRise .5s cubic-bezier(.2,.7,.3,1) both;animation-delay:calc(var(--i,0)*60ms)}
+@keyframes cardRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.snov .sbcard{animation:ovIn .22s cubic-bezier(.2,.8,.3,1)}
+#sbOverlay .sbcard{animation:ovIn .22s cubic-bezier(.2,.8,.3,1)}
+@keyframes ovIn{from{opacity:0;transform:scale(.98) translateY(6px)}to{opacity:1;transform:none}}
+.snov .sbply{animation:rowIn .3s ease both}
+.snov .sbply:nth-child(1){animation-delay:25ms}.snov .sbply:nth-child(2){animation-delay:50ms}
+.snov .sbply:nth-child(3){animation-delay:75ms}.snov .sbply:nth-child(4){animation-delay:100ms}
+.snov .sbply:nth-child(5){animation-delay:125ms}.snov .sbply:nth-child(6){animation-delay:150ms}
+.snov .sbply:nth-child(7){animation-delay:175ms}.snov .sbply:nth-child(8){animation-delay:200ms}
+.snov .sbply:nth-child(9){animation-delay:225ms}.snov .sbply:nth-child(10){animation-delay:250ms}
+.snov .sbply:nth-child(11){animation-delay:275ms}.snov .sbply:nth-child(n+12){animation-delay:300ms}
+@keyframes rowIn{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:none}}
+.sscard,.sstile{transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease}
+.sscard:hover,.sstile:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--line) 55%,var(--gold) 45%)}
+.deckbtn,.ssquick button{transition:transform .13s cubic-bezier(.34,1.56,.64,1),border-color .13s}
+.deckbtn:active,.ssquick button:active{transform:scale(.94)}
+.spdial circle:nth-child(2){animation:dialin .8s cubic-bezier(.3,.8,.3,1)}
+@keyframes dialin{from{stroke-dasharray:0 999}}
+.flashup{animation:flup .8s ease}
+.flashdown{animation:fldn .8s ease}
+@keyframes flup{0%,60%{color:var(--green)}100%{color:inherit}}
+@keyframes fldn{0%,60%{color:var(--red)}100%{color:inherit}}
+.sstile b.pulse{animation:tpulse .7s ease}
+@keyframes tpulse{30%{transform:scale(1.18)}}
+#ticker{mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent)}
+#ticker:hover .tkinner{animation-play-state:paused}
+.tkinner,.spdial circle:nth-child(2){will-change:transform}
+:focus-visible{transition:outline-offset .12s ease}
+/* master switches (#920/#922) */
+body.calm *,body.calm *::before,body.calm *::after{animation:none !important;transition:none !important}
+@media (prefers-reduced-motion: reduce){
+  #seasonPage.chor .sscard,#seasonPage.chor .spbar,.snov .sbcard,#sbOverlay .sbcard,.snov .sbply,
+  .spdial circle:nth-child(2),.flashup,.flashdown,.sstile b.pulse{animation:none !important}
+  .sscard,.sstile,.deckbtn,.ssquick button{transition:none}
+}

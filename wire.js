@@ -1150,6 +1150,7 @@ $("#settingsBtn").addEventListener("click", ()=>{
   const q = S.settings.quietHours||{from:23,to:8};
   qf.value = q.from; qt.value = q.to;
   $("#setHype").value = S.settings.hype||"standard";
+  $("#setCalm").checked = !!S.settings.calm;
   const rc = (typeof ritualCfg==="function") ? ritualCfg() : {checklist:true,goals:true,grades:true,bright:true};
   $("#rtChecklist").checked=rc.checklist; $("#rtGoals").checked=rc.goals;
   $("#rtGrades").checked=rc.grades; $("#rtBright").checked=rc.bright;
@@ -1253,6 +1254,8 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.scoreDelta = Math.min(20, Math.max(2, +$("#setScoreDelta").value||5));
   S.settings.quietHours = {from:+$("#setQuietFrom").value||23, to:+$("#setQuietTo").value===0?0:(+$("#setQuietTo").value||8)};
   S.settings.hype = $("#setHype").value||"standard";
+  S.settings.calm = $("#setCalm").checked;
+  if(typeof applyCalm==="function") applyCalm(S.settings.calm);
   S.settings.rituals = {checklist:$("#rtChecklist").checked, goals:$("#rtGoals").checked,
     grades:$("#rtGrades").checked, bright:$("#rtBright").checked};
   S.settings.cols = {adp:$("#colADP").checked, edge:$("#colEdge").checked, rd:$("#colRd").checked};

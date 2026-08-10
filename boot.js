@@ -128,6 +128,7 @@ if(!E2E_MODE && location.protocol.indexOf("http")===0){
       if(b2){ b2.textContent = "🏟 Season"; b2.title = "Back to the season page (/)"; }
       return;
     }
+    if(typeof applyCalm==="function") applyCalm(!!S.settings.calm);           // #922
     if(typeof applyDefaultIds==="function") applyDefaultIds();                 // #843: IDs pre-wired, zero setup
     startSeasonMode();
     if(typeof renderNow==="function") renderNow();

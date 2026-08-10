@@ -1258,11 +1258,24 @@ function renderSeasonPage(){
   pool.style.display = window._poolShow ? "" : "none";
   try{ if(window._density===undefined){ window._density = !!localStorage.getItem(LS_KEY+"-dense"); document.body.classList.toggle("compact", window._density); } }catch(e){}
   const prev = Array.from(sp.querySelectorAll(".spteam b")).map(b=>parseFloat(b.textContent)||0);
+  const prevTiles = Array.from(sp.querySelectorAll(".sptiles .sstile b")).map(b=>b.textContent);
   sp.innerHTML = seasonPageHtml();
+  if(!window._pageAnimated){                                                     // #909 first paint only
+    window._pageAnimated = true;
+    sp.classList.add("chor");
+    Array.from(sp.querySelectorAll(".sscard, .spbar")).forEach((c,i)=>c.style.setProperty("--i", i));
+    setTimeout(()=>sp.classList.remove("chor"), 1200);
+  }
   try{
     const now2 = sp.querySelectorAll(".spteam b");
     now2.forEach((b,i)=>{ const to = parseFloat(b.textContent);
-      if(!isNaN(to) && prev[i]!=null && Math.abs(to-prev[i])>0.05 && typeof countUp==="function"){ b.textContent = prev[i].toFixed(1); countUp(b, to); } });
+      if(!isNaN(to) && prev[i]!=null && Math.abs(to-prev[i])>0.05){
+        b.classList.add(to>prev[i] ? "flashup" : "flashdown");                    // #914
+        if(typeof countUp==="function"){ b.textContent = prev[i].toFixed(1); countUp(b, to); }
+      } });
+    sp.querySelectorAll(".sptiles .sstile b").forEach((b,i)=>{                    // #916
+      if(prevTiles[i]!=null && prevTiles[i]!==b.textContent) b.classList.add("pulse");
+    });
   }catch(e){}
 }
 
@@ -1467,6 +1480,14 @@ function chartDist(r){                                                          
     '<text x="'+pad+'" y="'+(H-2)+'" font-size="9" fill="var(--dim)">'+Math.round(mn)+'</text>'+
     '<text x="'+(W-pad)+'" y="'+(H-2)+'" text-anchor="end" font-size="9" fill="var(--dim)">'+Math.round(mx)+'</text></svg>';
 }
+function applyCalm(on){                                                          // #922
+  document.body.classList.toggle("calm", !!on);
+}
+document.addEventListener("keydown", e=>{                                         // #910 Esc closes any overlay
+  if(e.key!=="Escape") return;
+  const ov = document.querySelector(".snov, #sbOverlay");
+  if(ov){ ov.remove(); e.stopPropagation(); }
+}, true);
 function countUp(el, to, ms){                                                    // #900
   try{
     if(matchMedia("(prefers-reduced-motion: reduce)").matches){ el.textContent = to.toFixed(1); return; }
