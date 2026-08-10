@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-10T18:41:43.346Z",
+  "generated": "2026-08-10T18:41:43.543Z",
   "files": {
     "index.html": "193e3348d90f2d61b363e6d14ffed5eac1e2d746227769884cb6d84863e604c6",
     "styles.css": "5d8fc433356631d2cff913acdf3eff0cabdfde0aba734c0d7c6758e6d236ff21",
@@ -9,9 +9,9 @@
     "win.js": "97dd5a7baf3c57a1f8629783cf7819800e01bcb33d6b19379eeb17293b89d3d8",
     "views.js": "bbebe0a96a1f683b474dba2c3724d54009446f10bd4d2630eb67aeb840c340c2",
     "wire.js": "a50128f055c8ca3e86f4e1b2b3a9ad34b16fd1b2ed3ae1950ff3b97491090c07",
-    "boot.js": "6a0d5ebde7084737088b183e0873abd9b9c2e90b3d31dfec1097761bb570647b",
+    "boot.js": "07fcd70f231d663b15378d5ca93c724678bca2ed1599ee85ef19b5c6de10ad1b",
     "data.js": "d7270f4caf9eb49cf5b4fd1344bf0ad2f071eceb9be9009d001f06de086cf008",
-    "sw.js": "698a60d9a4485442ec5aca5e8ef4f08b8287889f4bea9af5fbef7673010e5d9c",
+    "sw.js": "209becf74a8cdb904375465030288a0c41c15d2331feaa119e67569dac9bbdbf",
     "manifest.json": "d0582c00c488ad9d1a4095ee547089eefe09bd4de13f616aff1863db54cdd1b1",
     "404.html": "3e07b402220b3082ec6efa53380e03d8238b2891af3ba19bfa82f992c6f00bc0"
   }
