@@ -1199,13 +1199,14 @@ function seasonPageHtml(){                                                      
       ssTile("playoffs", odds!=null?odds+"%":"—")+
       ssTile("leverage", lev?esc(lev.name.split(" ").slice(-1)[0]):"—")+
       '</div>';
-    const plist = side=>side.starters.filter(Boolean).map(id=>{
+    const plist = (side, mineSide)=>side.starters.filter(Boolean).map(id=>{
       const p = byId[id]; if(!p) return "";
       const got = +side.ppts[inv[id]]||0;
       const badge = (typeof gsBadge==="function") ? gsBadge(p.team) : "";
-      return ssPRow(p, p.pos+(badge?" · "+badge:""), got?got.toFixed(1):"~"+weekProj(p,w).toFixed(1), !got);
+      const row = ssPRow(p, p.pos+(badge?" · "+badge:""), got?got.toFixed(1):"~"+weekProj(p,w).toFixed(1), !got);
+      return mineSide && p.pos!=="DEF" && !got ? row.replace('<b class="ssval','<button class="swapbtn" data-swap="'+p.id+'" title="Swap out" aria-label="Swap '+esc(p.name)+'">⇄</button><b class="ssval') : row;
     }).join("");
-    h += '<div class="sbcols spcols"><div>'+plist(md.me)+'</div><div>'+(md.opp?plist(md.opp):'<div class="empty">no opponent</div>')+'</div></div>';
+    h += '<div class="sbcols spcols"><div>'+plist(md.me,true)+'</div><div>'+(md.opp?plist(md.opp,false):'<div class="empty">no opponent</div>')+'</div></div>';
     if(typeof liveWpChartHtml==="function") h += liveWpChartHtml();
   } else {
     h += '<div class="spheroTop skel"><div class="spteam"><span class="splab">OTTO5</span><b class="mono">·&#8202;·</b></div>'+winDial(50)+
@@ -1339,7 +1340,7 @@ function sidebarSeasonHtml(byId){                                               
     const stCls = stagedOut.has(p.id) ? " stagedout" : stagedIn.has(p.id) ? " stagedin" : "";
     return '<div class="ssrow'+stCls+'" data-card="'+p.id+'" tabindex="0" role="button" aria-label="'+esc(p.name)+'">'+
       avatarImg(p, 30)+
-      (slotLab?'<span class="ssslot '+p.pos.toLowerCase()+'">'+slotLab+'</span>':'')+
+      (slotLab?'<span class="ssslot '+p.pos.toLowerCase()+'" data-slotchip="'+slotLab+'" role="button" tabindex="0" title="Fill the '+slotLab+' slot">'+slotLab+'</span>':'')+
       '<div class="ssnm">'+esc(p.name)+(nick?' <span class="ssnick" title="'+esc(nick)+'">★</span>':'')+
       (stagedOut.has(p.id)?'<span class="stagechip">OUT</span>':stagedIn.has(p.id)?'<span class="stagechip" style="background:var(--green)">IN</span>':'')+
       '<span class="sssub">'+(bye?'🚫 BYE':sv?'<span class="'+sv.cls+'">'+sv.label+'</span>':badge||p.team)+'</span></div>'+
@@ -1355,15 +1356,29 @@ function sidebarSeasonHtml(byId){                                               
         return rowOf(sl.p, sl.lab, got ? got.toFixed(1) : sl.wp.toFixed(1), !got, true);
       }).join("")+
       '<div class="sslegend">tap a row for the card · ⇄ to swap · plain number = projected, bold = banked</div></div>';
-    if(staged.length){                                                          // #959 staged banner
-      list += '<div class="sscard warn"><div class="sshead">⇄ '+staged.length+' STAGED SWAP'+(staged.length>1?'S':'')+
-        '<span><button class="undo1" data-stagedclear="1">clear</button></span></div>'+
-        '<div class="sspad">'+staged.map(x=>{const o=byId[x.out],n=byId[x.in];return o&&n?esc(n.name)+' in for '+esc(o.name):'';}).filter(Boolean).join(" · ")+
-        '<br><a class="hbtn act" style="text-decoration:none;margin-top:6px;display:inline-block" target="_blank" rel="noopener" href="https://sleeper.com/leagues/'+(S.settings.sleeperLeagueId||"")+'/team">Commit in Sleeper →</a></div></div>';
+    {
+      const delta = staged.reduce((a,x)=>{const o=byId[x.out],n=byId[x.in];return a+(o&&n?weekProj(n,w)-weekProj(o,w):0);},0);
+      list += '<div class="sscard'+(staged.length?' warn':'')+'"><div class="sshead">⇄ LINEUP LAB'+
+        (staged.length?'<span class="mono" style="color:var(--'+(delta>=0?'green':'red')+')">'+(delta>=0?'+':'')+delta.toFixed(1)+'</span>':'')+'</div>'+
+        '<div class="sspad" style="display:flex;gap:6px;flex-wrap:wrap">'+
+        '<button class="hbtn act" data-act="stageOptimal">⚡ Stage optimal</button>'+
+        '<button class="hbtn" data-act="stageWinProb">🎲 Stage win-prob</button>'+
+        (staged.length?'<button class="undo1" data-stagedclear="1">clear all</button>':'')+'</div>'+
+        (staged.length ? staged.map((x,i)=>{const o=byId[x.out],n=byId[x.in];if(!o||!n)return '';
+          const d2=weekProj(n,w)-weekProj(o,w);
+          return '<div class="sbply"><span>'+esc(o.name)+' → <b>'+esc(n.name)+'</b> <span class="mono" style="color:var(--'+(d2>=0?'green':'red')+')">'+(d2>=0?'+':'')+d2.toFixed(1)+'</span></span>'+
+          '<button class="undo1" data-unstage="'+i+'" aria-label="Unstage">✕</button></div>';}).join("")+
+          '<div class="sspad"><a class="hbtn act" style="text-decoration:none" target="_blank" rel="noopener" href="https://sleeper.com/leagues/'+(S.settings.sleeperLeagueId||"")+'/team">Commit in Sleeper →</a></div>'
+        : '')+'</div>';
     }
     const bench = ids.map(id=>byId[id]).filter(Boolean).filter(p=>!bs.starterIds.has(p.id));
     if(bench.length) list += '<details class="ssbench"><summary>BENCH <span class="mono">'+bench.length+'</span></summary>'+
-      bench.sort((a,b)=>weekProj(b,w)-weekProj(a,w)).map(p=>rowOf(p, "", weekProj(p,w).toFixed(1), true)).join("")+'</details>';
+      bench.sort((a,b)=>weekProj(b,w)-weekProj(a,w)).map(p=>{
+        const starterAt = bs.line.filter(sl=>sl.p && sl.p.pos===p.pos).sort((a,b)=>a.wp-b.wp)[0];
+        const gap = starterAt ? Math.round((starterAt.wp-weekProj(p,w))*10)/10 : null;
+        const r = rowOf(p, "", weekProj(p,w).toFixed(1), true, true);
+        return gap!=null && gap>0 ? r.replace("</div><button", " <span style=\'color:var(--dim)\'>"+gap+" behind "+esc(starterAt.p.name.split(" ").slice(-1)[0])+"</span></div><button") : r;
+      }).join("")+'</details>';
   } else {
     list += '<div class="sscard"><div class="sshead">STARTING NINE</div>'+
       Array.from({length:5},()=>'<div class="ssrow skel"><span class="skava"></span><div class="ssnm"><span class="skln"></span></div></div>').join("")+'</div>';
@@ -1526,7 +1541,7 @@ function toggleDensity(){
 function copyWkText(){ try{ navigator.clipboard.writeText(window._wkText).then(()=>toast("📋 Recap copied")); }catch(e){} }
 const ACT_OK = ["renderGamePlan","renderSim","renderScoreboard","renderWaivers","renderTrades","renderSeasonStats",
   "renderRituals","egoDash","weeklyRecap2","renderAlertCenter","injuryDigest","scoutMyOpponent","moreSheet",
-  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText","analystReport"];
+  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText","analystReport","stageOptimal","stageWinProb"];
 document.addEventListener("click", e=>{
   const t = e.target.closest("[data-act],[data-scout],[data-clickid]");
   if(!t) return;
@@ -1595,12 +1610,94 @@ document.addEventListener("focusin", e=>{
 /* ---------- #958/#959 staged swaps, #963 analyst, #964 catch-up ---------- */
 function stagedGet(){ try{ return JSON.parse(localStorage.getItem(LS_KEY+"-staged"+curWeek())||"[]"); }catch(e){ return []; } }
 function stagedSave(a){ try{ localStorage.setItem(LS_KEY+"-staged"+curWeek(), JSON.stringify(a)); }catch(e){} }
+function lockedIds(){                                                            // #974
+  const out = new Set();
+  try{
+    rosterIds().forEach(id=>{
+      const p = idIndex()[id]; if(!p) return;
+      const g = (typeof gameStateOf==="function") ? gameStateOf(p.team) : null;
+      if(g && (g.state==="in" || g.state==="post")) out.add(id);
+    });
+  }catch(e){}
+  return out;
+}
 function stageSwap(outId, inId){
+  const lk = lockedIds();
+  if(lk.has(outId) || lk.has(inId)) return toast("🔒 That player's game already kicked off — Sleeper won't allow it either", {warn:true});
   const a = stagedGet().filter(x=>x.out!==outId && x.in!==inId);
   a.push({out:outId, in:inId});
   stagedSave(a);
-  toast("⇄ Staged — now make the same swap in Sleeper to lock it in");
+  try{ alertFire("swap", "⇄ Staged: "+idIndex()[inId].name+" in for "+idIndex()[outId].name, "Commit it in Sleeper to lock it"); }catch(e){}
   renderNow();
+}
+function unstageAt(i){ const a = stagedGet(); a.splice(i,1); stagedSave(a); renderNow(); }   // #973
+function stageToLineup(bs, label){                                               // #970/#971
+  const md = WEEKST.mate;
+  if(!md || !md.me || !md.me.starters || !md.me.starters.filter(Boolean).length)
+    return toast("Need your live Sleeper lineup first — one refresh away", {warn:true});
+  const lk = lockedIds();
+  const actual = md.me.starters.filter(Boolean);
+  const actualSet = new Set(actual);
+  const outs = actual.filter(id=>!bs.starterIds.has(id) && !lk.has(id));
+  const ins = [...bs.starterIds].filter(id=>!actualSet.has(id) && !lk.has(id));
+  if(!outs.length || !ins.length) return toast("✅ Already matches — nothing to stage");
+  const byId = idIndex();
+  const pairs = [];
+  ins.forEach(inId=>{
+    const p = byId[inId]; if(!p) return;
+    let idx = outs.findIndex(oId=>byId[oId] && byId[oId].pos===p.pos);
+    if(idx<0) idx = 0;
+    if(idx<outs.length) pairs.push({out:outs.splice(idx,1)[0], in:inId});
+  });
+  if(!pairs.length) return toast("✅ Already matches — nothing to stage");
+  stagedSave(pairs);
+  toast("⚡ Staged "+pairs.length+" swap"+(pairs.length>1?"s":"")+" → "+(label||"target lineup")+". Commit in Sleeper.");
+  renderNow();
+}
+function stageOptimal(){ stageToLineup(bestStartersWeek(rosterIds(), idIndex(), curWeek()), "projection-optimal"); }       // #970
+function stageWinProb(){ const m = winModeFor(); stageToLineup(winProbLineup(m.mode), "win-prob ("+m.mode+")"); }          // #971
+function slotSheet(slotLab){                                                     // #969
+  const byId = idIndex(), w = curWeek();
+  const poss = slotLab==="QB" ? ["QB"] : /^RB/.test(slotLab) ? ["RB"] : /^WR/.test(slotLab) ? ["WR"] : slotLab==="TE" ? ["TE"]
+    : slotLab==="FLEX" ? ["RB","WR","TE"] : slotLab==="SFLX" ? ["QB","RB","WR","TE"] : ["DEF"];
+  const bs = bestStartersWeek(rosterIds(), byId, w);
+  const cur = bs.line.find(sl=>sl.lab===slotLab);
+  const lk = lockedIds();
+  const cands = rosterIds().map(id=>byId[id]).filter(Boolean)
+    .filter(p=>poss.includes(p.pos) && !lk.has(p.id) && (!cur || !cur.p || p.id!==cur.p.id))
+    .map(p=>({p, wp:weekProj(p,w), starting:bs.starterIds.has(p.id)}))
+    .sort((a,b)=>b.wp-a.wp).slice(0,8);
+  const ov = document.createElement("div"); ov.id = "slotSheet"; ov.className = "snov";
+  ov.innerHTML = '<div class="sbcard" role="dialog" aria-label="Fill '+slotLab+'"><button class="sbx" data-slx="1">✕</button>'+
+    '<div class="tag">🎯 '+slotLab+' — WHO PLAYS?'+(cur&&cur.p?' <span class="mono">now '+esc(cur.p.name.split(" ").slice(-1)[0])+'</span>':'')+'</div>'+
+    (cands.length ? cands.map((x,i)=>'<div class="ssrow" data-slotpick="'+x.p.id+'" tabindex="0" role="button">'+avatarImg(x.p,30)+
+      '<div class="ssnm">'+esc(x.p.name)+'<span class="sssub">'+x.p.pos+(x.starting?' · currently starting elsewhere — will bump':'')+'</span></div>'+
+      '<b class="ssval mono">'+x.wp.toFixed(1)+'</b></div>').join("") : '<div class="empty">Nobody eligible and unlocked</div>')+'</div>';
+  document.body.appendChild(ov);
+  const rowsEls = ()=>Array.from(ov.querySelectorAll("[data-slotpick]"));
+  let sel = 0;
+  const hi = ()=>rowsEls().forEach((r,i)=>r.style.background = i===sel ? "rgba(240,180,41,.1)" : "");
+  hi(); if(rowsEls()[0]) rowsEls()[0].focus();
+  ov.addEventListener("keydown", e=>{                                             // #977
+    if(e.key==="ArrowDown"){ sel = Math.min(sel+1, rowsEls().length-1); hi(); e.preventDefault(); }
+    else if(e.key==="ArrowUp"){ sel = Math.max(sel-1, 0); hi(); e.preventDefault(); }
+    else if(e.key==="Enter" && rowsEls()[sel]){ rowsEls()[sel].click(); }
+  });
+  ov.addEventListener("click", e=>{
+    if(e.target===ov || e.target.closest("[data-slx]")) return ov.remove();
+    const t = e.target.closest("[data-slotpick]");
+    if(t){
+      ov.remove();
+      const pid = t.dataset.slotpick;
+      const fix = {};
+      rosterIds().map(id=>byId[id]).filter(Boolean).forEach(q=>{ fix[q.id] = weekProj(q, w); });
+      fix[pid] = Math.max(fix[pid]||0.1, 99);                                     // force into the slot family
+      if(cur && cur.p) fix[cur.p.id] = Math.max(0, (fix[cur.p.id]||0)-90);
+      const target = bestStartersWeek(rosterIds(), byId, w, fix);
+      target.line.forEach(sl=>{ if(sl.p) sl.wp = weekProj(sl.p, w); });
+      stageToLineup(target, slotLab+" = "+byId[pid].name.split(" ").slice(-1)[0]);
+    }
+  });
 }
 function stagedClear(){ stagedSave([]); renderNow(); }
 function stagedCheck(){                                                          // auto-clear when Sleeper matches
@@ -1615,9 +1712,11 @@ function swapSheet(outId){                                                      
   const byId = idIndex(), out = byId[outId]; if(!out) return;
   const w = curWeek();
   const flexy = ["RB","WR","TE"];
+  const lk = lockedIds();
+  const bsNow = bestStartersWeek(rosterIds(), byId, w);
   const cands = rosterIds().map(id=>byId[id]).filter(Boolean)
-    .filter(p=>p.id!==outId && (p.pos===out.pos || (flexy.includes(p.pos) && flexy.includes(out.pos))))
-    .map(p=>({p, wp:weekProj(p,w)})).sort((a,b)=>b.wp-a.wp).slice(0,6);
+    .filter(p=>p.id!==outId && !lk.has(p.id) && (p.pos===out.pos || (flexy.includes(p.pos) && flexy.includes(out.pos))))
+    .map(p=>({p, wp:weekProj(p,w), starting:bsNow.starterIds.has(p.id)})).sort((a,b)=>b.wp-a.wp).slice(0,6);
   const outWp = weekProj(out, w);
   const ov = document.createElement("div"); ov.id = "swapSheet"; ov.className = "snov";
   ov.innerHTML = '<div class="sbcard" role="dialog" aria-label="Swap '+esc(out.name)+'">'+
@@ -1627,7 +1726,8 @@ function swapSheet(outId){                                                      
       const e = injuryOf(x.p), sv = e ? injSeverity(e.s) : null;
       return '<div class="ssrow" data-swapin="'+x.p.id+'" tabindex="0" role="button">'+avatarImg(x.p,30)+
         '<div class="ssnm">'+esc(x.p.name)+'<span class="sssub">'+x.p.pos+(sv?' · <span class="'+sv.cls+'">'+sv.label+'</span>':'')+
-        ((typeof gsBadge==="function" && gsBadge(x.p.team))?' · '+gsBadge(x.p.team):'')+'</span></div>'+
+        ((typeof gsBadge==="function" && gsBadge(x.p.team))?' · '+gsBadge(x.p.team):'')+
+        (x.starting?' · bumps out of his current slot':'')+'</span></div>'+
         '<b class="ssval mono" style="color:var(--'+(d>0?'green':d<0?'red':'dim')+')">'+x.wp.toFixed(1)+' ('+(d>=0?'+':'')+d+')</b></div>';
     }).join("") : '<div class="empty">No eligible bench players this week</div>')+
     '<div class="sspad dim" style="font-size:11px">Staging plans the move here — Sleeper\'s public API can\'t write lineups, so commit it in the Sleeper app (one tap below).</div>'+
@@ -1642,7 +1742,11 @@ function swapSheet(outId){                                                      
 document.addEventListener("click", e=>{
   const sw2 = e.target.closest("[data-swap]");
   if(sw2){ e.preventDefault(); e.stopPropagation(); swapSheet(sw2.dataset.swap); return; }
-  if(e.target.closest("[data-stagedclear]")){ e.preventDefault(); stagedClear(); }
+  if(e.target.closest("[data-stagedclear]")){ e.preventDefault(); stagedClear(); return; }
+  const us = e.target.closest("[data-unstage]");
+  if(us){ e.preventDefault(); e.stopPropagation(); unstageAt(+us.dataset.unstage); return; }
+  const sc2 = e.target.closest("[data-slotchip]");
+  if(sc2){ e.preventDefault(); e.stopPropagation(); slotSheet(sc2.dataset.slotchip); }
 }, true);
 function analystReport(){                                                        // #963
   const old = document.getElementById("anOverlay"); if(old){ old.remove(); return; }

@@ -140,6 +140,26 @@ try {
     }
     return "OK";
   })()));
+  // Lineup lab: real click flow (#967–#981)
+  out.push("lab:"+((()=>{try{
+    localStorage.removeItem(LS_KEY+"-staged"+curWeek());
+    SEASON_LIVE.ids = allPlayers().slice(0,16).map(p=>p.id); SEASON_LIVE.at = Date.now();
+    const host=document.createElement("div"); host.id="labHost";
+    host.innerHTML=sidebarSeasonHtml(idIndex()).list; document.body.appendChild(host);
+    const swapBtn=host.querySelector("[data-swap]");
+    if(!swapBtn){ host.remove(); return "NOBTN"; }
+    swapBtn.click();
+    const sheet=document.getElementById("swapSheet");
+    const opened=!!sheet;
+    let staged=false;
+    if(sheet){ const pick=sheet.querySelector("[data-swapin]"); if(pick){ pick.click(); staged=stagedGet().length===1; } else sheet.remove(); }
+    const chips=host.querySelectorAll("[data-slotchip]").length>0;
+    stagedClear(); host.remove();
+    SEASON_LIVE.ids = null; SEASON_LIVE.at = 0;
+    const s2=document.getElementById("swapSheet"); if(s2) s2.remove();
+    return opened && staged && chips && typeof stageOptimal==="function" && typeof stageWinProb==="function" &&
+      typeof slotSheet==="function" && typeof unstageAt==="function" && lockedIds() instanceof Set;
+  }catch(e){ return false; }})()===true?"OK":"BAD"));
   // CSP-safe dispatcher (#949–#955): data-act clicks call through; no inline handlers in generated html
   out.push("csp:"+((()=>{try{
     const deck=seasonDeckHtml(), rail=sidebarSeasonHtml(idIndex());
@@ -215,7 +235,7 @@ try {
   // Season deck + shortcuts wiring (#738)
   out.push("deck:"+((()=>{try{
     const d = seasonDeckHtml();
-    return typeof d==="string" && d.includes("renderScoreboard") && d.includes("renderWaivers") &&
+    return typeof d==="string" && d.includes("renderScoreboard") && d.includes("analystReport") &&
       d.includes("renderTrades") && d.includes("seasonDeck") &&
       typeof applySeasonHeader==="function" && !document.getElementById("draftMenuBtn");
   }catch(e){ return false; }})()?"OK":"BAD"));

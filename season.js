@@ -1783,6 +1783,7 @@ async function renderGamePlan(){                                                
     (mode.mode==="ceiling" ? ' — YOU\'RE THE DOG. We go down swinging: boom-bust lineup, maximum variance. 🎢' :
      mode.mode==="floor" ? ' — you\'re favored. Protect the lead: floor plays, no heroics. 🧱' : ' — dead even. Best players play. ⚖')+
     (md && md.opp ? ' <span id="gpSimWp" class="dimtxt"></span> <button class="undo1" data-act="scoutMyOpponent">🕵️ scout them</button>' : '')+'</div>';
+  h += '<div class="sspad" style="display:flex;gap:6px"><button class="hbtn act" data-act="stageOptimal">⚡ Stage optimal lineup</button><button class="hbtn" data-act="stageWinProb">🎲 Stage win-prob lineup</button></div>';
   h += moves.length ? '<div class="benchhead">📋 The moves ('+moves.filter(m=>ticks[m.k]).length+'/'+moves.length+' done)</div>'+
     moves.map(m=>'<div class="sbply" style="cursor:pointer'+(ticks[m.k]?';opacity:.5':'')+'" data-tick="'+m.k+'">'+
       '<span>'+(ticks[m.k]?'✅ ':'⬜ ')+esc(m.txt)+'</span><b style="color:var(--'+m.tag.c+')">'+m.tag.t+'</b></div>').join("")
