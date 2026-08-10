@@ -362,13 +362,16 @@ function myWeekHtml(byId){
     cd = ' · 🔒 locks in ' + (dd>0 ? dd+'d '+hh+'h' : hh+'h');
   }catch(e){}
   const live = (typeof SEASON_LIVE!=="undefined" && SEASON_LIVE.ids && SEASON_LIVE.ids.length);
-  let h = '<div class="benchhead">🗓 MY WEEK '+w+' — optimal '+fmt(bs.pts)+' proj'+cd+(live?'':' · <span style="color:var(--dim)">draft-day roster — link your league for live</span>')+'</div>';
+  let hypeBit = "";
+  try{ if(typeof hypeLine==="function" && hypeOn("mild")) hypeBit = '<div class="benchhead" style="color:var(--gold)">😤 '+esc(hypeLine())+'</div>'; }catch(e0){}
+  let h = hypeBit + '<div class="benchhead">🗓 MY WEEK '+w+' — optimal '+fmt(bs.pts)+' proj'+cd+(live?'':' · <span style="color:var(--dim)">draft-day roster — link your league for live</span>')+'</div>';
   h += '<div class="scarce">'+bs.line.map(sl=>{
     if(!sl.p) return '<span class="scpill" style="color:var(--red)">'+sl.lab+': HOLE</span>';
     const p = sl.p, bye = (typeof BYES!=="undefined" && BYES[p.team]===w);
     const e = injuryOf(p), sv = e ? injSeverity(e.s) : null;
-    return '<span class="scpill" data-card="'+p.id+'" style="cursor:pointer" title="'+esc(p.name)+' — '+sl.wp+' proj">'+sl.lab+' '+
-      esc(p.name.split(" ").slice(-1)[0])+(bye?' 🚫':'')+(sv?' <span class="'+sv.cls+'">'+sv.code+'</span>':'')+
+    const nick = (typeof nicknameOf==="function") ? nicknameOf(p) : null;
+    return '<span class="scpill" data-card="'+p.id+'" style="cursor:pointer" title="'+esc(p.name)+(nick?' — '+nick:'')+' — '+sl.wp+' proj">'+sl.lab+' '+
+      esc(p.name.split(" ").slice(-1)[0])+(nick?' <span style="color:var(--gold)" aria-hidden="true">★</span>':'')+(bye?' 🚫':'')+(sv?' <span class="'+sv.cls+'">'+sv.code+'</span>':'')+
       ' <b class="mono">'+sl.wp+'</b></span>';
   }).join("")+'</div>';
   // start/sit vs my ACTUAL Sleeper lineup (#644)
@@ -424,6 +427,7 @@ function myWeekHtml(byId){
   }
   if(grid.length) h += '<div class="benchhead">📆 Byes ahead</div><div class="scarce">'+grid.join("")+'</div>';
   if(typeof hqMondayLine==="function") h += hqMondayLine();                       // #727
+  if(typeof titleChaseHtml==="function") h += titleChaseHtml();                   // #761
   // rival tracker (#661)
   try{
     const rs = +S.settings.rivalSlot, s2r = S.settings.slot2rid;
@@ -1502,6 +1506,7 @@ function seasonDeckHtml(){                                                      
     btn("renderSeasonStats()","📈","Season","Efficiency, luck, ROI, ghost season — X")+
     btn("weeklyRecap2()","📖","Recap","Last week's story + share card")+
     btn("renderAlertCenter()","🔔",un?String(un):"Alerts","Alert center")+
+    btn("egoDash()","😤","Ego","The ego dashboard: hype card, receipts, speech, trash talk")+
     btn("document.getElementById('gradeBtn').click()","🎓","Report","Draft report")+
     btn("document.getElementById('injBtn').click()","🩺","Health","Injury center")+
     '<button class="hbtn deckbtn" id="weekRecapBtn"><span class="dicon">📅</span><span class="dlab">Weeks</span></button>'+

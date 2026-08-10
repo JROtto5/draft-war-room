@@ -15,7 +15,7 @@ try {
   out.push("hero:"+(document.getElementById("hero").innerHTML.includes("% at #")?"OK":"BAD"));
   out.push("avatars:"+(document.querySelectorAll("#poolBody .avatar").length>10?"OK":"BAD"));
   out.push("stamp:"+(document.getElementById("buildStamp").textContent.includes("build v")?"OK":"BAD"));
-  out.push("mods:"+((window.__mod||[]).length===5?"OK":"BAD("+(window.__mod||[]).join("/")+")"));
+  out.push("mods:"+((window.__mod||[]).length===6?"OK":"BAD("+(window.__mod||[]).join("/")+")"));
   pickMine(allPlayers().find(p=>p.name==="Josh Allen").id);
   const c={QB:0}; S.mine.forEach(id=>{const p=idIndex()[id]; if(p&&p.pos==="QB")c.QB++;});
   out.push("pick:"+(c.QB===1?"OK":"BAD"));
@@ -159,6 +159,15 @@ try {
       Array.isArray(gp.moves) && typeof rosSos(p0)==="number" &&
       (pathToPlayoffs()===null || typeof pathToPlayoffs()==="object") &&
       typeof planTick==="function" && typeof renderGamePlan==="function";
+  }catch(e){ return false; }})()?"OK":"BAD"));
+  // Hype engine runs offline (#769)
+  out.push("hype:"+((()=>{try{
+    const hl=hypeLine(), tt=trashTalk();
+    return typeof hl==="string" && hl.length>10 && typeof tt==="string" && tt.length>10 &&
+      ["mild","standard","full"].includes(hypeDial()) && typeof hypeOn("mild")==="boolean" &&
+      (nicknameOf(allPlayers()[0])===null || typeof nicknameOf(allPlayers()[0])==="string") &&
+      typeof hypeCard==="function" && typeof receiptsCard==="function" && typeof egoDash==="function" &&
+      typeof pregameSpeech==="function" && typeof entranceSplash==="function" && typeof titleChaseHtml()==="string";
   }catch(e){ return false; }})()?"OK":"BAD"));
   // My Week math runs offline on fixtures (#654)
   out.push("week:"+((()=>{try{

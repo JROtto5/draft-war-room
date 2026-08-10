@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 
 const SHIPPED = [
-  "index.html", "styles.css", "engine.js", "core.js", "season.js", "views.js", "wire.js",
+  "index.html", "styles.css", "engine.js", "core.js", "season.js", "win.js", "views.js", "wire.js",
   "boot.js", "data.js", "sw.js", "manifest.json", "404.html",
 ];
 

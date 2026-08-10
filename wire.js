@@ -1149,6 +1149,7 @@ $("#settingsBtn").addEventListener("click", ()=>{
   if(qf.options.length<2) for(let h2=0;h2<24;h2++){ [qf,qt].forEach(sl2=>{ const o=document.createElement("option"); o.value=h2; o.textContent=(h2%12||12)+(h2<12?"am":"pm"); sl2.appendChild(o.cloneNode(true)); }); }
   const q = S.settings.quietHours||{from:23,to:8};
   qf.value = q.from; qt.value = q.to;
+  $("#setHype").value = S.settings.hype||"standard";
   const rs=$("#setRival");
   rs.innerHTML='<option value="">none</option>'+Array.from({length:S.settings.teams},(_,i)=>i+1)
     .filter(s2=>s2!==S.settings.slot).map(s2=>'<option value="'+s2+'"'+(+S.settings.rivalSlot===s2?' selected':'')+'>'+esc(slotName(s2))+'</option>').join("");
@@ -1248,6 +1249,7 @@ $("#settingsSave").addEventListener("click", ()=>{
     close:$("#alClose").checked, waiver:$("#alWaiver").checked, oppnews:$("#alOpp").checked};
   S.settings.scoreDelta = Math.min(20, Math.max(2, +$("#setScoreDelta").value||5));
   S.settings.quietHours = {from:+$("#setQuietFrom").value||23, to:+$("#setQuietTo").value===0?0:(+$("#setQuietTo").value||8)};
+  S.settings.hype = $("#setHype").value||"standard";
   S.settings.cols = {adp:$("#colADP").checked, edge:$("#colEdge").checked, rd:$("#colRd").checked};
   S.settings.fontSize = $("#setFont").value;
   S.settings.cbSafe = $("#setCbSafe").checked;
