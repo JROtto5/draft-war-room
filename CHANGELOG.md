@@ -1,5 +1,21 @@
 # Changelog — Draft War Room
 
+## v15.0 (2026-08-11) — The Perfect Sim (#1067–#1166)
+The whole 9 yards. 📱 Sleeper's own weekly projections as a switchable
+source (baked / Sleeper / blend, 6pt-corrected, pins on top, divergence
+report + alerts) · 🩹 an injury engine: per-player weekly hazard (position ×
+age × nagging flags), in-sim injuries with geometric durations and next-man-
+up replacement, O/IR return timelines, fragility reports with depth grades ·
+🔮 season sim v2: per-week team strength from real optimal lineups (byes dent
+exactly on schedule), player-variance rollups, waiver drift, PF tiebreakers,
+reseeded bracket with homefield, toilet-bowl odds, rival H2H · 🧠 opponents
+sim at their own learned sloppiness with FAAB-scaled healing; one cached
+run powers the Futures table, scout futures, and the Sunday rooting guide ·
+🧪 the what-if machine: price any add/drop/trade/injury in make% and title%
+with CI bands, saved scenarios, clinch/elimination magic numbers · 🎛 all of
+it under the Sim Center's four tabs with shared caches and JSON export.
+61 E2E checks. New simx.js module.
+
 ## v14.0 (2026-08-10) — The Functional Hundred (#967–#1066)
 Everything clicks, provably. ⇄ Lineup lab: swap sheets with ranked bench
 deltas, slot editors with cross-slot bumps, ⚡ stage-optimal / 🎲 stage-win-
