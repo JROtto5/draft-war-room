@@ -527,6 +527,7 @@ const PALETTE_ACTIONS = [
   ["🎙 Voice control", ()=>voxStart()],
   ["📢 The Arsenal", ()=>renderArsenal()],
   ["📺 Highlight reel", ()=>renderReel()],
+  ["🏛 The Vault", ()=>renderVault()],
   ["⚔ Jump: matchup", ()=>{ const el=document.getElementById("spMatchup"); if(el) el.scrollIntoView({behavior:"smooth"}); }],
   ["🏆 Jump: standings", ()=>{ const el=document.getElementById("spStandings"); if(el) el.scrollIntoView({behavior:"smooth"}); }],
   ["🔥 Jump: the wire", ()=>{ const el=document.getElementById("spWire"); if(el) el.scrollIntoView({behavior:"smooth"}); }],

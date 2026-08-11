@@ -140,6 +140,18 @@ try {
     }
     return "OK";
   })()));
+  // The vault (#1227–#1241)
+  out.push("vault:"+((()=>{try{
+    const mk=(rid,pts,mid)=>({matchup_id:mid, roster_id:rid, points:pts, starters:[], players:[], players_points:{}});
+    const hist=[[mk(1,150.5,1),mk(2,100.2,1)],[mk(1,80.1,1),mk(2,120.9,1)],[mk(1,110,1),mk(2,109.5,1)]];
+    const rec=vaultRecords(hist);
+    const empty=vaultRecords([]);
+    const mineEmpty=vaultMine([]);
+    return rec.hiWeek.pts===150.5 && rec.hiWeek.w===1 && rec.loWeek.pts===80.1 &&
+      rec.blowout.d===50.3 && Math.abs(rec.closest.d-0.5)<0.01 && rec.streak.n>=1 &&
+      empty.hiWeek===null && mineEmpty.winStreak===0 && Array.isArray(vaultSearch("zz")) &&
+      Array.isArray(dynastyGet()) && typeof renderVault==="function" && typeof dynastySnapshot==="function";
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // Broadcast feed (#1212–#1226)
   out.push("cast:"+((()=>{try{
     const fx={scoringPlays:[

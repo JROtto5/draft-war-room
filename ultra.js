@@ -548,4 +548,159 @@ function renderReel(){                                                          
   ov.addEventListener("click", e=>{ if(e.target===ov || e.target.closest("[data-rlx]")) ov.remove(); });
 }
 
+/* ---------- R78 THE VAULT (#1227–#1241) ---------- */
+function vaultRecords(hist){                                                     // pure (#1228)
+  const rec = {hiWeek:null, loWeek:null, blowout:null, closest:null, streak:null};
+  const streaks = {};
+  (hist||[]).forEach((wm,wi)=>{
+    const w = wi+1;
+    const finals = (wm||[]).filter(m=>(m.points||0)>0);
+    finals.forEach(m=>{
+      const row = {rid:m.roster_id, pts:Math.round((m.points||0)*10)/10, w};
+      if(!rec.hiWeek || row.pts>rec.hiWeek.pts) rec.hiWeek = row;
+      if(!rec.loWeek || row.pts<rec.loWeek.pts) rec.loWeek = row;
+    });
+    const pairs = {}; finals.forEach(m=>{ (pairs[m.matchup_id]=pairs[m.matchup_id]||[]).push(m); });
+    Object.values(pairs).forEach(pr=>{
+      if(pr.length!==2) return;
+      const d = Math.round(Math.abs(pr[0].points-pr[1].points)*10)/10;
+      const winner = pr[0].points>pr[1].points ? pr[0] : pr[1];
+      const loser = pr[0].points>pr[1].points ? pr[1] : pr[0];
+      if(!rec.blowout || d>rec.blowout.d) rec.blowout = {d, w, rid:winner.roster_id, over:loser.roster_id};
+      if(!rec.closest || d<rec.closest.d) rec.closest = {d, w, rid:winner.roster_id, over:loser.roster_id};
+      streaks[winner.roster_id] = (streaks[winner.roster_id]||0)+1;
+      streaks[loser.roster_id] = 0;
+      const cur = streaks[winner.roster_id];
+      if(!rec.streak || cur>rec.streak.n) rec.streak = {n:cur, rid:winner.roster_id, w};
+    });
+  });
+  return rec;
+}
+function vaultMine(hist){                                                        // #1229/#1232/#1235
+  const myRid = +S.settings.sleeperRosterId, byId = idIndex(), s2o = sleeperToOurs();
+  const rows = (typeof myWeeklyRows==="function") ? myWeeklyRows(hist) : [];
+  const out = {best:null, worst:null, bestPlayer:null, worstStart:null, winStreak:0, loseStreak:0, optStreak:0, perf:[]};
+  let ws = 0, ls = 0, os = 0;
+  rows.forEach(r=>{
+    const pts = Math.round((r.m.points||0)*10)/10;
+    if(!out.best || pts>out.best.pts) out.best = {pts, w:r.w, opp:r.opp?ridName(r.opp.roster_id):""};
+    if(!out.worst || pts<out.worst.pts) out.worst = {pts, w:r.w};
+    if(r.opp && r.m.points>r.opp.points){ ws++; ls = 0; } else if(r.opp){ ls++; ws = 0; }
+    out.winStreak = Math.max(out.winStreak, ws); out.loseStreak = Math.max(out.loseStreak, ls);
+    if(r.eff && r.eff.eff>=99){ os++; out.optStreak = Math.max(out.optStreak, os); } else os = 0;
+    (r.m.starters||[]).forEach(sid=>{
+      const p = byId[s2o[String(sid)]]; if(!p) return;
+      const got = +r.m.players_points[sid]||0;
+      out.perf.push({name:p.name, pos:p.pos, pts:Math.round(got*10)/10, w:r.w});
+      if(!out.bestPlayer || got>out.bestPlayer.pts) out.bestPlayer = {name:p.name, pts:Math.round(got*10)/10, w:r.w};
+      if(p.pos!=="DEF" && (!out.worstStart || got<out.worstStart.pts)) out.worstStart = {name:p.name, pts:Math.round(got*10)/10, w:r.w};
+    });
+  });
+  out.perf.sort((a,b)=>b.pts-a.pts);
+  return out;
+}
+function vaultH2H(hist){                                                         // #1236
+  const l = (typeof h2hLedger==="function") ? h2hLedger(hist) : {};
+  return Object.values(l).sort((a,b)=>(b.w-b.l)-(a.w-a.l));
+}
+function vaultSearch(q){                                                         // #1237
+  const hist = seasonArchive(), byId = idIndex(), s2o = sleeperToOurs();
+  const needle = String(q||"").toLowerCase().trim();
+  if(needle.length<3) return [];
+  const myRid = +S.settings.sleeperRosterId, out = [];
+  (hist||[]).forEach((wm,wi)=>{
+    const m = (wm||[]).find(x=>+x.roster_id===myRid); if(!m || !m.players_points) return;
+    for(const sid in m.players_points){
+      const p = byId[s2o[String(sid)]]; if(!p) continue;
+      if(!p.name.toLowerCase().includes(needle)) continue;
+      out.push({w:wi+1, name:p.name, pts:Math.round((+m.players_points[sid]||0)*10)/10,
+        started:(m.starters||[]).includes(sid)});
+    }
+  });
+  return out.sort((a,b)=>a.w-b.w);
+}
+function dynastyGet(){ try{ return JSON.parse(localStorage.getItem(LS_KEY+"-dynasty")||"[]"); }catch(e){ return []; } }
+function dynastySnapshot(){                                                      // #1233/#1234
+  try{
+    const hist = seasonArchive(); if(hist.length<13) return;
+    const yr = new Date().getFullYear();
+    const d = dynastyGet();
+    if(d.some(x=>x.year===yr)) return;
+    const ms = (typeof myStandingsRow==="function") ? myStandingsRow() : null;
+    const mine = vaultMine(hist);
+    d.push({year:yr, w:ms?ms.row.w:null, l:ms?ms.row.l:null, place:ms?ms.place:null,
+      pf:ms?ms.row.pf:null, best:mine.best, bestPlayer:mine.bestPlayer, roster:rosterIds().slice(0,20)});
+    localStorage.setItem(LS_KEY+"-dynasty", JSON.stringify(d.slice(-20)));
+    toast("🏛 "+yr+" sealed in the vault");
+  }catch(e){}
+}
+function recordWatch(){                                                          // #1238
+  try{
+    const hist = seasonArchive(); if(hist.length<2) return;
+    const rec = vaultRecords(hist), myRid = +S.settings.sleeperRosterId;
+    if(!rec.hiWeek || +rec.hiWeek.rid!==myRid) return;
+    const k = LS_KEY+"-recwatch";
+    if(localStorage.getItem(k)===String(rec.hiWeek.pts)) return;
+    localStorage.setItem(k, String(rec.hiWeek.pts));
+    if(rec.hiWeek.w===hist.length) alertFire("record", "🏛 LEAGUE RECORD: "+rec.hiWeek.pts+" points",
+      "Highest single week in the archive — week "+rec.hiWeek.w+", and it's yours");
+  }catch(e){}
+}
+function renderVault(){                                                          // #1227
+  const old = document.getElementById("vaultOverlay"); if(old){ old.remove(); return; }
+  const hist = seasonArchive();
+  const rec = vaultRecords(hist), mine = vaultMine(hist), h2h = vaultH2H(hist), dyn = dynastyGet();
+  const ov = document.createElement("div"); ov.id = "vaultOverlay"; ov.className = "snov";
+  let h = '<div class="sbcard" role="dialog" aria-label="The vault"><button class="sbx" data-vlx="1">✕</button>'+
+    '<div class="tag">🏛 THE VAULT</div>';
+  if(!hist.length) h += '<div class="empty">The vault fills as weeks finish. Come back after week 1.</div>';
+  else {
+    h += '<div class="benchhead">📜 League records</div>'+
+      (rec.hiWeek?'<div class="sbply"><span>Highest week</span><b class="mono">'+esc(ridName(rec.hiWeek.rid))+' — '+rec.hiWeek.pts+' (W'+rec.hiWeek.w+')</b></div>':'')+
+      (rec.loWeek?'<div class="sbply"><span>Lowest week</span><b class="mono">'+esc(ridName(rec.loWeek.rid))+' — '+rec.loWeek.pts+' (W'+rec.loWeek.w+')</b></div>':'')+
+      (rec.blowout?'<div class="sbply"><span>Biggest blowout</span><b class="mono">'+esc(ridName(rec.blowout.rid))+' by '+rec.blowout.d+' (W'+rec.blowout.w+')</b></div>':'')+
+      (rec.closest?'<div class="sbply"><span>Closest game</span><b class="mono">'+esc(ridName(rec.closest.rid))+' by '+rec.closest.d+' (W'+rec.closest.w+')</b></div>':'')+
+      (rec.streak?'<div class="sbply"><span>Longest streak</span><b class="mono">'+esc(ridName(rec.streak.rid))+' — '+rec.streak.n+' straight</b></div>':'');
+    h += '<div class="benchhead">🥇 My bests</div>'+
+      (mine.best?'<div class="sbply"><span>Best week</span><b class="mono">'+mine.best.pts+' (W'+mine.best.w+(mine.best.opp?' vs '+esc(mine.best.opp):'')+')</b></div>':'')+
+      (mine.bestPlayer?'<div class="sbply"><span>Best player game</span><b class="mono">'+esc(mine.bestPlayer.name)+' — '+mine.bestPlayer.pts+' (W'+mine.bestPlayer.w+')</b></div>':'')+
+      (mine.worst?'<div class="sbply"><span>Worst week</span><b class="mono">'+mine.worst.pts+' (W'+mine.worst.w+')</b></div>':'')+
+      (mine.worstStart?'<div class="sbply"><span>Worst start</span><b class="mono">'+esc(mine.worstStart.name)+' — '+mine.worstStart.pts+' (W'+mine.worstStart.w+')</b></div>':'')+
+      '<div class="sbply"><span>Streaks</span><b class="mono">W'+mine.winStreak+' best · L'+mine.loseStreak+' worst · '+mine.optStreak+' perfect lineups</b></div>';
+    if(mine.perf.length) h += '<div class="benchhead">🏆 Hall of fame (my top games)</div><div class="scarce">'+
+      mine.perf.slice(0,6).map(x=>'<span class="scpill good">'+esc(x.name.split(" ").slice(-1)[0])+' '+x.pts+' <span class="dimtxt">W'+x.w+'</span></span>').join("")+'</div>'+
+      '<div class="benchhead">💀 Hall of shame</div><div class="scarce">'+
+      mine.perf.filter(x=>x.pos!=="DEF").slice(-5).reverse().map(x=>'<span class="scpill warn">'+esc(x.name.split(" ").slice(-1)[0])+' '+x.pts+' <span class="dimtxt">W'+x.w+'</span></span>').join("")+'</div>';
+    if(h2h.length) h += '<div class="benchhead">📒 Head-to-head</div>'+h2h.map(x=>
+      '<div class="sbply"><span>vs '+esc(ridName(x.rid))+'</span><b class="mono">'+x.w+'-'+x.l+'</b></div>').join("");
+    h += '<div class="benchhead">🎞 Film room</div>'+((typeof myWeeklyRows==="function")?myWeeklyRows(hist):[]).map(r=>
+      '<div class="sbply"><span>Week '+r.w+(r.opp?' vs '+esc(ridName(r.opp.roster_id)):'')+'</span><b class="mono" style="color:var(--'+
+      (r.opp && r.m.points>r.opp.points?'green':'red')+')">'+(r.m.points||0).toFixed(1)+(r.opp?'–'+(r.opp.points||0).toFixed(1):'')+
+      (r.eff?' · '+r.eff.eff+'%':'')+'</b></div>').join("");
+  }
+  if(dyn.length) h += '<div class="benchhead">👑 Dynasty</div>'+dyn.map(y=>
+    '<div class="sbply"><span>'+y.year+'</span><b class="mono">'+(y.w!=null?y.w+'-'+y.l+' · '+ordinal(y.place):'—')+'</b></div>').join("");
+  h += '<div class="benchhead">🔎 Search the vault</div><div class="sspad" style="display:flex;gap:6px">'+
+    '<input type="text" id="vaultQ" placeholder="player name…" style="flex:1"><button class="hbtn" data-vsearch="1">Find</button></div><div id="vaultOut"></div>';
+  h += '<div class="sspad"><button class="hbtn" data-vexport="1">⇩ Export the vault</button></div></div>';
+  ov.innerHTML = h;
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{
+    if(e.target===ov || e.target.closest("[data-vlx]")) return ov.remove();
+    if(e.target.closest("[data-vsearch]")){
+      const q = (document.getElementById("vaultQ")||{}).value||"";
+      const rows = vaultSearch(q);
+      const outEl = document.getElementById("vaultOut");
+      if(outEl) outEl.innerHTML = rows.length ? rows.map(r=>'<div class="sbply"><span>W'+r.w+' '+esc(r.name)+(r.started?'':' <span class="dimtxt">(bench)</span>')+'</span><b class="mono">'+r.pts+'</b></div>').join("")
+        : '<div class="empty">No weeks found for that name.</div>';
+    }
+    if(e.target.closest("[data-vexport]")){                                      // #1239
+      const blob = new Blob([JSON.stringify({exported:new Date().toISOString(), records:rec, mine, h2h, dynasty:dyn, weeks:hist.length}, null, 1)], {type:"application/json"});
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "war-room-vault.json"; a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+      toast("⇩ Vault exported");
+    }
+  });
+}
+
 window.__mod = window.__mod || []; window.__mod.push("ultra.js");
