@@ -1151,6 +1151,14 @@ $("#settingsBtn").addEventListener("click", ()=>{
   qf.value = q.from; qt.value = q.to;
   $("#setHype").value = S.settings.hype||"standard";
   $("#setCalm").checked = !!S.settings.calm;
+  $("#voxSpeak").checked = S.settings.voxSpeak!==false;
+  $("#voxWake").checked = !!S.settings.voxWake;
+  try{ const sel=$("#voxVoice");
+    if(sel.options.length<2 && "speechSynthesis" in window){
+      speechSynthesis.getVoices().slice(0,12).forEach(v=>{ const o=document.createElement("option"); o.value=v.name; o.textContent=v.name; sel.appendChild(o); });
+    }
+    sel.value = S.settings.voxVoice||"";
+  }catch(e){}
   $("#setProjSrc").value = S.settings.projSrc||"blend";
   $("#setProjBlend").value = isNaN(+S.settings.projBlendPct)?50:+S.settings.projBlendPct;
   $("#projBlendVal").textContent = $("#setProjBlend").value+"% 📱";
@@ -1264,6 +1272,9 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.quietHours = {from:+$("#setQuietFrom").value||23, to:+$("#setQuietTo").value===0?0:(+$("#setQuietTo").value||8)};
   S.settings.hype = $("#setHype").value||"standard";
   S.settings.calm = $("#setCalm").checked;
+  S.settings.voxSpeak = $("#voxSpeak").checked;
+  S.settings.voxWake = $("#voxWake").checked;
+  S.settings.voxVoice = $("#voxVoice").value||"";
   S.settings.projSrc = $("#setProjSrc").value||"blend";
   S.settings.projBlendPct = +$("#setProjBlend").value;
   _memo = {key:null};

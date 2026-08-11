@@ -224,6 +224,13 @@
       <div class="frow"><label>🔔 Test the alert chain</label><button class="hbtn" id="alertTestBtn" type="button" data-act="alertTest">Send test alert</button></div>
       <div class="frow"><label>🌙 Quiet hours (no notifications)</label><span style="display:flex;gap:6px;align-items:center;font-size:11px">
         <select id="setQuietFrom"></select> → <select id="setQuietTo"></select></span></div>
+      <div class="frow"><label>🎙 Voice</label><span style="display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--dim);align-items:center">
+        <label><input type="checkbox" id="voxSpeak"> speak answers</label>
+        <label><input type="checkbox" id="voxWake"> require "war room" wake phrase</label>
+        <select id="voxVoice" style="max-width:150px"><option value="">system voice</option></select></span></div>
+      <div class="frow"><label>💬 Ask the war room</label><span style="display:flex;gap:6px;width:100%">
+        <input type="text" id="voxAsk" placeholder="what's my score?" style="flex:1">
+        <button class="hbtn" type="button" id="voxAskBtn">Ask</button></span></div>
       <div class="frow"><label>🧊 Calm mode (no decorative motion)</label><input type="checkbox" id="setCalm"></div>
       <div class="frow"><label>😤 Hype dial</label><select id="setHype"><option value="mild">mild</option><option value="standard">standard</option><option value="full">FULL SEND</option></select></div>
       <div class="frow"><label>📄 My projections (CSV: name,ppg)</label><span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">

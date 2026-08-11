@@ -96,6 +96,7 @@ function bridgeOpen(){                                                          
   try{ if(navigator.wakeLock && navigator.wakeLock.request) navigator.wakeLock.request("screen").then(s2=>{ BRIDGE.wake = s2; }).catch(()=>{}); }catch(e){}   // #1171
   if(typeof leagueWeekData==="function") leagueWeekData(true).then(()=>bridgeRender());
   toast("🖥 War room mode — F for fullscreen, Esc to exit");
+  if(S.settings.voxBridge!==false && !VOX.on && (window.SpeechRecognition||window.webkitSpeechRecognition)) { try{ voxStart(); }catch(e){} }
 }
 function bridgeClose(){
   const el = document.getElementById("bridge"); if(el) el.remove();
@@ -139,6 +140,120 @@ function bridgeOffer(){                                                         
     localStorage.setItem(k, "1");
     toast("🖥 Games are live — open War Room mode?", {action:{label:"OPEN", fn:bridgeOpen}});
   }catch(e){}
+}
+
+/* ---------- R75 THE VOICE (#1182–#1196) ---------- */
+const VOX = {rec:null, on:false, last:""};
+function voxSay(text){                                                           // #1183/#1193
+  try{
+    if(S.settings.voxSpeak===false || !("speechSynthesis" in window)) return;
+    const u = new SpeechSynthesisUtterance(text);
+    const want = S.settings.voxVoice;
+    if(want){ const v = speechSynthesis.getVoices().find(x=>x.name===want); if(v) u.voice = v; }
+    u.rate = 1.02; u.pitch = 1;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  }catch(e){}
+}
+function voxSwagger(base, swag){                                                 // #1193
+  return (typeof hypeOn==="function" && hypeOn("full") && swag) ? base+" "+swag : base;
+}
+function voxAnswer(q){                                                           // pure-ish intent → answer (#1184–#1189)
+  const t = String(q||"").toLowerCase().trim().replace(/^war ?room[,\s]*/,"");
+  const byId = idIndex(), w = curWeek(), md = WEEKST.mate;
+  const bs = rosterIds().length ? bestStartersWeek(rosterIds(), byId, w) : null;
+  const nameHit = txt=>{
+    const ids = rosterIds().concat((typeof freeAgents==="function" ? freeAgents().slice(0,120).map(p=>p.id) : []));
+    let best = null;
+    ids.map(id=>byId[id]).filter(Boolean).forEach(p=>{
+      const last = p.name.split(" ").slice(-1)[0].toLowerCase();
+      if(txt.includes(p.name.toLowerCase()) || (last.length>3 && txt.includes(last))) best = best||p;
+    });
+    return best;
+  };
+  if(/^(open |show |go to )?(war ?room|bridge)$/.test(t) || t.includes("war room mode")){ bridgeOpen(); return {say:"War room mode.", act:1}; }
+  if(/(open|show)\s+(the\s+)?plan|read me the plan|what.s the plan/.test(t)){
+    try{
+      const {moves} = gamePlanMoves();
+      if(!moves.length) return {say:voxSwagger("No moves needed. The lineup is already optimal.","Sit back.")};
+      return {say:"Week "+w+" plan. "+moves.slice(0,3).map((m,i)=>(i+1)+". "+m.txt.replace(/^[^\w]+\s*/,"")+", "+m.tag.t.toLowerCase()).join(". ")+"."};
+    }catch(e){ return {say:"The plan isn't ready yet."}; }
+  }
+  if(/brief|analyst|report/.test(t)){ if(typeof analystReport==="function") analystReport(); return {say:"Opening the analyst brief.", act:1}; }
+  if(/(score|winning|losing|how.s it going)/.test(t)){
+    if(!md || !md.me) return {say:"No live matchup loaded yet."};
+    const mine = md.me.pts, theirs = md.opp ? md.opp.pts : 0;
+    const ytp = (typeof yetToPlay==="function") ? yetToPlay(md.me) : null;
+    const wp = window._liveWp!=null ? window._liveWp : (bs && md.opp ? Math.round(winProb(bs.pts, bestStartersWeek(md.opp.ids, byId, w).pts)*100) : null);
+    const lead = mine-theirs;
+    return {say:voxSwagger("You have "+mine.toFixed(1)+", "+(md.opp?md.opp.name:"they")+" "+theirs.toFixed(1)+". "+
+      (lead>=0?"Up "+lead.toFixed(1)+".":"Down "+(-lead).toFixed(1)+".")+
+      (ytp?" "+ytp.waiting.length+" of yours left to play.":"")+(wp!=null?" Win probability "+wp+" percent.":""),
+      lead>=0?"Keep your foot down.":"Not over yet.")};
+  }
+  if(/playoff|odds|chances/.test(t)){
+    const odds = SEASON.lastOdds ? SEASON.lastOdds[+S.settings.sleeperRosterId] : null;
+    return {say: odds!=null ? voxSwagger("Playoff odds "+odds+" percent.","Book it.") : "Playoff odds haven't computed yet."};
+  }
+  if(/should i start|start or sit|who should i start/.test(t)){
+    const p = nameHit(t);
+    if(p && bs){
+      const starting = bs.starterIds.has(p.id);
+      const wp2 = weekProj(p, w);
+      const alt = (typeof benchSwapFor==="function") ? benchSwapFor(p) : null;
+      return {say: starting ? p.name+" is in the optimal lineup at "+wp2.toFixed(1)+" projected. Start him."
+        : p.name+" projects "+wp2.toFixed(1)+", below your starter"+(alt?" "+alt.name:"")+". Bench him."};
+    }
+    if(bs) return {say:"Your optimal nine is "+bs.line.filter(sl=>sl.p).slice(0,3).map(sl=>sl.p.name).join(", ")+" and six more. Say a name for a verdict."};
+  }
+  if(/^(start|swap|play)\s/.test(t) && /\bfor\b|\bover\b|\binstead\b/.test(t)){   // #1188
+    const parts = t.split(/\bfor\b|\bover\b|\binstead of\b/);
+    const inn = nameHit(parts[0]||""), out = nameHit(parts[1]||"");
+    if(inn && out && typeof stageSwap==="function"){ stageSwap(out.id, inn.id); return {say:"Staged "+inn.name+" in for "+out.name+". Commit it in Sleeper.", act:1}; }
+    return {say:"I couldn't match both names."};
+  }
+  if(/open sim|simulate|sim center/.test(t)){ if(typeof simCenter==="function") simCenter(); return {say:"Sim center.", act:1}; }
+  if(/waiver|wire|pick ?up/.test(t)){ if(typeof renderWaivers==="function") renderWaivers(); return {say:"Waiver wire.", act:1}; }
+  if(/scout|opponent/.test(t)){ if(typeof scoutMyOpponent==="function") scoutMyOpponent(); return {say:"Scouting them now.", act:1}; }
+  if(/hype|talk|trash/.test(t)){ const line = (typeof trashTalk==="function") ? trashTalk() : hypeLine(); return {say:String(line).replace(/<[^>]+>/g,"")}; }
+  return {say:"Say: score, plan, brief me, playoff odds, should I start a name, or war room."};
+}
+function voxAsk(q){                                                              // shared by voice + typed box (#1195)
+  const r = voxAnswer(q);
+  const chip = document.getElementById("voxChip");
+  if(chip){ chip.textContent = "“"+q+"” → "+r.say; chip.hidden = false; setTimeout(()=>{ if(chip) chip.hidden = true; }, 9000); }
+  toast("🎙 "+r.say);
+  voxSay(r.say);
+  return r;
+}
+function voxStart(){                                                             // #1182
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR) return toast("This browser has no speech recognition — use the ask box", {warn:true});
+  if(VOX.on){ try{ VOX.rec.stop(); }catch(e){} VOX.on = false; document.body.classList.remove("voxon"); return toast("🎙 off"); }
+  const rec = new SR();
+  rec.continuous = true; rec.interimResults = false; rec.lang = "en-US";
+  rec.onresult = ev=>{
+    const txt = ev.results[ev.results.length-1][0].transcript.trim();
+    VOX.last = txt;
+    if(S.settings.voxWake && !/^war ?room/i.test(txt)) return;                    // #1190
+    voxAsk(txt);
+  };
+  rec.onend = ()=>{ if(VOX.on){ try{ rec.start(); }catch(e){} } };
+  rec.onerror = ()=>{};
+  VOX.rec = rec; VOX.on = true; document.body.classList.add("voxon");
+  try{ rec.start(); }catch(e){}
+  toast("🎙 Listening — ask me anything. Say 'score' or 'read me the plan'.");
+}
+function voxUi(){                                                                // mount chip + ask box (#1191/#1195)
+  if(!document.getElementById("voxChip")){
+    const chip = document.createElement("div"); chip.id = "voxChip"; chip.hidden = true; chip.setAttribute("role","status");
+    document.body.appendChild(chip);
+  }
+  const btn = document.getElementById("voxAskBtn"), inp = document.getElementById("voxAsk");
+  if(btn && !btn.dataset.wired){
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", ()=>{ if(inp && inp.value.trim()){ voxAsk(inp.value.trim()); inp.value=""; } });
+    if(inp) inp.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); btn.click(); } });
+  }
 }
 
 window.__mod = window.__mod || []; window.__mod.push("ultra.js");

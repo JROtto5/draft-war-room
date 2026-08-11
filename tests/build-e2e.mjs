@@ -140,6 +140,28 @@ try {
     }
     return "OK";
   })()));
+  // The voice: intent parser (#1182–#1196)
+  out.push("vox:"+((()=>{try{
+    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();
+    const s0=S.settings.voxSpeak; S.settings.voxSpeak=false;
+    const a1=voxAnswer("what's my score");
+    const a2=voxAnswer("read me the plan");
+    const a3=voxAnswer("what are my playoff odds");
+    const p0=allPlayers().find(x=>SEASON_LIVE.ids.includes(x.id) && x.pos==="WR");
+    const a4=voxAnswer("should i start "+p0.name);
+    const a5=voxAnswer("banana pancakes");
+    localStorage.removeItem(LS_KEY+"-staged"+curWeek());
+    const inn=allPlayers().find(x=>SEASON_LIVE.ids.includes(x.id) && x.pos==="RB");
+    const outp=allPlayers().filter(x=>SEASON_LIVE.ids.includes(x.id) && x.pos==="RB" && x.id!==inn.id)[0];
+    const a6=voxAnswer("start "+inn.name+" for "+outp.name);
+    const stagedOk=stagedGet().length===1;
+    stagedClear(); S.settings.voxSpeak=s0;
+    SEASON_LIVE.ids=null; SEASON_LIVE.at=0;
+    const all=[a1,a2,a3,a4,a5,a6].every(x=>x && typeof x.say==="string" && x.say.length>3);
+    return all && /score|matchup|You have/i.test(a1.say) && /plan|optimal|ready/i.test(a2.say) &&
+      /odds|percent|computed/i.test(a3.say) && /start|bench|optimal/i.test(a4.say) && /Say:/.test(a5.say) &&
+      stagedOk && typeof voxStart==="function" && typeof voxAsk==="function";
+  }catch(e){ SEASON_LIVE.ids=null; return false; }})()?"OK":"BAD"));
   // War room mode (#1167–#1181)
   out.push("bridge:"+((()=>{try{
     SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();

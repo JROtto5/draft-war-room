@@ -1652,6 +1652,7 @@ function seasonDeckHtml(){                                                      
   };
   return '<div class="actions" id="seasonDeck" role="navigation" aria-label="Season navigation">'+
     btn("bridgeOpen()","🖥","Bridge","War Room mode — big-screen Sunday cockpit (B)")+
+    btn("voxStart()","🎙","Voice","Hands-free: ask the war room anything")+
     btn("simCenter()","🎛","Sims","Sim Center: this week · season · what-if · fragility (M/Y)")+
     btn("renderScoreboard()","📊","Scores","League scoreboard, standings, playoff odds — S")+
     btn("renderTrades()","🔁","Trades","Trade center — D")+
