@@ -5,10 +5,11 @@
 
 /* ---------- R74 WAR ROOM MODE: the big screen (#1167–#1181) ---------- */
 const BRIDGE = {on:false, rot:0, paused:false, timer:null, wake:null, lastPts:{}};
-const BRIDGE_ROT = ["standings","rooting","wire","future"];
-function bridgePanelIntel(){                                                     // #1169
+const BRIDGE_ROT = ["broadcast","standings","rooting","wire","future"];
+function bridgePanelIntel(){                                                     // #1169/#1219
   const kind = BRIDGE_ROT[BRIDGE.rot % BRIDGE_ROT.length];
   const byId = idIndex();
+  if(kind==="broadcast") return {t:"📺 BROADCAST", h:((typeof castFeedHtml==="function")?castFeedHtml(8):'')};
   if(kind==="standings" && SCOREB.rosters){
     const st = standingsRows(SCOREB.rosters, SCOREB.users), myRid = +S.settings.sleeperRosterId;
     return {t:"🏆 STANDINGS", h:st.slice(0,8).map((r,i)=>'<div class="brrow'+(r.rid===myRid?" me":"")+'"><span>'+(i+1)+' '+esc(r.name)+'</span><b class="mono">'+r.w+'-'+r.l+'</b></div>').join("")};
@@ -47,7 +48,8 @@ function bridgeHtml(){
   };
   const intel = bridgePanelIntel();
   const kick = (typeof anyGameLive==="function" && anyGameLive()) ? null : (typeof nextOpp==="function" ? null : null);
-  return '<div class="brtop">'+
+  return ((typeof castRedzoneHtml==="function")?castRedzoneHtml():'')+
+    '<div class="brtop">'+
       '<div class="brteam"><span>OTTO5</span><b class="mono" id="brMe">'+(md&&md.me?md.me.pts.toFixed(1):'0.0')+'</b></div>'+
       '<div class="brmid"><b class="mono">'+(wp!=null?wp+'%':'W'+w)+'</b><span>'+(wp!=null?'WIN PROBABILITY':'WEEK')+'</span>'+
         (typeof anyGameLive==="function" && anyGameLive() ? '<span class="brlive">● LIVE</span>' : '<span class="dim">'+((typeof scenarioLine==="function" && scenarioLine())||'awaiting kickoff')+'</span>')+'</div>'+
@@ -420,6 +422,130 @@ function arsenalAutoFire(){                                                     
     localStorage.setItem(k, "1");
     alertFire("arsenal", "📢 This week's artillery is ready", "Power rankings + newsletter waiting in the Arsenal");
   }catch(e){}
+}
+
+/* ---------- R77 BROADCAST: the live feed (#1212–#1226) ---------- */
+const CAST = {events:[], seen:{}, at:{}, redzone:[], lastLead:null};
+function castKey(ev){ return (ev.gid||"")+":"+(ev.clock||"")+":"+String(ev.text||"").slice(0,40); }
+function castParseSummary(j, gid, myNames, oppNames){                            // pure (#1212/#1226)
+  const out = [];
+  const plays = (j && j.scoringPlays) || [];
+  plays.forEach(p=>{
+    const txt = String(p.text||"");
+    const period = (p.period && p.period.number) || 0;
+    const clock = (p.clock && p.clock.displayValue) || "";
+    const mine = myNames.some(n=>txt.includes(n));
+    const theirs = !mine && oppNames.some(n=>txt.includes(n));
+    out.push({gid, text:txt, period, clock, mine, theirs,
+      team:(p.team && p.team.abbreviation)||"", type:(p.scoringType && p.scoringType.displayName)||"Score"});
+  });
+  const dr = (j && j.drives && j.drives.current) || null;
+  const rz = [];
+  if(dr && dr.plays && dr.plays.length){
+    const last = dr.plays[dr.plays.length-1];
+    const yl = last && last.end && last.end.yardsToEndzone;
+    if(yl!=null && yl<=20) rz.push({gid, team:(dr.team && dr.team.abbreviation)||"", yl});
+  }
+  return {events:out, redzone:rz};
+}
+function lastNames(ids){
+  const byId = idIndex();
+  return (ids||[]).map(id=>byId[id]).filter(Boolean).map(p=>p.name.split(" ").slice(-1)[0]).filter(n=>n.length>3);
+}
+async function castPoll(){                                                       // #1221 throttled, only relevant games
+  try{
+    if(S.settings.castOff) return;
+    if(typeof anyGameLive!=="function" || !anyGameLive()) return;
+    const md = WEEKST.mate; if(!md || !md.me) return;
+    const byId = idIndex();
+    const myNames = lastNames(md.me.starters ? md.me.starters.filter(Boolean) : rosterIds());
+    const oppNames = lastNames(md.opp && md.opp.starters ? md.opp.starters.filter(Boolean) : []);
+    const teams = new Set();
+    (md.me.starters||[]).concat(md.opp?md.opp.starters||[]:[]).filter(Boolean).forEach(id=>{
+      const p = byId[id]; if(!p) return;
+      const g = gameStateOf(p.team);
+      if(g && g.state==="in") teams.add(p.team);
+    });
+    if(!teams.size) return;
+    const j0 = await (await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard")).json();
+    const wanted = [];
+    (j0.events||[]).forEach(ev=>{
+      const comp = (ev.competitions||[])[0]; if(!comp) return;
+      const abs = (comp.competitors||[]).map(c=>ESPN2OURS[c.team && c.team.abbreviation] || (c.team && c.team.abbreviation));
+      if(abs.some(a=>teams.has(a)) && ev.status && ev.status.type && ev.status.type.state==="in") wanted.push(ev.id);
+    });
+    for(const gid of wanted.slice(0,4)){
+      if(CAST.at[gid] && Date.now()-CAST.at[gid] < 90e3) continue;
+      CAST.at[gid] = Date.now();
+      const j = await (await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event="+gid)).json();
+      const {events, redzone} = castParseSummary(j, gid, myNames, oppNames);
+      CAST.redzone = CAST.redzone.filter(r=>r.gid!==gid).concat(redzone);
+      events.forEach(ev=>{
+        const k = castKey(ev);
+        if(CAST.seen[k]) return;
+        CAST.seen[k] = 1;
+        CAST.events.unshift(Object.assign({t:Date.now()}, ev));
+        if(ev.mine){ castSound("td"); alertFire("cast", "🏈 "+ev.type+" — your guy", ev.text.slice(0,110)); }
+        else if(ev.theirs) castSound("oppTd");
+      });
+    }
+    CAST.events = CAST.events.slice(0, 40);
+    try{ localStorage.setItem(LS_KEY+"-reel"+curWeek(), JSON.stringify(CAST.events.slice(0,25))); }catch(e){}   // #1224
+    castLeadCheck();
+    if(BRIDGE.on) bridgeRender();
+  }catch(e){}
+}
+function castSound(kind){                                                        // #1215/#1225
+  try{
+    if(S.settings.castAudio===false || S.settings.calm) return;
+    if(kind==="td" && typeof chime==="function") chime();
+    else if(kind==="lead" && typeof horn==="function") horn();
+    else if(typeof blip==="function") blip();
+  }catch(e){}
+}
+function castLeadCheck(){                                                        // #1216
+  try{
+    const md = WEEKST.mate; if(!md || !md.me || !md.opp) return;
+    const lead = md.me.pts >= md.opp.pts;
+    if(CAST.lastLead===null){ CAST.lastLead = lead; return; }
+    if(lead!==CAST.lastLead){
+      CAST.lastLead = lead;
+      CAST.events.unshift({t:Date.now(), lead:true, mine:lead, text:(lead?"YOU TOOK THE LEAD ":"THEY TOOK THE LEAD ")+md.me.pts.toFixed(1)+"–"+md.opp.pts.toFixed(1)});
+      castSound("lead");
+      alertFire("lead", lead?"🔥 You took the lead":"😬 They took the lead", md.me.pts.toFixed(1)+"–"+md.opp.pts.toFixed(1));
+    }
+  }catch(e){}
+}
+function castFeedHtml(limit){                                                    // #1213/#1219
+  const evs = CAST.events.slice(0, limit||12);
+  if(!evs.length) return '<div class="brrow dim">no scoring plays yet — the feed wakes up at kickoff</div>';
+  return evs.map(e=>'<div class="castrow'+(e.mine?" mine":e.theirs?" theirs":"")+'">'+
+    '<span>'+(e.lead?"🔁 ":e.mine?"🏈 ":e.theirs?"🛡 ":"• ")+esc(String(e.text).slice(0,120))+'</span>'+
+    (e.clock?'<b class="mono">Q'+e.period+' '+esc(e.clock)+'</b>':'')+'</div>').join("");
+}
+function castRedzoneHtml(){                                                      // #1214
+  if(!CAST.redzone.length) return "";
+  const byId = idIndex(), md = WEEKST.mate;
+  const mineIn = [];
+  (md && md.me && md.me.starters ? md.me.starters.filter(Boolean) : []).forEach(id=>{
+    const p = byId[id]; if(!p) return;
+    if(CAST.redzone.some(r=>(ESPN2OURS[r.team]||r.team)===p.team)) mineIn.push(p.name.split(" ").slice(-1)[0]);
+  });
+  if(!mineIn.length) return "";
+  return '<div class="rzstrip">🚨 RED ZONE — '+esc(mineIn.join(", "))+' about to cash</div>';
+}
+function renderReel(){                                                           // #1217/#1224
+  const old = document.getElementById("reelOverlay"); if(old){ old.remove(); return; }
+  let evs = CAST.events;
+  if(!evs.length){ try{ evs = JSON.parse(localStorage.getItem(LS_KEY+"-reel"+curWeek())||"[]"); }catch(e){} }
+  const ov = document.createElement("div"); ov.id = "reelOverlay"; ov.className = "snov";
+  ov.innerHTML = '<div class="sbcard" role="dialog"><button class="sbx" data-rlx="1">✕</button>'+
+    '<div class="tag">📺 WEEK '+curWeek()+' HIGHLIGHT REEL</div>'+
+    (evs.length ? evs.map(e=>'<div class="castrow'+(e.mine?" mine":e.theirs?" theirs":"")+'"><span>'+
+      (e.lead?"🔁 ":e.mine?"🏈 ":"🛡 ")+esc(String(e.text).slice(0,140))+'</span>'+(e.clock?'<b class="mono">Q'+e.period+' '+esc(e.clock)+'</b>':'')+'</div>').join("")
+      : '<div class="empty">Nothing yet — the reel fills as your players score.</div>')+'</div>';
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e=>{ if(e.target===ov || e.target.closest("[data-rlx]")) ov.remove(); });
 }
 
 window.__mod = window.__mod || []; window.__mod.push("ultra.js");

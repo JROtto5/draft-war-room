@@ -1260,6 +1260,7 @@ function seasonTicker(){                                                        
   items.push('<span class="tk steal">🏈 '+esc(md.me.name)+' <b>'+md.me.pts.toFixed(1)+'</b>'+(md.opp?' — <b>'+md.opp.pts.toFixed(1)+'</b> '+esc(md.opp.name):'')+'</span>');
   try{ const sc = (typeof scenarioLine==="function") ? scenarioLine() : null;
     if(sc) items.push('<span class="tk run">'+esc(sc)+'</span>'); }catch(e8){}
+  try{ if(typeof CAST!=="undefined" && CAST.events.length) items.unshift('<span class="tk steal">📺 '+esc(String(CAST.events[0].text).slice(0,80))+'</span>'); }catch(e7){}
   try{ (window._rootGuide||[]).slice(0,2).forEach(g2=>items.push('<span class="tk reach">📣 root: '+esc(ridName(g2.root))+' over '+esc(ridName(g2.against))+' (+'+g2.swing+'% for us)</span>')); }catch(e9){}
   md.me.starters.filter(Boolean).forEach(id=>{
     const p = byId[id]; if(!p) return;
@@ -1659,6 +1660,7 @@ function seasonDeckHtml(){                                                      
     btn("renderSeasonStats()","📈","Season","Efficiency, luck, ROI, ghost season — X")+
 
     btn("renderRituals()","🧘","Ritual","Checklist, goals, grades, bright side")+
+    btn("renderReel()","📺","Reel","This week's scoring plays")+
     btn("renderArsenal()","📢","Arsenal","Power rankings · newsletter · smack — ready to post")+
     btn("egoDash()","😤","Ego","The ego dashboard: hype card, receipts, speech, trash talk")+
     btn("weeklyRecap2()","📖","Recap","Last week's story + share card")+

@@ -140,6 +140,23 @@ try {
     }
     return "OK";
   })()));
+  // Broadcast feed (#1212–#1226)
+  out.push("cast:"+((()=>{try{
+    const fx={scoringPlays:[
+      {text:"Justin Herbert 14 Yd pass to Ladd McConkey", period:{number:3}, clock:{displayValue:"8:12"}, team:{abbreviation:"LAC"}, scoringType:{displayName:"Touchdown"}},
+      {text:"Somebody Else 3 Yd Run", period:{number:4}, clock:{displayValue:"2:00"}, team:{abbreviation:"SF"}, scoringType:{displayName:"Touchdown"}}],
+      drives:{current:{team:{abbreviation:"LAC"}, plays:[{end:{yardsToEndzone:12}}]}}};
+    const r=castParseSummary(fx, "g1", ["Herbert"], ["Else"]);
+    const k1=castKey(r.events[0]), k2=castKey(r.events[0]);
+    const feed0=CAST.events.length;
+    CAST.events.unshift(r.events[0]);
+    const html=castFeedHtml(5);
+    CAST.events.length=feed0;
+    return r.events.length===2 && r.events[0].mine===true && r.events[1].theirs===true &&
+      r.redzone.length===1 && r.redzone[0].yl===12 && k1===k2 &&
+      html.indexOf("Herbert")>=0 && typeof renderReel==="function" && typeof castPoll==="function" &&
+      typeof castRedzoneHtml()==="string";
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // The arsenal (#1197–#1211)
   out.push("arsenal:"+((()=>{try{
     const st=[{rid:1,name:"Alpha",w:3,l:1,pf:480,pa:400},{rid:2,name:"Beta",w:1,l:3,pf:420,pa:470}];

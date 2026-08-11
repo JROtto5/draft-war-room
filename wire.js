@@ -1151,6 +1151,7 @@ $("#settingsBtn").addEventListener("click", ()=>{
   qf.value = q.from; qt.value = q.to;
   $("#setHype").value = S.settings.hype||"standard";
   $("#setCalm").checked = !!S.settings.calm;
+  $("#castAudio").checked = S.settings.castAudio!==false;
   $("#voxSpeak").checked = S.settings.voxSpeak!==false;
   $("#voxWake").checked = !!S.settings.voxWake;
   try{ const sel=$("#voxVoice");
@@ -1272,6 +1273,7 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.quietHours = {from:+$("#setQuietFrom").value||23, to:+$("#setQuietTo").value===0?0:(+$("#setQuietTo").value||8)};
   S.settings.hype = $("#setHype").value||"standard";
   S.settings.calm = $("#setCalm").checked;
+  S.settings.castAudio = $("#castAudio").checked;
   S.settings.voxSpeak = $("#voxSpeak").checked;
   S.settings.voxWake = $("#voxWake").checked;
   S.settings.voxVoice = $("#voxVoice").value||"";
