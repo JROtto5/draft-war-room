@@ -60,17 +60,25 @@ function defToughRank(team){
   });
   return r[team] || 16;
 }
-function weekProj(p, w){                                                        // #642
+function weekProj(p, w){                                                        // #642 · source-aware (#1069)
   if(typeof BYES!=="undefined" && BYES[p.team]===w) return 0;
   const e = (typeof injuryOf==="function") ? injuryOf(p) : null;
   const sev = e ? injSeverity(e.s) : null;
   if(sev && (sev.code==="IR" || sev.code==="O")) return 0;
   let pts = p.proj/16;
+  let pureFeed = false;
+  if(S.overrides[p.id]==null && typeof sleeperWk==="function"){                  // 📌 pins always win (#1068)
+    const sv2 = sleeperWk(p, w), mode = (typeof projSource==="function") ? projSource() : "baked";
+    if(sv2!=null && mode!=="baked"){
+      if(mode==="sleeper"){ pts = sv2; pureFeed = true; }                        // already matchup-specific
+      else { const b2 = projBlendPct(); pts = (pts*(100-b2) + sv2*b2)/100; }
+    }
+  }
   if(sev && sev.code==="D") pts *= 0.4;
   else if(sev && sev.code==="Q") pts *= 0.85;
   const opp = (typeof SCHED!=="undefined" && SCHED[p.team]) ? SCHED[p.team][w] : null;
   if(!opp && p.pos!=="DEF" && typeof SCHED!=="undefined" && SCHED[p.team]) return 0;  // no game that week
-  if(opp && p.pos!=="DEF") pts *= 1 + (defToughRank(opp)-16.5)/110;              // soft matchup lean
+  if(opp && p.pos!=="DEF" && !pureFeed) pts *= 1 + (defToughRank(opp)-16.5)/110; // lean only on model numbers
   return Math.round(pts*10)/10;
 }
 function bestStartersWeek(ids, byId, w, fixture){                               // #642/#654

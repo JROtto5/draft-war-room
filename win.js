@@ -1386,7 +1386,7 @@ function sidebarSeasonHtml(byId){                                               
   if(bs){
     const s2o = (md && md.me) ? sleeperToOurs() : null;
     const inv = {}; if(s2o) for(const k2 in s2o) inv[s2o[k2]] = k2;
-    list += '<div class="sscard"><div class="sshead">STARTING NINE<span class="mono">'+fmt(bs.pts)+' proj</span></div>'+
+    list += '<div class="sscard"><div class="sshead">STARTING NINE<span class="mono">'+((typeof projSrcLabel==="function")?projSrcLabel()+' · ':'')+fmt(bs.pts)+' proj</span></div>'+
       bs.line.filter(sl=>sl.p).map(sl=>{
         const got = (md && md.me && md.me.ppts) ? (+md.me.ppts[inv[sl.p.id]]||0) : 0;
         return rowOf(sl.p, sl.lab, got ? got.toFixed(1) : sl.wp.toFixed(1), !got, true);
@@ -1577,7 +1577,7 @@ function toggleDensity(){
 function copyWkText(){ try{ navigator.clipboard.writeText(window._wkText||"").then(()=>toast("📋 Recap copied")).catch(()=>toast("Copy blocked here — select the text manually", {warn:true})); }catch(e){ toast("Copy blocked here", {warn:true}); } }
 const ACT_OK = ["renderGamePlan","renderSim","renderScoreboard","renderWaivers","renderTrades","renderSeasonStats",
   "renderRituals","egoDash","weeklyRecap2","renderAlertCenter","injuryDigest","scoutMyOpponent","moreSheet",
-  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText","analystReport","stageOptimal","stageWinProb","renderSeasonSim","scoutPicker","alertTest"];
+  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText","analystReport","stageOptimal","stageWinProb","renderSeasonSim","scoutPicker","alertTest","projDivergence"];
 document.addEventListener("click", e=>{
   const t = e.target.closest("[data-act],[data-scout],[data-clickid]");
   if(!t) return;

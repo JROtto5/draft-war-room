@@ -15,7 +15,7 @@ try {
   out.push("hero:"+(document.getElementById("hero").innerHTML.includes("% at #")?"OK":"BAD"));
   out.push("avatars:"+(document.querySelectorAll("#poolBody .avatar").length>10?"OK":"BAD"));
   out.push("stamp:"+(document.getElementById("buildStamp").textContent.includes("build v")?"OK":"BAD"));
-  out.push("mods:"+((window.__mod||[]).length===6?"OK":"BAD("+(window.__mod||[]).join("/")+")"));
+  out.push("mods:"+((window.__mod||[]).length===7?"OK":"BAD("+(window.__mod||[]).join("/")+")"));
   pickMine(allPlayers().find(p=>p.name==="Josh Allen").id);
   const c={QB:0}; S.mine.forEach(id=>{const p=idIndex()[id]; if(p&&p.pos==="QB")c.QB++;});
   out.push("pick:"+(c.QB===1?"OK":"BAD"));
@@ -140,6 +140,23 @@ try {
     }
     return "OK";
   })()));
+  // Projection sources (#1067–#1081)
+  out.push("src:"+((()=>{try{
+    const p=allPlayers().find(x=>x.pos==="RB" && !injuryOf(x) && (typeof BYES==="undefined"||BYES[x.team]!==3));
+    const baked=weekProj(p,3);
+    PROJX.future[3]={map:{[p.id]: baked+8}, at:Date.now()};
+    const s0=S.settings.projSrc;
+    S.settings.projSrc="sleeper"; const slp=weekProj(p,3);
+    S.settings.projSrc="blend"; S.settings.projBlendPct=50; const bl=weekProj(p,3);
+    S.settings.projSrc="baked"; const bk=weekProj(p,3);
+    S.overrides[p.id]=320; _memo={key:null};
+    S.settings.projSrc="sleeper";
+    const pin=weekProj(allPlayers().find(x=>x.id===p.id),3);
+    S.overrides={}; _memo={key:null}; S.settings.projSrc=s0; delete PROJX.future[3];
+    return slp===baked+8 && bl>baked && bl<slp+2 && Math.abs(bk-baked)<0.5 &&
+      pin>16 && pin<25 && typeof projSrcLabel()==="string" && typeof projDivergence==="function" &&
+      typeof fetchWeekProjections==="function";
+  }catch(e){ S.overrides={}; delete PROJX.future[3]; return false; }})()?"OK":"BAD"));
   // Data correctness matrix (#1042–#1056)
   out.push("truth:"+((()=>{try{
     const p=allPlayers().find(x=>x.pos==="WR" && !injuryOf(x) && (typeof BYES==="undefined" || BYES[x.team]!==3));

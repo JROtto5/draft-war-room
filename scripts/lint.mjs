@@ -3,7 +3,7 @@ const fail = m => { console.error("LINT FAIL: " + m); process.exit(1); };
 const app = ["core.js","views.js","wire.js","boot.js"].map(f=>readFileSync(f,"utf8")).join("\n");
 // inline event handlers are dead in production — CSP script-src 'self' blocks them (#950)
 {
-  const mods = ["core.js","season.js","win.js","views.js","wire.js","boot.js"];
+  const mods = ["core.js","season.js","win.js","simx.js","views.js","wire.js","boot.js"];
   for (const f of mods){
     const src = readFileSync(f,"utf8");
     const m = src.match(/on(click|input|change|submit|mouseover)=\\?"/);
@@ -12,7 +12,7 @@ const app = ["core.js","views.js","wire.js","boot.js"].map(f=>readFileSync(f,"ut
 }
 // duplicate top-level function names across modules shadow each other silently (#835)
 {
-  const mods = ["engine.js","core.js","season.js","win.js","views.js","wire.js","boot.js"];
+  const mods = ["engine.js","core.js","season.js","win.js","simx.js","views.js","wire.js","boot.js"];
   const seen = {};
   for (const f of mods)
     for (const m of readFileSync(f,"utf8").matchAll(/^function (\w+)/gm)) {
@@ -41,14 +41,14 @@ const modals = (html.match(/class="modal[" ]/g) || []).length;
 if (overlays !== modals) fail(`overlay/modal mismatch: ${overlays} vs ${modals}`);
 if (!html.includes("Content-Security-Policy")) fail("CSP meta missing");
 const order = [...html.matchAll(/<script src="([^"]+)" defer>/g)].map(m=>m[1]);
-if (JSON.stringify(order) !== JSON.stringify(["data.js","engine.js","core.js","season.js","win.js","views.js","wire.js","boot.js"]))
+if (JSON.stringify(order) !== JSON.stringify(["data.js","engine.js","core.js","season.js","win.js","simx.js","views.js","wire.js","boot.js"]))
   fail("script load order wrong: " + order.join(","));
 if (!html.includes('rel="stylesheet" href="styles.css"')) fail("styles.css link missing");
 // Re-baselined after the v6 personalization data (LAST3 histories, hometowns,
 // college map): app 215K, data 450K leave ~20% headroom over current sizes.
 // rebased post-R37: wire/index got ~25% fresh headroom; boot budget was
 // silently dead (swallowed by a line comment) — restored.
-const budgets = { "core.js": 110000, "season.js": 145000, "win.js": 150000, "views.js": 95000, "wire.js": 110000, "boot.js": 32000,
+const budgets = { "core.js": 110000, "season.js": 145000, "win.js": 150000, "simx.js": 120000, "views.js": 95000, "wire.js": 110000, "boot.js": 32000,
   "engine.js": 40000, "data.js": 450000, "styles.css": 70000, "index.html": 42000 };
 for (const [f, cap] of Object.entries(budgets)) {
   const size = statSync(f).size;

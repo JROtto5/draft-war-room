@@ -208,6 +208,10 @@
       <div class="frow"><label>🏁 Finished drafting on Sleeper?</label><button class="hbtn" id="importDraftBtn" type="button">📥 Import completed draft</button></div>
       <div class="frow"><label>🔥 Heat alerts (trending + available in your league)</label><input type="checkbox" id="setHeat"></div>
       <div class="frow"><label>🔥 Heat threshold (adds per 24h)</label><select id="setHeatMin"><option value="500">500</option><option value="1000">1,000</option><option value="2500">2,500</option><option value="5000">5,000</option></select></div>
+      <div class="frow"><label>📊 Projection source</label><span style="display:flex;gap:8px;align-items:center">
+        <select id="setProjSrc"><option value="baked">📊 draft model</option><option value="sleeper">📱 Sleeper weekly</option><option value="blend">🔀 blend</option></select>
+        <input type="range" id="setProjBlend" min="0" max="100" step="10" style="width:90px" title="Blend: % Sleeper"><span class="dimtxt" id="projBlendVal" style="font-size:10px"></span></span></div>
+      <div class="frow"><label></label><button class="hbtn" type="button" data-act="projDivergence" style="font-size:11px">⚖ where the models disagree</button></div>
       <div class="frow"><label>🗓 NFL week (auto from Sleeper unless pinned)</label><select id="setWeek"><option value="0">auto</option></select></div>
       <div class="frow"><label>🔔 Alerts</label><span style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--dim)">
         <label><input type="checkbox" id="alHeat"> heat</label>
@@ -480,6 +484,7 @@
 <script src="core.js" defer></script>
 <script src="season.js" defer></script>
 <script src="win.js" defer></script>
+<script src="simx.js" defer></script>
 <script src="views.js" defer></script>
 <script src="wire.js" defer></script>
 <script src="boot.js" defer></script>

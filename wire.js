@@ -1151,6 +1151,9 @@ $("#settingsBtn").addEventListener("click", ()=>{
   qf.value = q.from; qt.value = q.to;
   $("#setHype").value = S.settings.hype||"standard";
   $("#setCalm").checked = !!S.settings.calm;
+  $("#setProjSrc").value = S.settings.projSrc||"blend";
+  $("#setProjBlend").value = isNaN(+S.settings.projBlendPct)?50:+S.settings.projBlendPct;
+  $("#projBlendVal").textContent = $("#setProjBlend").value+"% 📱";
   try{
     const cm = JSON.parse(localStorage.getItem(LS_KEY+"-csvmeta")||"null");
     const pinned = Object.keys(S.overrides).length;
@@ -1261,6 +1264,9 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.quietHours = {from:+$("#setQuietFrom").value||23, to:+$("#setQuietTo").value===0?0:(+$("#setQuietTo").value||8)};
   S.settings.hype = $("#setHype").value||"standard";
   S.settings.calm = $("#setCalm").checked;
+  S.settings.projSrc = $("#setProjSrc").value||"blend";
+  S.settings.projBlendPct = +$("#setProjBlend").value;
+  _memo = {key:null};
   if(typeof applyCalm==="function") applyCalm(S.settings.calm);
   S.settings.rituals = {checklist:$("#rtChecklist").checked, goals:$("#rtGoals").checked,
     grades:$("#rtGrades").checked, bright:$("#rtBright").checked};
