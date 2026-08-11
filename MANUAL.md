@@ -121,3 +121,12 @@ lineup-aware injury-world seasons), **What-if** (scenarios priced in playoff
 odds), **Fragility** (who breaks and what it costs). Tabs at the top of each,
 `m`/`y` deep-link, runs share caches so switching is instant, and the Season
 tab exports its full results as JSON.
+
+## 😎 Running Sunday like a villain (v16)
+
+Put the app on the TV (`B` → `F`), turn the mic on, and never touch the
+keyboard again: ask "what's my score", "should I start Reed", "read me the
+plan". The broadcast feed calls your touchdowns, the red-zone strip warns you
+before they happen, and lead changes get a horn. Monday: 📢 Arsenal for the
+power rankings and newsletter, 🏛 Vault for the records you just set, 🧠 Edge
+for the moves nobody else has noticed yet.

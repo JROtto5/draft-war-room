@@ -1,5 +1,19 @@
 # Changelog — Draft War Room
 
+## v16.0 (2026-08-11) — The Badass Hundred (#1167–#1266)
+🖥 War Room Mode: a fullscreen Sunday command bridge with giant score, win
+dial, both lineups on real game clocks, rotating intel, wake lock, and
+keyboard control · 🎙 The Voice: hands-free questions answered ALOUD from live
+data, spoken plans and briefs, voice staging of swaps, wake phrase, typed
+fallback · 📢 The Arsenal: auto power rankings with data-backed roasts (text
+and PNG), the weekly newsletter, per-opponent smack, commissioner-safe mode,
+joke log · 📺 Broadcast: ESPN play-level scoring feed for your players, red-
+zone watch, lead-change horns, and the week's highlight reel · 🏛 The Vault:
+league records, personal bests, hall of fame/shame, head-to-head, film room,
+search, dynasty snapshots · 🧠 Edge Radar: breakouts, buy-low/sell-high,
+schedule arbitrage, playoff alpha, and crowd fades ranked by value ×
+confidence, each linked to the move. New ultra.js module. 67 E2E checks.
+
 ## v15.0 (2026-08-11) — The Perfect Sim (#1067–#1166)
 The whole 9 yards. 📱 Sleeper's own weekly projections as a switchable
 source (baked / Sleeper / blend, 6pt-corrected, pins on top, divergence
