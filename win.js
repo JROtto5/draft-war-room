@@ -740,7 +740,7 @@ async function renderSim(){                                                     
   const wpPct = Math.round(r.wp*1000)/10;
   const ov = document.createElement("div"); ov.id = "simOverlay"; ov.className = "snov";
   let h = '<div class="sbcard" role="dialog" aria-label="Matchup simulator"><button class="sbx" data-smx="1">✕</button>';
-  h += '<div class="tag">🎲 1,000 SIMULATED SUNDAYS — vs '+esc(md.opp.name)+'</div>';
+  h += '<div class="tag">🎲 1,000 SIMULATED SUNDAYS — vs '+esc(md.opp.name)+'</div>'+((typeof scTabs==="function")?scTabs("week"):'');
   h += '<div class="benchhead" style="font-size:16px;color:var(--'+(wpPct>=55?'green':wpPct<=45?'red':'gold')+')">You win '+wpPct+'% of them</div>';
   h += chartDist(r);
   h += '<div class="sbply"><span>your range (p10 / median / p90)</span><b class="mono">'+r.p10+' / '+r.p50+' / '+r.p90+'</b></div>';
@@ -1588,7 +1588,7 @@ function toggleDensity(){
 function copyWkText(){ try{ navigator.clipboard.writeText(window._wkText||"").then(()=>toast("📋 Recap copied")).catch(()=>toast("Copy blocked here — select the text manually", {warn:true})); }catch(e){ toast("Copy blocked here", {warn:true}); } }
 const ACT_OK = ["renderGamePlan","renderSim","renderScoreboard","renderWaivers","renderTrades","renderSeasonStats",
   "renderRituals","egoDash","weeklyRecap2","renderAlertCenter","injuryDigest","scoutMyOpponent","moreSheet",
-  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText","analystReport","stageOptimal","stageWinProb","renderSeasonSim","scoutPicker","alertTest","projDivergence","renderFragility","renderWhatIf"];
+  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText","analystReport","stageOptimal","stageWinProb","renderSeasonSim","scoutPicker","alertTest","projDivergence","renderFragility","renderWhatIf","simCenter","exportFuture"];
 document.addEventListener("click", e=>{
   const t = e.target.closest("[data-act],[data-scout],[data-clickid]");
   if(!t) return;
@@ -2110,7 +2110,9 @@ async function renderSeasonSim(){                                               
   const effCost = Math.round((opt.winsAvg-act.winsAvg)*10)/10;
   const ov = document.createElement("div"); ov.id = "fsOverlay"; ov.className = "snov";
   let h = '<div class="sbcard" role="dialog" aria-label="Season simulator"><button class="sbx" data-fsx="1">✕</button>';
+  window._lastSeasonSimFull = {week:w, opt, act, strip};                          // #1151
   h += '<div class="tag">🔮 500 SIMULATED SEASONS — from week '+w+(injOn?' · 🩹 injury world ('+(opt.injPerSeason||0)+'/roster)':' · clean world')+'</div>'+
+    ((typeof scTabs==="function")?scTabs("season"):'')+
     '<div class="sspad" style="font-size:11px"><label><input type="checkbox" id="fsInj"'+(injOn?' checked':'')+'> simulate injuries (hazard model)</label> <button class="undo1" data-act="renderFragility">🩹 fragility report</button></div>';
   h += '<div class="benchhead" style="font-size:15px">Most likely: <b class="mono" style="color:var(--gold)">'+topRec[0]+'</b> ('+Math.round(topRec[1]/opt.N*100)+'% of sims) · avg <b class="mono">'+opt.winsAvg+'</b> wins</div>';
   h += '<div class="benchhead">📊 Final record</div>'+recBars.map(([k,n])=>
@@ -2131,7 +2133,7 @@ async function renderSeasonSim(){                                               
     const rTop = Object.entries(act.rivalDist).sort((a,b)=>b[1]-a[1])[0];
     if(rTop) h += '<div class="sbply"><span>😈 Rival most likely lands</span><b class="mono">'+rTop[0]+'</b></div>';
   }
-  h += '<div style="padding:10px 0"><button class="hbtn" data-fsroll="1">🎲 Re-roll</button></div></div>';
+  h += '<div style="padding:10px 0"><button class="hbtn" data-fsroll="1">🎲 Re-roll</button> <button class="hbtn" data-act="exportFuture">⇩ Export</button></div></div>';
   ov.innerHTML = h;
   document.body.appendChild(ov);
   ov.addEventListener("click", e=>{

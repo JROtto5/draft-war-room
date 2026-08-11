@@ -140,6 +140,20 @@ try {
     }
     return "OK";
   })()));
+  // Sim Center (#1142–#1156)
+  out.push("center:"+((()=>{try{
+    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();
+    document.querySelectorAll(".snov").forEach(x=>x.remove());                    // toggle-safe: clear strays first
+    renderFragility();
+    let ov=document.getElementById("frOverlay");
+    if(!ov){ renderFragility(); ov=document.getElementById("frOverlay"); }
+    const tabs=ov?ov.querySelectorAll("[data-sctab]").length:0;
+    const activeOk=ov?ov.querySelector('[data-sctab="frag"]').getAttribute("aria-selected")==="true":false;
+    if(ov) ov.remove();
+    SEASON_LIVE.ids=null; SEASON_LIVE.at=0;
+    return tabs===4 && activeOk && typeof simCenter==="function" && typeof exportFuture==="function" &&
+      seasonDeckHtml().includes("simCenter");
+  }catch(e){ SEASON_LIVE.ids=null; return false; }})()?"OK":"BAD"));
   // What-if machine (#1127–#1141)
   out.push("whatif:"+((()=>{try{
     SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();

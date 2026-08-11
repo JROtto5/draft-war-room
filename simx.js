@@ -264,7 +264,7 @@ function renderFragility(){                                                     
   const avgLost = Object.keys(lost).length ? Object.values(lost).reduce((a,b)=>a+b,0)/Object.keys(lost).length : 0;
   const ov = document.createElement("div"); ov.id = "frOverlay"; ov.className = "snov";
   let h = '<div class="sbcard" role="dialog"><button class="sbx" data-frx="1">✕</button>'+
-    '<div class="tag">🩹 FRAGILITY REPORT — depth grade '+depthGrade(myRid)+'</div>';
+    '<div class="tag">🩹 FRAGILITY REPORT — depth grade '+depthGrade(myRid)+'</div>'+((typeof scTabs==="function")?scTabs("frag"):'');
   h += '<div class="benchhead">My load-bearing walls (dependence × risk)</div>'+
     mine.map(x=>'<div class="sbply" data-card="'+x.id+'" style="cursor:pointer"><span>'+esc(x.p.name)+
     ' <span class="dimtxt">'+x.p.pos+' · risk '+(x.haz*100).toFixed(1)+'%/wk</span></span>'+
@@ -441,7 +441,7 @@ async function renderWhatIf(){                                                  
   const ov = document.createElement("div"); ov.id = "wiOverlay"; ov.className = "snov";
   const band = ciBand(base.makePct, 200);
   let h = '<div class="sbcard" role="dialog" aria-label="What-if machine"><button class="sbx" data-wix="1">✕</button>'+
-    '<div class="tag">🧪 WHAT-IF MACHINE</div>'+
+    '<div class="tag">🧪 WHAT-IF MACHINE</div>'+((typeof scTabs==="function")?scTabs("whatif"):'')+
     '<div class="sbply"><span>Base future</span><b class="mono">'+base.winsAvg+' wins · make '+base.makePct+'% ±'+band+' · title '+base.titlePct+'%</b></div>'+
     '<div class="benchhead">Build a scenario</div>'+
     '<div class="sspad" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+
@@ -510,6 +510,36 @@ function elimWatch(){                                                           
       alertFire("elim", "⚠ Elimination math is live", "Lose this week and "+(OPPX.clinch.elimWins)+" wins becomes your ceiling — that's dead territory");
     }
   }catch(e){}
+}
+
+/* ---------- R72 Sim Center (#1142–#1156) ---------- */
+const SC_TABS = [["week","🎲","This week"],["season","🔮","Season"],["whatif","🧪","What-if"],["frag","🩹","Fragility"]];
+function scTabs(active){                                                         // #1142/#1143/#1150
+  return '<div class="sctabs" role="tablist" aria-label="Sim Center">'+
+    SC_TABS.map(([k2,ico,lab])=>'<button role="tab" aria-selected="'+(k2===active)+'" data-sctab="'+k2+'"'+
+      (k2===active?' class="on"':'')+'><span>'+ico+'</span>'+lab+'</button>').join("")+
+    '<span class="scmeta mono">'+((typeof projSrcLabel==="function")?projSrcLabel():'')+
+    (S.settings.simInjuries!==false?' · 🩹on':' · 🩹off')+'</span></div>';
+}
+document.addEventListener("click", e=>{
+  const t = e.target.closest("[data-sctab]");
+  if(!t) return;
+  e.preventDefault();
+  const map = {week:"renderSim", season:"renderSeasonSim", whatif:"renderWhatIf", frag:"renderFragility"};
+  const cur = t.closest(".snov");
+  const fn = window[map[t.dataset.sctab]];
+  if(t.getAttribute("aria-selected")==="true") return;
+  if(cur) cur.remove();
+  if(typeof fn==="function") fn();
+});
+function simCenter(){ if(typeof renderSim==="function") renderSim(); }           // #1149 default tab
+function exportFuture(){                                                         // #1151
+  if(!window._lastSeasonSimFull) return toast("Run the season sim first", {warn:true});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(window._lastSeasonSimFull, null, 1)], {type:"application/json"}));
+  a.download = "war-room-future-wk"+curWeek()+".json"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+  toast("⇩ The future, exported");
 }
 
 window.__mod = window.__mod || []; window.__mod.push("simx.js");

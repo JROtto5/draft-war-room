@@ -113,3 +113,11 @@ scenario ticker, two-minute-drill pings, and the late-window verdict.
 - **The crystal ball:** 🔮 Future (or `y`) = 500 simulated seasons: record
   distribution, seed odds, title chain, the road week by week, and what your
   lineup sloppiness costs in wins.
+
+## 🎛 The Sim Center (v15)
+
+One home for every future: **This week** (1,000 Sundays), **Season** (500
+lineup-aware injury-world seasons), **What-if** (scenarios priced in playoff
+odds), **Fragility** (who breaks and what it costs). Tabs at the top of each,
+`m`/`y` deep-link, runs share caches so switching is instant, and the Season
+tab exports its full results as JSON.

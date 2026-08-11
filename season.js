@@ -1651,10 +1651,11 @@ function seasonDeckHtml(){                                                      
     return '<button class="hbtn deckbtn" '+attr+' title="'+(title||lab)+'"><span class="dicon">'+ico+'</span><span class="dlab">'+lab+'</span></button>';
   };
   return '<div class="actions" id="seasonDeck" role="navigation" aria-label="Season navigation">'+
+    btn("simCenter()","🎛","Sims","Sim Center: this week · season · what-if · fragility (M/Y)")+
     btn("renderScoreboard()","📊","Scores","League scoreboard, standings, playoff odds — S")+
     btn("renderTrades()","🔁","Trades","Trade center — D")+
     btn("renderSeasonStats()","📈","Season","Efficiency, luck, ROI, ghost season — X")+
-    btn("renderSeasonSim()","🔮","Future","500 simulated seasons — Y")+
+
     btn("renderRituals()","🧘","Ritual","Checklist, goals, grades, bright side")+
     btn("egoDash()","😤","Ego","The ego dashboard: hype card, receipts, speech, trash talk")+
     btn("weeklyRecap2()","📖","Recap","Last week's story + share card")+
