@@ -2067,9 +2067,12 @@ async function renderSeasonSim(){                                               
   if(!data) return toast("Link the league first", {warn:true});
   const seed = curWeek()*31 + (window._simReroll||0);                             // #1004
   const injOn = S.settings.simInjuries!==false && typeof seasonSimX==="function"; // #1092
-  const CORE2 = injOn ? seasonSimX : (d2,o2)=>seasonSimCore(Object.assign({},d2,o2));
-  const opt = CORE2(data, {N:500, seed, myMult:1, injuries:injOn});
-  const act = CORE2(data, {N:500, seed:seed+1, myMult:myEffMult(), injuries:injOn});  // #1002
+  const vectors = (typeof weeklyVectors==="function" && SCOREB.rosters) ? weeklyVectors(data) : null;   // #1097
+  const CORE2 = (typeof seasonSimX==="function") ? seasonSimX : (d2,o2)=>seasonSimCore(Object.assign({},d2,o2));
+  const t0 = performance.now();
+  const opt = CORE2(data, {N:500, seed, myMult:1, injuries:injOn, vectors});
+  const act = CORE2(data, {N:500, seed:seed+1, myMult:myEffMult(), injuries:injOn, vectors});  // #1002
+  const simMs = Math.round(performance.now()-t0);
   const w = curWeek(), byId = idIndex();
   // week-by-week win prob strip (#1001)
   const myBs = bestStartersWeek(rosterIds(), byId, w);
@@ -2078,8 +2081,10 @@ async function renderSeasonSim(){                                               
     (data.schedule[wk]||[]).forEach(pair=>{
       if(!pair.includes(data.myRid)) return;
       const opp = pair[0]===data.myRid ? pair[1] : pair[0];
-      const wp = winProb(data.mu[data.myRid], data.mu[opp]);
-      strip.push({w:wk, opp:ridName(opp), wp:Math.round(wp*100), rival:opp===data.rivRid});
+      const myMu = vectors ? vectors.mu[data.myRid][wk] : data.mu[data.myRid];
+      const opMu = vectors ? vectors.mu[opp][wk] : data.mu[opp];
+      strip.push({w:wk, opp:ridName(opp), wp:Math.round(winProb(myMu, opMu)*100), rival:opp===data.rivRid,
+        dip: vectors && myMu < data.mu[data.myRid]*0.92});
     });
   });
   const topRec = Object.entries(opt.recDist).sort((a,b)=>b[1]-a[1])[0];
@@ -2099,10 +2104,14 @@ async function renderSeasonSim(){                                               
     '<span class="mono dim">'+Math.round(n/opt.N*100)+'%</span></div>').join("");
   h += '<div class="benchhead">🎫 Where you land</div><div class="scarce" style="padding:0 12px 6px">'+
     opt.seedCount.map((n,i)=>'<span class="scpill'+(i<2?' good':i===6?' warn':'')+'">'+seedLabels[i]+' <b class="mono">'+Math.round(n/opt.N*100)+'%</b></span>').join("")+'</div>';
-  h += '<div class="sbply"><span>👑 Championship chain</span><b class="mono">make it '+Math.round((1-opt.seedCount[6]/opt.N)*100)+'% → title <span style="color:var(--gold)">'+opt.titlePct+'%</span></b></div>';
+  h += '<div class="sbply"><span>👑 Championship chain</span><b class="mono">make '+(opt.makePct!=null?opt.makePct:Math.round((1-opt.seedCount[6]/opt.N)*100))+'%'+
+    (opt.finalPct!=null?' → final '+opt.finalPct+'%':'')+' → title <span style="color:var(--gold)">'+opt.titlePct+'%</span></b></div>';
+  if(opt.lastPct!=null && opt.lastPct>0) h += '<div class="sbply"><span>🚽 Toilet-bowl risk</span><b class="mono" style="color:var(--'+(opt.lastPct>15?'red':'dim')+')">'+opt.lastPct+'%</b></div>';
+  if(opt.rivalH2HPct!=null) h += '<div class="sbply"><span>😈 vs rival across sims</span><b class="mono">'+opt.rivalH2HPct+'% H2H</b></div>';
   if(effCost>=0.2) h += '<div class="sbply"><span>🎯 Lineup discipline is worth</span><b style="color:var(--red)">'+effCost+' wins</b><span class="dimtxt">optimal vs your '+Math.round(myEffMult()*100)+'% efficiency</span></div>';
   h += '<div class="benchhead">🗓 The road (win prob by week)</div><div class="scarce" style="padding:0 12px 8px">'+
-    strip.map(x=>'<span class="scpill'+(x.rival?' warn':'')+'" title="week '+x.w+' vs '+esc(x.opp)+'">W'+x.w+' '+esc(x.opp.slice(0,8))+' <b class="mono" style="color:var(--'+(x.wp>=55?'green':x.wp<=45?'red':'gold')+')">'+x.wp+'%</b></span>').join("")+'</div>';
+    strip.map(x=>'<span class="scpill'+(x.rival?' warn':'')+'" title="week '+x.w+' vs '+esc(x.opp)+(x.dip?' — bye-week dent':'')+'">W'+x.w+(x.dip?'🕳':'')+' '+esc(x.opp.slice(0,8))+' <b class="mono" style="color:var(--'+(x.wp>=55?'green':x.wp<=45?'red':'gold')+')">'+x.wp+'%</b></span>').join("")+'</div>'+
+    (simMs!=null?'<div class="sspad dimtxt" style="font-size:10px">'+opt.N*2+' seasons in '+simMs+'ms · '+(vectors?'weekly-lineup vectors':'flat strength')+'</div>':'');
   if(data.rivRid!=null){
     const rTop = Object.entries(act.rivalDist).sort((a,b)=>b[1]-a[1])[0];
     if(rTop) h += '<div class="sbply"><span>😈 Rival most likely lands</span><b class="mono">'+rTop[0]+'</b></div>';

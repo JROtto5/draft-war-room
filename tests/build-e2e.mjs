@@ -140,6 +140,26 @@ try {
     }
     return "OK";
   })()));
+  // Weekly vectors: bye dents + speed (#1097–#1111)
+  out.push("vec:"+((()=>{try{
+    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();
+    const byeTeam = allPlayers().slice(0,16).map(x=>x.team).find(t2=>typeof BYES!=="undefined" && BYES[t2]>=6 && BYES[t2]<=13);
+    const bw = BYES[byeTeam];
+    const data={schedule:{}, mu:{12:140}, wins0:{12:0}, pf0:{12:0}, myRid:12, spots:1, lastW:14, games:14};
+    for(let w2=5;w2<=14;w2++) data.schedule[w2]=[[12,12]];
+    S.settings.sleeperRosterId = S.settings.sleeperRosterId || 12;
+    VEC.key=null;
+    const v=weeklyVectors(data);
+    const dip = v.mu[12][bw] < v.mu[12][bw===5?6:bw-1] - 2;
+    const fix={schedule:{1:[[1,2]],2:[[1,2]],3:[[1,2]]}, mu:{1:115,2:100}, wins0:{1:0,2:0}, pf0:{1:0,2:0},
+      myRid:1, rivRid:2, spots:1, lastW:3, games:3};
+    const t0=performance.now();
+    const r=seasonSimX(fix, {N:500, seed:3, injuries:true});
+    const ms=performance.now()-t0;
+    SEASON_LIVE.ids=null; SEASON_LIVE.at=0; VEC.key=null;
+    return dip && r.rivalH2HPct!=null && r.lastPct!=null && r.makePct!=null && ms<700 &&
+      typeof driftMult==="function";
+  }catch(e){ SEASON_LIVE.ids=null; return false; }})()?"OK":"BAD"));
   // Injury engine (#1082–#1096)
   out.push("inj2:"+((()=>{try{
     const p=allPlayers().find(x=>x.pos==="RB");

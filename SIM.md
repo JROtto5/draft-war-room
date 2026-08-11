@@ -20,6 +20,14 @@ strength(mu) − injury drag + triangular noise (σ≈26). The injury engine
 - **Toggle**: clean-world vs injury-world in the 🔮 overlay; the headline
   playoff odds carry an expected-injury drag (Σ dep×haz×2.2) either way.
 
+## Weekly vectors (v2, #1097–#1111)
+Team strength is a PER-WEEK vector: each roster's real optimal lineup that
+week (byes and injuries land exactly where the calendar puts them), with team
+σ rolled up from starters' individual variances. Below-median teams drift
++2%/wk toward replacement (leagues heal). Ties break on PF everywhere; the
+bracket reseeds semis and gives the better seed +1.5 homefield. Outputs add
+make→final→title chain, toilet-bowl %, and sim-wide rival H2H.
+
 ## Projection sources
 weekProj feeds every sim; source picker (📊/📱/🔀) and 📌 pins upstream of
 everything — see DATA-FLOW.md.
