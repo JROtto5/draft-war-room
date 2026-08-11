@@ -140,6 +140,20 @@ try {
     }
     return "OK";
   })()));
+  // The arsenal (#1197–#1211)
+  out.push("arsenal:"+((()=>{try{
+    const st=[{rid:1,name:"Alpha",w:3,l:1,pf:480,pa:400},{rid:2,name:"Beta",w:1,l:3,pf:420,pa:470}];
+    const ctx={hist:[], st, slop:{1:{eff:88,left:44.2,weeks:4}, 2:null},
+      ap:[{rid:1,luck:1.4,w:3},{rid:2,luck:-1.2,w:1}],
+      tend:[{rid:1,faab:0,claims:0,trades:0,zeros:0},{rid:2,faab:20,claims:3,trades:1,zeros:3}],
+      pr:[], aw:null};
+    const r1=roastFor(1, ctx), r2=roastFor(2, ctx);
+    const pr=powerRankingsText(ctx), nl=newsletterText(ctx);
+    const clean=[r1,r2,pr,nl].every(x=>typeof x==="string" && x.length>5 && x.indexOf("undefined")<0 && x.indexOf("NaN")<0 && x.indexOf("object Object")<0);
+    return clean && pr.includes("POWER RANKINGS") && pr.includes("Alpha") && nl.includes("WEEKLY") &&
+      typeof renderArsenal==="function" && typeof rankingsPng==="function" && typeof arsCopy==="function" &&
+      typeof arsenalAutoFire==="function";
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // The voice: intent parser (#1182–#1196)
   out.push("vox:"+((()=>{try{
     SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();

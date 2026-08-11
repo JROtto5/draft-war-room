@@ -1659,6 +1659,7 @@ function seasonDeckHtml(){                                                      
     btn("renderSeasonStats()","📈","Season","Efficiency, luck, ROI, ghost season — X")+
 
     btn("renderRituals()","🧘","Ritual","Checklist, goals, grades, bright side")+
+    btn("renderArsenal()","📢","Arsenal","Power rankings · newsletter · smack — ready to post")+
     btn("egoDash()","😤","Ego","The ego dashboard: hype card, receipts, speech, trash talk")+
     btn("weeklyRecap2()","📖","Recap","Last week's story + share card")+
     btn("renderAlertCenter()","🔔",un?String(un):"Alerts","Alert center")+

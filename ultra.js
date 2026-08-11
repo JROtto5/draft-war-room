@@ -256,4 +256,170 @@ function voxUi(){                                                               
   }
 }
 
+/* ---------- R76 THE ARSENAL (#1197–#1211) ---------- */
+function arsSafe(){ return !!S.settings.arsSafe; }                               // #1203
+function arsHeat(){ return arsSafe() ? "mild" : ((typeof hypeDial==="function") ? hypeDial() : "standard"); }
+function roastFor(rid, ctx){                                                     // #1202/#1214 data-backed only
+  const lines = [];
+  const slop = ctx.slop[rid], ap = ctx.ap.find(x=>+x.rid===+rid), tend = ctx.tend.find(x=>+x.rid===+rid);
+  const st = ctx.st.find(x=>+x.rid===+rid);
+  const heat = arsHeat();
+  if(slop && slop.eff<92) lines.push(heat==="full" ? "has donated "+slop.left+" points to their own bench — a charitable organization"
+    : "leaves points on the bench ("+slop.eff+"% lineup efficiency)");
+  if(ap && ap.luck>1) lines.push(heat==="full" ? "is "+ap.luck+" wins of pure luck away from being honest" : "is running "+ap.luck+" wins above expected");
+  if(ap && ap.luck<-1) lines.push("is owed "+(-ap.luck)+" wins by the schedule — genuinely unlucky");
+  if(tend && tend.faab===0 && tend.claims===0) lines.push(heat==="full" ? "hasn't touched the waiver wire. Set and forget, emphasis on forget" : "has made no waiver moves");
+  if(tend && tend.zeros>2) lines.push(heat==="full" ? "started "+tend.zeros+" players who scored zero. Zero. Nothing." : "has started "+tend.zeros+" zero-point players");
+  if(st && ctx.st[0] && +ctx.st[0].rid===+rid) lines.push(heat==="full" ? "is in first and won't shut up about it (relatable)" : "leads the league");
+  if(!lines.length && st) lines.push(st.w+"-"+st.l+", "+st.pf+" points for — quietly going about it");
+  return lines[0];
+}
+async function arsenalCtx(){
+  if(!SCOREB.rosters) await leagueWeekData(false);
+  const hist = await leagueHistory();
+  const tx = await txHistory();
+  const st = standingsRows(SCOREB.rosters, SCOREB.users);
+  const slop = {}; st.forEach(r=>{ slop[r.rid] = (typeof sloppinessOf==="function") ? sloppinessOf(r.rid, hist) : null; });
+  return {hist, st, slop, ap:allPlayStandings(hist, SCOREB.rosters, SCOREB.users), tend:leagueTendencies(tx, hist),
+    pr:(typeof powerRankings==="function")?powerRankings():[], aw:hist.length?weeklyAwards(hist[hist.length-1], SCOREB):null};
+}
+function powerRankingsText(ctx){                                                 // #1198
+  const w = curWeek();
+  const rows = ctx.pr.length ? ctx.pr : ctx.st;
+  let t = "🏈 BUCK BREAKERS POWER RANKINGS — WEEK "+w+"\n\n";
+  rows.forEach((r,i)=>{
+    const mv = r.move>0 ? " ▲"+r.move : r.move<0 ? " ▼"+(-r.move) : "";
+    t += (i+1)+". "+r.name+" ("+r.w+"-"+r.l+")"+mv+"\n   "+roastFor(r.rid, ctx)+"\n";
+  });
+  t += "\n— compiled by the Draft War Room";
+  return t;
+}
+function newsletterText(ctx){                                                    // #1200
+  const w = curWeek(), hist = ctx.hist;
+  const last = hist.length ? hist[hist.length-1] : null;
+  let t = "📰 THE BUCK BREAKERS WEEKLY — after week "+(hist.length||w)+"\n\n";
+  if(last){
+    const pairs = {}; last.forEach(m=>{ (pairs[m.matchup_id]=pairs[m.matchup_id]||[]).push(m); });
+    t += "SCORES\n";
+    Object.values(pairs).forEach(pr=>{ if(pr.length!==2) return;
+      const [a,b] = pr[0].points>=pr[1].points ? pr : [pr[1],pr[0]];
+      t += "  "+ridName(a.roster_id)+" "+(a.points||0).toFixed(1)+" def. "+ridName(b.roster_id)+" "+(b.points||0).toFixed(1)+"\n"; });
+    if(ctx.aw) t += "\nAWARDS\n  🥇 High: "+ctx.aw.hi.name+" ("+ctx.aw.hi.pts+")\n  🥶 Low: "+ctx.aw.lo.name+" ("+ctx.aw.lo.pts+")\n"+
+      (ctx.aw.blow?"  🔨 Blowout: "+ctx.aw.blow.name+" by "+ctx.aw.blow.d+"\n":"")+
+      (ctx.aw.nail?"  😅 Nail-biter: "+ctx.aw.nail.name+" by "+ctx.aw.nail.d+"\n":"");
+  }
+  const worst = Object.entries(ctx.slop).filter(([,v])=>v).sort((a,b)=>a[1].eff-b[1].eff)[0];
+  if(worst) t += "\nBIGGEST SELF-OWN\n  "+ridName(worst[0])+" — "+worst[1].left+" points left on the bench this season ("+worst[1].eff+"% efficiency)\n";
+  const moves = (WAIV.tx||[]).slice(0,5);
+  if(moves.length){ t += "\nTRANSACTION WIRE\n"; moves.forEach(m=>{ t += "  "+ridName(m.rid)+(m.adds.length?" ➕"+m.adds.join(", "):"")+(m.drops.length?" ➖"+m.drops.join(", "):"")+(m.bid?" ($"+m.bid+")":"")+"\n"; }); }
+  t += "\nNEXT WEEK\n";
+  if(SCOREB.mus){ const rows = scoreboardRows(SCOREB, idIndex());
+    rows.forEach(([a,b])=>{ t += "  "+a.name+" vs "+b.name+"\n"; }); }
+  t += "\n— The Draft War Room";
+  return t;
+}
+function smackText(ctx){                                                         // #1199
+  const md = WEEKST.mate;
+  if(!md || !md.opp) return "No opponent this week.";
+  const byId = idIndex(), w = curWeek();
+  const mine = bestStartersWeek(rosterIds(), byId, w).pts;
+  const theirs = bestStartersWeek(md.opp.ids, byId, w).pts;
+  const wp = Math.round(winProb(mine, theirs)*100);
+  const slop = ctx.slop[md.opp.rid];
+  const heat = arsHeat();
+  let t = "WEEK "+w+": Otto5 vs "+md.opp.name+"\n";
+  t += "Projected: "+fmt(mine)+" — "+fmt(theirs)+" ("+wp+"% Otto5)\n";
+  if(slop && slop.eff<92) t += (heat==="full" ? "They've left "+slop.left+" points on their own bench this year. I'll take the ones they leave out.\n"
+    : "They run "+slop.eff+"% lineup efficiency.\n");
+  if(heat==="full") t += (typeof trashTalk==="function" ? String(trashTalk()).replace(/<[^>]+>/g,"")+"\n" : "");
+  return t;
+}
+function arsLog(line){                                                           // #1205
+  try{
+    const k = LS_KEY+"-arslog";
+    const a = JSON.parse(localStorage.getItem(k)||"[]");
+    a.unshift({t:Date.now(), w:curWeek(), line:String(line).slice(0,180)});
+    localStorage.setItem(k, JSON.stringify(a.slice(0,60)));
+  }catch(e){}
+}
+function arsCopy(text){                                                          // #1204
+  try{
+    navigator.clipboard.writeText(text).then(()=>{ toast("📋 Copied — go ruin their week"); arsLog(text.split("\n")[0]); })
+      .catch(()=>arsFallback(text));
+  }catch(e){ arsFallback(text); }
+}
+function arsFallback(text){
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.style.cssText = "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:500;width:min(92vw,680px);height:60vh";
+  document.body.appendChild(ta); ta.select();
+  toast("Select-all shown — copy manually, then click away", {warn:true});
+  ta.addEventListener("blur", ()=>ta.remove());
+}
+function rankingsPng(ctx){                                                       // #1206
+  const rows = (ctx.pr.length ? ctx.pr : ctx.st).slice(0, 12);
+  const H = 140 + rows.length*62;
+  const c = document.createElement("canvas"); c.width = 1000; c.height = H;
+  const x = c.getContext("2d");
+  x.fillStyle = "#0b0f14"; x.fillRect(0,0,1000,H);
+  x.fillStyle = "#f0b429"; x.font = "bold 44px sans-serif"; x.fillText("POWER RANKINGS", 40, 66);
+  x.fillStyle = "#8b98a9"; x.font = "24px sans-serif"; x.fillText("Buck Breakers · week "+curWeek(), 40, 102);
+  rows.forEach((r,i)=>{
+    const y = 150+i*62;
+    x.fillStyle = "#e8eef5"; x.font = "bold 28px sans-serif";
+    x.fillText((i+1)+". "+r.name, 40, y);
+    x.fillStyle = "#8b98a9"; x.font = "20px sans-serif";
+    x.fillText(r.w+"-"+r.l, 620, y);
+    const line = roastFor(r.rid, ctx)||"";
+    x.fillStyle = "#556270"; x.font = "17px sans-serif";
+    x.fillText(line.length>62?line.slice(0,60)+"…":line, 40, y+24);
+  });
+  c.toBlob(b=>{ const a = document.createElement("a"); a.href = URL.createObjectURL(b);
+    a.download = "power-rankings-wk"+curWeek()+".png"; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 5000); });
+  toast("⇩ Rankings image downloaded");
+}
+async function renderArsenal(){                                                  // #1197
+  const old = document.getElementById("arOverlay"); if(old){ old.remove(); return; }
+  toast("📢 Loading the arsenal…");
+  const ctx = await arsenalCtx();
+  if(!ctx.st.length) return toast("Link the league first", {warn:true});
+  window._arsCtx = ctx;
+  const pr = powerRankingsText(ctx), nl = newsletterText(ctx), sm = smackText(ctx);
+  window._arsTexts = {pr, nl, sm};
+  const ov = document.createElement("div"); ov.id = "arOverlay"; ov.className = "snov";
+  ov.innerHTML = '<div class="sbcard" role="dialog" aria-label="The arsenal"><button class="sbx" data-arx="1">✕</button>'+
+    '<div class="tag">📢 THE ARSENAL — week '+curWeek()+(arsSafe()?' · commissioner-safe':'')+'</div>'+
+    '<div class="sspad" style="display:flex;gap:6px;flex-wrap:wrap">'+
+      '<button class="hbtn act" data-arscopy="pr">📋 Power rankings</button>'+
+      '<button class="hbtn" data-arspng="1">🖼 Rankings PNG</button>'+
+      '<button class="hbtn act" data-arscopy="nl">📋 Newsletter</button>'+
+      '<button class="hbtn" data-arscopy="sm">📋 Smack (this week)</button>'+
+      '<button class="hbtn" data-act="scoutMyOpponent">📤 Smack card PNG</button>'+
+      '<label class="dimtxt" style="display:flex;align-items:center;gap:5px;font-size:11px"><input type="checkbox" data-arssafe="1"'+(arsSafe()?" checked":"")+'> commissioner-safe</label>'+
+    '</div>'+
+    '<div class="benchhead">Preview — power rankings</div>'+
+    '<pre class="arspre">'+esc(pr)+'</pre>'+
+    '<div class="benchhead">Preview — newsletter</div>'+
+    '<pre class="arspre">'+esc(nl)+'</pre></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener("change", e=>{
+    if(e.target.closest("[data-arssafe]")){ S.settings.arsSafe = e.target.checked; commit(); ov.remove(); renderArsenal(); }
+  });
+  ov.addEventListener("click", e=>{
+    if(e.target===ov || e.target.closest("[data-arx]")) return ov.remove();
+    const cp = e.target.closest("[data-arscopy]");
+    if(cp) arsCopy(window._arsTexts[cp.dataset.arscopy]||"");
+    if(e.target.closest("[data-arspng]")) rankingsPng(window._arsCtx);
+  });
+}
+function arsenalAutoFire(){                                                      // #1207
+  try{
+    if(S.settings.arsAuto===false) return;
+    if(new Date().getDay()!==2) return;                                          // Tuesday
+    const k = LS_KEY+"-arsauto"+curWeek();
+    if(localStorage.getItem(k)) return;
+    localStorage.setItem(k, "1");
+    alertFire("arsenal", "📢 This week's artillery is ready", "Power rankings + newsletter waiting in the Arsenal");
+  }catch(e){}
+}
+
 window.__mod = window.__mod || []; window.__mod.push("ultra.js");
