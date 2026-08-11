@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-11T14:43:44.242Z",
+  "generated": "2026-08-11T14:43:44.450Z",
   "files": {
     "index.html": "969ce7dd13ecff67fef0fbbd9ecc873d09bfb09b09e91d8670f0f15b59539605",
     "styles.css": "d6f8c711767ee9ff3b7c693626dd0ea99ef3d343d2369c01d83758e0b82b5014",
@@ -10,9 +10,9 @@
     "simx.js": "37996052ca14ea7a1aa5ee1d642e7be934a40fa89899e4cdeb1193a312733157",
     "views.js": "86bb1a37042019af3997a827cbb0151cdd1137fc01c94746a0bc85832c5bb087",
     "wire.js": "b71018668e1b46a5e18880a5da929d1c3fae29816df154b6e6c7862bcc0874cc",
-    "boot.js": "cac50158d17eebbbf2a7c0e172662f3de3c00e5c7bbfef17fc607d190b8aeb48",
+    "boot.js": "b1cb935cb2ebd185cc58a6e70eff389d90ef84facfaaf5f15e26bfd2acaef629",
     "data.js": "d7270f4caf9eb49cf5b4fd1344bf0ad2f071eceb9be9009d001f06de086cf008",
-    "sw.js": "807b25a89a6489e9c3c8bb9b25a7b31eb2453c26708c325af06a7aca822b0d97",
+    "sw.js": "9105dd92d01729974e9d723ec479c9884c1c05c3d0ec67ccb9b5bd144f2b476e",
     "manifest.json": "d0582c00c488ad9d1a4095ee547089eefe09bd4de13f616aff1863db54cdd1b1",
     "404.html": "3e07b402220b3082ec6efa53380e03d8238b2891af3ba19bfa82f992c6f00bc0"
   }
