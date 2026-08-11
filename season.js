@@ -1651,6 +1651,7 @@ function seasonDeckHtml(){                                                      
     return '<button class="hbtn deckbtn" '+attr+' title="'+(title||lab)+'"><span class="dicon">'+ico+'</span><span class="dlab">'+lab+'</span></button>';
   };
   return '<div class="actions" id="seasonDeck" role="navigation" aria-label="Season navigation">'+
+    btn("bridgeOpen()","🖥","Bridge","War Room mode — big-screen Sunday cockpit (B)")+
     btn("simCenter()","🎛","Sims","Sim Center: this week · season · what-if · fragility (M/Y)")+
     btn("renderScoreboard()","📊","Scores","League scoreboard, standings, playoff odds — S")+
     btn("renderTrades()","🔁","Trades","Trade center — D")+
@@ -1690,6 +1691,7 @@ document.addEventListener("keydown", e=>{                                       
   else if(k==="x"){ e.preventDefault(); renderSeasonStats(); }
   else if(k==="m"){ e.preventDefault(); e.stopImmediatePropagation(); if(typeof renderSim==="function") renderSim(); }
   else if(k==="y"){ e.preventDefault(); if(typeof renderSeasonSim==="function") renderSeasonSim(); }
+  else if(k==="b"){ e.preventDefault(); if(typeof bridgeOpen==="function") bridgeOpen(); }
   else if(k==="w"){ e.preventDefault(); const h2 = document.getElementById("hero"); if(h2) h2.scrollIntoView({behavior:"smooth", block:"start"}); }
 });
 

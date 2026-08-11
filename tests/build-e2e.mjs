@@ -15,7 +15,7 @@ try {
   out.push("hero:"+(document.getElementById("hero").innerHTML.includes("% at #")?"OK":"BAD"));
   out.push("avatars:"+(document.querySelectorAll("#poolBody .avatar").length>10?"OK":"BAD"));
   out.push("stamp:"+(document.getElementById("buildStamp").textContent.includes("build v")?"OK":"BAD"));
-  out.push("mods:"+((window.__mod||[]).length===7?"OK":"BAD("+(window.__mod||[]).join("/")+")"));
+  out.push("mods:"+((window.__mod||[]).length===8?"OK":"BAD("+(window.__mod||[]).join("/")+")"));
   pickMine(allPlayers().find(p=>p.name==="Josh Allen").id);
   const c={QB:0}; S.mine.forEach(id=>{const p=idIndex()[id]; if(p&&p.pos==="QB")c.QB++;});
   out.push("pick:"+(c.QB===1?"OK":"BAD"));
@@ -140,6 +140,20 @@ try {
     }
     return "OK";
   })()));
+  // War room mode (#1167–#1181)
+  out.push("bridge:"+((()=>{try{
+    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();
+    bridgeOpen();
+    const el=document.getElementById("bridge");
+    const panels=el?el.querySelectorAll("[data-brpanel]").length:0;
+    const r0=BRIDGE.rot; BRIDGE.rot++; bridgeRender();
+    const rotated=document.getElementById("bridge").querySelector(".brh").textContent!==null && BRIDGE.rot===r0+1;
+    document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}));
+    const gone=!document.getElementById("bridge") && !document.body.classList.contains("bridgeon");
+    SEASON_LIVE.ids=null; SEASON_LIVE.at=0;
+    if(BRIDGE.on) bridgeClose();
+    return panels===4 && rotated && gone && typeof bridgeFullscreen==="function" && typeof bridgeOffer==="function";
+  }catch(e){ if(typeof bridgeClose==="function") bridgeClose(); SEASON_LIVE.ids=null; return false; }})()?"OK":"BAD"));
   // Sim Center (#1142–#1156)
   out.push("center:"+((()=>{try{
     SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();

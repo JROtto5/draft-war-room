@@ -523,6 +523,7 @@ const PALETTE_ACTIONS = [
   ["🩹 Fragility report", ()=>renderFragility()],
   ["🧪 What if…", ()=>renderWhatIf()],
   ["🎛 Sim Center", ()=>simCenter()],
+  ["🖥 War Room mode", ()=>bridgeOpen()],
   ["⚔ Jump: matchup", ()=>{ const el=document.getElementById("spMatchup"); if(el) el.scrollIntoView({behavior:"smooth"}); }],
   ["🏆 Jump: standings", ()=>{ const el=document.getElementById("spStandings"); if(el) el.scrollIntoView({behavior:"smooth"}); }],
   ["🔥 Jump: the wire", ()=>{ const el=document.getElementById("spWire"); if(el) el.scrollIntoView({behavior:"smooth"}); }],
