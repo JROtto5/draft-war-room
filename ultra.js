@@ -703,4 +703,144 @@ function renderVault(){                                                         
   });
 }
 
+/* ---------- R79 EDGE INTELLIGENCE (#1242–#1256) ---------- */
+function edgeConf(n, effect){                                                    // #1250
+  const c = Math.min(1, (n/4)*0.6 + Math.min(1, effect/6)*0.4);
+  return c>=0.66 ? {t:"HIGH", c:"green", v:c} : c>=0.4 ? {t:"MED", c:"gold", v:c} : {t:"LOW", c:"dim", v:c};
+}
+function sosNext(p, n){                                                          // #1246/#1247
+  const w = curWeek(); let s = 0, g = 0;
+  for(let fw=w; fw<w+(n||3) && fw<=17; fw++){
+    const opp = (typeof SCHED!=="undefined" && SCHED[p.team]) ? SCHED[p.team][fw] : null;
+    if(opp){ s += defToughRank(opp); g++; }
+  }
+  return g ? Math.round(s/g) : 16;
+}
+function playoffSos(p){
+  let s = 0, g = 0;
+  for(let fw=15; fw<=17; fw++){
+    const opp = (typeof SCHED!=="undefined" && SCHED[p.team]) ? SCHED[p.team][fw] : null;
+    if(opp){ s += defToughRank(opp); g++; }
+  }
+  return g ? Math.round(s/g) : 16;
+}
+function edgeScan(){                                                             // #1242–#1249
+  const byId = idIndex(), w = curWeek(), hist = seasonArchive();
+  const pw = hist.length ? playerWeekly(hist) : {};
+  const fas = (typeof freeAgents==="function") ? freeAgents().filter(p=>p.pos!=="DEF") : [];
+  const mine = rosterIds().map(id=>byId[id]).filter(Boolean).filter(p=>p.pos!=="DEF");
+  const rostered = SEASON.rostered;
+  const edges = [];
+  const recent = p=>{ const a = (pw[p.id]||[]).filter(x=>x!=null); return a.slice(-3); };
+  // breakout: heat + soft schedule + spike profile, still available (#1243)
+  fas.forEach(p=>{
+    const heat = (typeof buzzOf==="function") ? buzzOf(p) : 0;
+    const sos = sosNext(p, 3);
+    const spike = (typeof spikeRate==="function") ? (spikeRate(p)||0) : 0;
+    const br = (typeof breakoutTag==="function") ? !!breakoutTag(p) : false;
+    const r = recent(p);
+    const trend = r.length>=2 ? r[r.length-1]-r[0] : 0;
+    const score = (heat/1500) + (sos-16)/6 + spike*2 + (br?1.5:0) + trend/6;
+    if(score>=2.2) edges.push({kind:"BREAKOUT", p, val:Math.round(score*10)/10,
+      why:"heat "+heat.toLocaleString()+" · next-3 SOS "+sos+"/32"+(br?" · breakout profile":"")+(trend>2?" · rising":""),
+      act:"claim", conf:edgeConf(r.length||2, score)});
+  });
+  // buy-low / sell-high on real production vs expectation (#1244/#1245)
+  const evalProd = (p, isMine)=>{
+    const r = recent(p); if(r.length<2) return;
+    const exp = ppgOf(p), act = r.reduce((a,b)=>a+b,0)/r.length;
+    const gap = Math.round((act-exp)*10)/10;
+    if(isMine && gap>=3) edges.push({kind:"SELL HIGH", p, val:gap, why:"averaging "+act.toFixed(1)+" vs "+exp+" expected over "+r.length+" wks — sell the belief",
+      act:"trade", conf:edgeConf(r.length, gap)});
+    if(!isMine && gap<=-3) edges.push({kind:"BUY LOW", p, val:-gap, why:"averaging "+act.toFixed(1)+" vs "+exp+" expected — regression is a friend",
+      act:"trade", conf:edgeConf(r.length, -gap)});
+  };
+  mine.forEach(p=>evalProd(p, true));
+  Object.keys(pw).slice(0, 220).forEach(id=>{
+    const p = byId[id]; if(!p || p.pos==="DEF") return;
+    if(rosterIds().includes(id)) return;
+    if(rostered && !rostered.has(id)) return;                                    // rostered elsewhere = trade target
+    evalProd(p, false);
+  });
+  // schedule arbitrage (#1246) + playoff alpha (#1247)
+  mine.concat(fas.slice(0,40)).forEach(p=>{
+    const s3 = sosNext(p, 3);
+    if(s3>=23) edges.push({kind:"SCHEDULE", p, val:Math.round((s3-16)/2*10)/10,
+      why:"next 3 opponents average "+s3+"/32 defense — soft stretch starts now", act:rosterIds().includes(p.id)?"start":"claim",
+      conf:edgeConf(3, s3-16)});
+    const ps = playoffSos(p);
+    if(ps>=24 && w<=11) edges.push({kind:"PLAYOFF ALPHA", p, val:Math.round((ps-16)/2*10)/10,
+      why:"weeks 15–17 opponents average "+ps+"/32 — acquire before the run", act:"trade", conf:edgeConf(3, ps-16)});
+  });
+  // market inefficiency: crowd chasing heat with no value (#1248)
+  fas.forEach(p=>{
+    const heat = (typeof buzzOf==="function") ? buzzOf(p) : 0;
+    if(heat>4000 && ppgOf(p)<7) edges.push({kind:"FADE THE CROWD", p, val:Math.round(heat/1000),
+      why:heat.toLocaleString()+" adds for a "+ppgOf(p)+"/wk player — let someone else spend the FAAB", act:"none",
+      conf:edgeConf(2, 3)});
+  });
+  const seen = {};
+  return edges.filter(e=>{ const k = e.kind+":"+e.p.id; if(seen[k]) return false; seen[k] = 1; return true; })
+    .sort((a,b)=>(b.val*b.conf.v)-(a.val*a.conf.v)).slice(0, 12);
+}
+function scarcityClock(){                                                        // #1249
+  const byId = idIndex(), w = curWeek();
+  const out = {};
+  ["QB","RB","WR","TE"].forEach(pos=>{
+    const fas = (typeof freeAgents==="function") ? freeAgents().filter(p=>p.pos===pos && weekProj(p,w)>=8) : [];
+    out[pos] = fas.length;
+  });
+  return out;
+}
+function edgeLogAdd(e, acted){                                                    // #1253
+  try{
+    const k = LS_KEY+"-edgelog";
+    const a = JSON.parse(localStorage.getItem(k)||"[]");
+    a.unshift({t:Date.now(), w:curWeek(), kind:e.kind, id:e.p.id, name:e.p.name, acted:!!acted});
+    localStorage.setItem(k, JSON.stringify(a.slice(0,80)));
+  }catch(e2){}
+}
+function renderEdge(){                                                            // #1242
+  const old = document.getElementById("edgeOverlay"); if(old){ old.remove(); return; }
+  const edges = edgeScan(), sc = scarcityClock();
+  const ov = document.createElement("div"); ov.id = "edgeOverlay"; ov.className = "snov";
+  ov.innerHTML = '<div class="sbcard" role="dialog" aria-label="Edge radar"><button class="sbx" data-egx="1">✕</button>'+
+    '<div class="tag">🧠 EDGE RADAR — WEEK '+curWeek()+'</div>'+
+    '<div class="benchhead">⏳ Startable free agents left: '+["QB","RB","WR","TE"].map(p=>p+" "+sc[p]).join(" · ")+'</div>'+
+    (edges.length ? edges.map((e,i)=>'<div class="sbply" data-edge="'+i+'" style="cursor:pointer">'+
+      '<span><b style="color:var(--'+(e.kind==="BUY LOW"||e.kind==="BREAKOUT"?"green":e.kind==="FADE THE CROWD"?"red":"gold")+')">'+e.kind+'</b> '+esc(e.p.name)+
+      ' <span class="dimtxt">'+esc(e.why)+'</span></span>'+
+      '<b class="mono" style="color:var(--'+e.conf.c+')">'+e.conf.t+'</b></div>').join("")
+    : '<div class="empty">No exploitable edges this week — the market is efficient (annoying).</div>')+
+    '</div>';
+  document.body.appendChild(ov);
+  window._edges = edges;
+  ov.addEventListener("click", e=>{
+    if(e.target===ov || e.target.closest("[data-egx]")) return ov.remove();
+    const row = e.target.closest("[data-edge]");
+    if(!row) return;
+    const ed = window._edges[+row.dataset.edge]; if(!ed) return;
+    edgeLogAdd(ed, true);
+    ov.remove();
+    if(ed.act==="claim" && typeof claimsAdd==="function"){
+      const b = bidSuggest(ed.p, null); claimsAdd(ed.p.id, null, b.bid);
+      toast("📋 "+ed.p.name+" planned at $"+b.bid+" — tune it in Waivers");
+      if(typeof renderWaivers==="function") renderWaivers();
+    } else if(ed.act==="trade" && typeof renderTrades==="function"){ renderTrades(); }
+    else if(typeof openCard==="function") openCard(ed.p.id);
+  });
+}
+function edgeAlert(){                                                             // #1251
+  try{
+    if(typeof hypeOn!=="function" || !hypeOn("full")) return;
+    const edges = edgeScan(); if(!edges.length) return;
+    const top = edges[0];
+    if(top.conf.t==="LOW") return;
+    const k = LS_KEY+"-edgealert"+curWeek();
+    if(localStorage.getItem(k)===top.p.id) return;
+    localStorage.setItem(k, top.p.id);
+    alertFire("edge", "🧠 Edge: "+top.kind+" — "+top.p.name, top.why);
+  }catch(e){}
+}
+
 window.__mod = window.__mod || []; window.__mod.push("ultra.js");

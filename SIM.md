@@ -52,3 +52,14 @@ player for N weeks. Clinch math tallies wins→make% across 400 sims: clinch =
 fewest wins at ≥95%, dead = most wins at ≤5%; magic numbers surface in the
 chase card from week 8 and elimination-watch alerts on full send. Odds carry
 ±1.96·SE bands. Up to 3 scenarios persist for side-by-side reruns.
+
+## Edge intelligence (#1242–#1256)
+edgeScan ranks exploitable edges by value×confidence: **BREAKOUT** (heat +
+soft next-3 SOS + spike/breakout profile + rising 3-week trend, still on the
+wire), **BUY LOW / SELL HIGH** (3-week actual vs ppgOf expectation, ±3),
+**SCHEDULE** (next-3 opponents ≥23/32) and **PLAYOFF ALPHA** (weeks 15–17
+≥24/32, before week 12), **FADE THE CROWD** (>4k adds on a <7 ppg player).
+Confidence = data volume + effect size (HIGH/MED/LOW), the scarcity clock
+counts startable free agents per position, every row links to the actual move,
+and acted-on edges are logged for accountability. The top non-LOW edge is
+absorbed into the Game Plan's move list.

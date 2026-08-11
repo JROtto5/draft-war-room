@@ -1819,6 +1819,13 @@ function gamePlanMoves(){                                                       
         txt:"▲ Start "+p.name+" over "+o.name+" (+"+gain+")", tag:confidenceTag(gain, (playerVariance(p)+playerVariance(o))/2/4)});
     });
   }
+  try{
+    if(typeof edgeScan==="function"){
+      const top = edgeScan().filter(e=>e.conf.t!=="LOW" && (e.act==="claim"||e.act==="start"))[0];
+      if(top) moves.push({k:"edge-"+top.p.id, pri:34, gain:top.val,
+        txt:"🧠 "+top.kind+": "+top.p.name+" — "+top.why, tag:{t:top.conf.t==="HIGH"?"LEAN":"COIN-FLIP", c:top.conf.c}});
+    }
+  }catch(e0){}
   const fas = freeAgents();
   upgradeFinder(rosterIds(), byId, w, fas).slice(0,2).forEach(u=>{
     moves.push({k:"claim-"+u.add.id, pri:30+u.gain, gain:u.gain,

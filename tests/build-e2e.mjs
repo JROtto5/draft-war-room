@@ -140,6 +140,20 @@ try {
     }
     return "OK";
   })()));
+  // Edge intelligence (#1242–#1256)
+  out.push("edge:"+((()=>{try{
+    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();
+    const c1=edgeConf(4, 8), c2=edgeConf(1, 1);
+    const p0=allPlayers()[3];
+    const s3=sosNext(p0,3), ps=playoffSos(p0);
+    const edges=edgeScan();
+    const sc=scarcityClock();
+    const ordered=edges.every((e,i)=>i===0 || (edges[i-1].val*edges[i-1].conf.v)>=(e.val*e.conf.v)-0.001);
+    SEASON_LIVE.ids=null; SEASON_LIVE.at=0;
+    return c1.t==="HIGH" && c2.t==="LOW" && c1.v>c2.v && s3>=1 && s3<=32 && ps>=1 && ps<=32 &&
+      Array.isArray(edges) && ordered && edges.every(e=>e.p && e.kind && e.conf) &&
+      typeof sc.RB==="number" && typeof renderEdge==="function" && typeof edgeAlert==="function";
+  }catch(e){ SEASON_LIVE.ids=null; return false; }})()?"OK":"BAD"));
   // The vault (#1227–#1241)
   out.push("vault:"+((()=>{try{
     const mk=(rid,pts,mid)=>({matchup_id:mid, roster_id:rid, points:pts, starters:[], players:[], players_points:{}});
