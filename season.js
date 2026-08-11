@@ -267,7 +267,8 @@ async function playoffOdds(nSims, forceMyResult){                               
     }catch(e){ return null; }
   }
   const st = standingsRows(SCOREB.rosters, SCOREB.users);
-  const mu = {}; st.forEach(r=>{ mu[r.rid] = Math.max(80, rosterStrengthOf(r.rid)/16); });
+  const mu = {}; st.forEach(r=>{ mu[r.rid] = Math.max(80, rosterStrengthOf(r.rid)/16
+    - ((typeof injuryDragOf==="function") ? injuryDragOf(r.rid, w, LAST) : 0)); });   // expected-injury drag (#1086)
   const madeIt = {}; st.forEach(r=>madeIt[r.rid]=0);
   for(let s2=0; s2<N; s2++){
     const wins = {}, pf = {};

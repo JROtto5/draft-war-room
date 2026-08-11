@@ -140,6 +140,23 @@ try {
     }
     return "OK";
   })()));
+  // Injury engine (#1082–#1096)
+  out.push("inj2:"+((()=>{try{
+    const p=allPlayers().find(x=>x.pos==="RB");
+    const h=hazardOf(p);
+    const fix={schedule:{1:[[1,2]],2:[[1,2]],3:[[1,2]]}, mu:{1:115,2:100}, wins0:{1:0,2:0}, pf0:{1:0,2:0},
+      myRid:1, spots:1, lastW:3, games:3};
+    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();
+    const clean=seasonSimX(fix, {N:150, seed:5, injuries:false});
+    const hurt=seasonSimX(fix, {N:150, seed:5, injuries:true});
+    const hurt2=seasonSimX(fix, {N:150, seed:5, injuries:true});
+    const pack=rosterPack(1, 1, 4);
+    SEASON_LIVE.ids=null; SEASON_LIVE.at=0;
+    return h>0.01 && h<0.1 && ["LOW","MED","HIGH"].includes(hazardBand(p).t) &&
+      clean.winsAvg>=hurt.winsAvg && JSON.stringify(hurt.recDist)===JSON.stringify(hurt2.recDist) &&
+      Array.isArray(pack) && (pack.length===0 || (pack[0].dep>=0 && pack[0].haz>0)) &&
+      typeof injuryDragOf(1,1,4)==="number" && typeof renderFragility==="function" && typeof depthGrade(1)==="string";
+  }catch(e){ SEASON_LIVE.ids=null; return false; }})()?"OK":"BAD"));
   // Projection sources (#1067–#1081)
   out.push("src:"+((()=>{try{
     const p=allPlayers().find(x=>x.pos==="RB" && !injuryOf(x) && (typeof BYES==="undefined"||BYES[x.team]!==3));

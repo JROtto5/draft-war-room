@@ -1664,6 +1664,7 @@ function openCard(id){
       '</div></div>'+
     '</div>'+
     ((typeof projSourceLine==="function") ? projSourceLine(p) : '')+
+    ((typeof hazardLine==="function") ? hazardLine(p) : '')+
     (S.overrides[id]!=null ? '<div class="cintel" style="color:var(--gold)">📌 MY NUMBER: <b class="mono">'+ppgOf(p)+'/wk</b>'+
       (bakedProjOf(p)!=null ? ' <span class="dimtxt">(baked: '+Math.round(bakedProjOf(p)/16*10)/10+'/wk)</span>' : '')+'</div>' : '')+
     '<div class="ctabs">'+tabBtn("ov","Overview")+tabBtn("hist","History")+tabBtn("intel","Intel")+'</div>'+

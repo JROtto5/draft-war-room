@@ -425,7 +425,7 @@ async function scoutReport(rid){                                                
   const ov = document.createElement("div"); ov.id = "scOverlay"; ov.className = "snov";
   let h = '<div class="sbcard" role="dialog" aria-label="Scouting report"><button class="sbx" data-scx="1">✕</button>';
   h += '<div class="tag">🕵️ SCOUTING REPORT: '+esc(name)+'</div>';
-  h += '<div class="sbply"><span>week '+w+' optimal projection</span><b class="mono">'+fmt(theirBs.pts)+'</b></div>';
+  h += '<div class="sbply"><span>week '+w+' optimal projection</span><b class="mono">'+fmt(theirBs.pts)+((typeof depthGrade==="function")?' · depth '+depthGrade(rid):'')+'</b></div>';
   if(slop) h += '<div class="sbply"><span>😴 Sloppiness index</span><b>'+slop.eff+'% efficiency · '+slop.left+' pts left on bench over '+slop.weeks+' wks</b></div>';
   if(h2h && (h2h.w+h2h.l)>0) h += '<div class="sbply"><span>📒 Head-to-head</span><b>'+h2h.w+'-'+h2h.l+' <span class="dimtxt">'+esc(h2h.games.join(" · "))+'</span></b></div>';
   h += '<div class="benchhead">⚖ Position by position (me ▲ vs them ▼)</div>'+sd.map(x=>
@@ -1577,7 +1577,7 @@ function toggleDensity(){
 function copyWkText(){ try{ navigator.clipboard.writeText(window._wkText||"").then(()=>toast("📋 Recap copied")).catch(()=>toast("Copy blocked here — select the text manually", {warn:true})); }catch(e){ toast("Copy blocked here", {warn:true}); } }
 const ACT_OK = ["renderGamePlan","renderSim","renderScoreboard","renderWaivers","renderTrades","renderSeasonStats",
   "renderRituals","egoDash","weeklyRecap2","renderAlertCenter","injuryDigest","scoutMyOpponent","moreSheet",
-  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText","analystReport","stageOptimal","stageWinProb","renderSeasonSim","scoutPicker","alertTest","projDivergence"];
+  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText","analystReport","stageOptimal","stageWinProb","renderSeasonSim","scoutPicker","alertTest","projDivergence","renderFragility"];
 document.addEventListener("click", e=>{
   const t = e.target.closest("[data-act],[data-scout],[data-clickid]");
   if(!t) return;
@@ -2066,8 +2066,10 @@ async function renderSeasonSim(){                                               
   const data = await seasonSimData();
   if(!data) return toast("Link the league first", {warn:true});
   const seed = curWeek()*31 + (window._simReroll||0);                             // #1004
-  const opt = seasonSimCore(Object.assign({}, data, {N:500, seed, myMult:1}));
-  const act = seasonSimCore(Object.assign({}, data, {N:500, seed:seed+1, myMult:myEffMult()}));  // #1002
+  const injOn = S.settings.simInjuries!==false && typeof seasonSimX==="function"; // #1092
+  const CORE2 = injOn ? seasonSimX : (d2,o2)=>seasonSimCore(Object.assign({},d2,o2));
+  const opt = CORE2(data, {N:500, seed, myMult:1, injuries:injOn});
+  const act = CORE2(data, {N:500, seed:seed+1, myMult:myEffMult(), injuries:injOn});  // #1002
   const w = curWeek(), byId = idIndex();
   // week-by-week win prob strip (#1001)
   const myBs = bestStartersWeek(rosterIds(), byId, w);
@@ -2088,7 +2090,8 @@ async function renderSeasonSim(){                                               
   const effCost = Math.round((opt.winsAvg-act.winsAvg)*10)/10;
   const ov = document.createElement("div"); ov.id = "fsOverlay"; ov.className = "snov";
   let h = '<div class="sbcard" role="dialog" aria-label="Season simulator"><button class="sbx" data-fsx="1">✕</button>';
-  h += '<div class="tag">🔮 500 SIMULATED SEASONS — from week '+w+'</div>';
+  h += '<div class="tag">🔮 500 SIMULATED SEASONS — from week '+w+(injOn?' · 🩹 injury world ('+(opt.injPerSeason||0)+'/roster)':' · clean world')+'</div>'+
+    '<div class="sspad" style="font-size:11px"><label><input type="checkbox" id="fsInj"'+(injOn?' checked':'')+'> simulate injuries (hazard model)</label> <button class="undo1" data-act="renderFragility">🩹 fragility report</button></div>';
   h += '<div class="benchhead" style="font-size:15px">Most likely: <b class="mono" style="color:var(--gold)">'+topRec[0]+'</b> ('+Math.round(topRec[1]/opt.N*100)+'% of sims) · avg <b class="mono">'+opt.winsAvg+'</b> wins</div>';
   h += '<div class="benchhead">📊 Final record</div>'+recBars.map(([k,n])=>
     '<div class="bar" style="display:grid;grid-template-columns:44px 1fr 44px;gap:8px;align-items:center;font-size:12px;padding:1px 12px">'+
@@ -2109,7 +2112,8 @@ async function renderSeasonSim(){                                               
   document.body.appendChild(ov);
   ov.addEventListener("click", e=>{
     if(e.target===ov || e.target.closest("[data-fsx]")) return ov.remove();
-    if(e.target.closest("[data-fsroll]")){ window._simReroll = (window._simReroll||0)+1; ov.remove(); renderSeasonSim(); }
+    if(e.target.closest("[data-fsroll]")){ window._simReroll = (window._simReroll||0)+1; ov.remove(); renderSeasonSim(); return; }
+    if(e.target.id==="fsInj"){ S.settings.simInjuries = e.target.checked; commit(); ov.remove(); renderSeasonSim(); }
   });
 }
 
