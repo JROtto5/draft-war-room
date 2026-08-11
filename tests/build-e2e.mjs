@@ -140,6 +140,19 @@ try {
     }
     return "OK";
   })()));
+  // Opponent behavior (#1112–#1126)
+  out.push("oppx:"+((()=>{try{
+    const fix={schedule:{1:[[1,2]],2:[[1,2]],3:[[1,2]]}, mu:{1:110,2:110}, wins0:{1:0,2:0}, pf0:{1:0,2:0},
+      myRid:1, spots:1, lastW:3, games:3};
+    const even=seasonSimX(fix, {N:200, seed:4, injuries:false});
+    const sloppy=seasonSimX(fix, {N:200, seed:4, injuries:false, oppEff:{2:0.85}});
+    const a1=faabAggro(1, [{rid:1, faab:60, claims:4, trades:0}]);
+    const a2=faabAggro(1, [{rid:1, faab:0, claims:0, trades:0}]);
+    const rg=rootingGuide({schedule:{1:[[2,3]],2:[[1,2]]}, mu:{1:110,2:100,3:100}, wins0:{1:0,2:0,3:0}, pf0:{1:0,2:0,3:0},
+      myRid:1, spots:1, lastW:2, games:2}, null);
+    return sloppy.winsAvg>=even.winsAvg && a1===1.5 && a2===0.6 &&
+      Array.isArray(rg) && typeof teamEffMult==="function" && typeof leagueFutures==="function";
+  }catch(e){ return false; }})()?"OK":"BAD"));
   // Weekly vectors: bye dents + speed (#1097–#1111)
   out.push("vec:"+((()=>{try{
     SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();

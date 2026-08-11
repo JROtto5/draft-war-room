@@ -438,6 +438,14 @@ async function scoutReport(rid){                                                
   if(exps.length) h += '<div class="benchhead">🎯 Exploits</div>'+exps.map(x=>
     '<div class="sbply"><span>'+(x.w?'W'+x.w+' — ':'')+x.kind+'</span><span class="dimtxt">'+esc(x.note)+'</span></div>').join("");
   if(tend) h += '<div class="sbply"><span>🎰 Tendencies</span><b>$'+tend.faab+' FAAB spent · '+tend.claims+' claims · '+tend.trades+' trades'+(tend.zeros?' · '+tend.zeros+' zero-point starters(!)':'')+'</b></div>';
+  try{
+    if(typeof OPPX!=="undefined" && OPPX.futures && OPPX.futures[rid]){
+      const f2 = OPPX.futures[rid];
+      h += '<div class="sbply"><span>🔮 Their future</span><b class="mono">'+f2.rec+' · make '+f2.make+'% · title '+f2.title+'%</b></div>';
+      if(typeof injuryDragOf==="function") h += '<div class="sbply"><span>🩹 Their fragility vs mine</span><b class="mono">'+
+        injuryDragOf(rid, w, 14).toFixed(1)+' vs '+injuryDragOf(+S.settings.sleeperRosterId, w, 14).toFixed(1)+' pts/wk at risk</b></div>';
+    }
+  }catch(e0){}
   if(kr) h += '<div class="sbply"><span>☠ My kryptonite (self-scout)</span><b>'+kr.pos+' averaging '+kr.avg+'/start — feed it or fix it</b></div>';
   h += '<div style="padding:10px 0"><button class="hbtn" id="scPng">📤 Share the beatdown</button> <button class="hbtn" id="scTalk">🗣 Talk</button> <button class="hbtn" data-tradewith="'+rid+'">🔁 Trade with them</button></div><div id="scOut"></div></div>';
   ov.innerHTML = h;
@@ -2070,8 +2078,12 @@ async function renderSeasonSim(){                                               
   const vectors = (typeof weeklyVectors==="function" && SCOREB.rosters) ? weeklyVectors(data) : null;   // #1097
   const CORE2 = (typeof seasonSimX==="function") ? seasonSimX : (d2,o2)=>seasonSimCore(Object.assign({},d2,o2));
   const t0 = performance.now();
-  const opt = CORE2(data, {N:500, seed, myMult:1, injuries:injOn, vectors});
-  const act = CORE2(data, {N:500, seed:seed+1, myMult:myEffMult(), injuries:injOn, vectors});  // #1002
+  const oppEff = {};
+  try{ const hist2 = seasonArchive();
+    Object.keys(data.mu).forEach(r2=>{ if(+r2!==data.myRid && typeof teamEffMult==="function") oppEff[r2] = teamEffMult(+r2, hist2); });
+  }catch(e0){}
+  const opt = CORE2(data, {N:500, seed, myMult:1, injuries:injOn, vectors, oppEff});
+  const act = CORE2(data, {N:500, seed:seed+1, myMult:myEffMult(), injuries:injOn, vectors, oppEff});  // #1002
   const simMs = Math.round(performance.now()-t0);
   const w = curWeek(), byId = idIndex();
   // week-by-week win prob strip (#1001)

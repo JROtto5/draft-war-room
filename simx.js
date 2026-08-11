@@ -154,7 +154,8 @@ function seasonSimX(data, opts){                                                
   const weeks = Object.keys(data.schedule).map(Number).sort((a,b)=>a-b).filter(w2=>w2<=data.lastW);
   const recDist = {}, seedCount = new Array((data.spots||6)+1).fill(0);
   let titles = 0, finals = 0, made = 0, winsSum = 0, injSum = 0, lastPlace = 0, rivalH2H = 0, rivalGames = 0;
-  const muOf = (r,w2)=> vec ? vec.mu[r][w2]*driftMult(vec, r, w2, wNow) : data.mu[r];
+  const effM = opts.oppEff || null;                                              // per-rid efficiency multipliers (#1112)
+  const muOf = (r,w2)=> (vec ? vec.mu[r][w2]*driftMult(vec, r, w2, wNow) : data.mu[r]) * (effM && r!==data.myRid && effM[r] ? effM[r] : 1);
   const noiseOf = (r,w2)=> (rng()+rng()+rng()-1.5)*2*(vec ? vec.sd[r][w2] : 13);
   for(let s2=0; s2<N; s2++){
     const wins = {}, pf = {}, outUntil = {};
@@ -292,6 +293,73 @@ function fragilityAlert(){                                                      
     alertFire("frag", "🧱 Load-bearing wall flagged: "+top.p.name,
       "−"+top.dep.toFixed(1)+"/wk if he sits"+(swap?" · backup plan: "+swap.name:" · no bench cover — hit the wire"));
   }catch(e){}
+}
+
+/* ---------- R70 Opponent modeling (#1112–#1126) ---------- */
+const OPPX = {at:0, eff:{}, faab:{}, futures:null, futuresAt:0, prevOdds:{}};
+function teamEffMult(rid, hist){                                                 // #1112/#1119
+  if(OPPX.eff[rid]!=null && Date.now()-OPPX.at < 10*60e3) return OPPX.eff[rid];
+  const byId = idIndex();
+  const effs = (hist||seasonArchive()).map(wm=>(wm||[]).find(x=>+x.roster_id===+rid)).filter(Boolean)
+    .map(m=>lineupEffOf(m, byId)).filter(Boolean).map(e2=>e2.eff);
+  const v = effs.length ? Math.max(0.85, Math.min(1, effs.reduce((a,b)=>a+b,0)/effs.length/100)) : 0.97;
+  OPPX.eff[rid] = v; OPPX.at = Date.now();
+  return v;
+}
+function faabAggro(rid, tendRows){                                               // #1113/#1122
+  const t2 = (tendRows||[]).find(r=>+r.rid===+rid);
+  if(!t2) return 1;
+  const spend = t2.faab + t2.claims*3;
+  return spend>=40 ? 1.5 : spend>=15 ? 1.15 : spend>0 ? 1 : 0.6;
+}
+async function leagueFutures(force){                                             // one sim powers everything (#1116/#1123)
+  if(!force && OPPX.futures && Date.now()-OPPX.futuresAt < 15*60e3) return OPPX.futures;
+  const data = await seasonSimData(); if(!data) return null;
+  const hist = seasonArchive();
+  const tend = leagueTendencies(await txHistory(), hist);
+  const vectors = weeklyVectors(data);
+  const rids = Object.keys(data.mu).map(Number);
+  const wNow = curWeek();
+  const out = {};
+  for(const rid of rids){
+    const d2 = Object.assign({}, data, {myRid:rid, rivRid:null});
+    const eff = teamEffMult(rid, hist);
+    const r = seasonSimX(d2, {N:150, seed:wNow*7+rid, myMult:eff, injuries:true, vectors});
+    const topRec = Object.entries(r.recDist).sort((a,b)=>b[1]-a[1])[0];
+    out[rid] = {rec:topRec?topRec[0]:"?", make:r.makePct, title:r.titlePct, winsAvg:r.winsAvg, eff:Math.round(eff*100)};
+  }
+  try{
+    const k = LS_KEY+"-futprev"+wNow;
+    if(!localStorage.getItem(k)){
+      localStorage.setItem(k, JSON.stringify(Object.fromEntries(rids.map(r=>[r, out[r].make]))));
+      const kp = LS_KEY+"-futprev"+(wNow-1);
+      OPPX.prevOdds = JSON.parse(localStorage.getItem(kp)||"{}");
+    } else OPPX.prevOdds = JSON.parse(localStorage.getItem(LS_KEY+"-futprev"+(wNow-1))||"{}");
+  }catch(e){}
+  OPPX.futures = out; OPPX.futuresAt = Date.now();
+  return out;
+}
+function rootingGuide(data, vectors){                                            // pure-ish (#1117)
+  const wNow = curWeek(), myRid = data.myRid;
+  const base = seasonSimX(data, {N:120, seed:wNow*13, injuries:false, vectors});
+  const out = [];
+  (data.schedule[wNow]||[]).forEach(pair=>{
+    if(pair.includes(myRid)) return;
+    const [a,b] = pair;
+    const muA = vectors ? vectors.mu[a][wNow] : data.mu[a];
+    const muB = vectors ? vectors.mu[b][wNow] : data.mu[b];
+    const fav = muA>=muB ? a : b, dog = muA>=muB ? b : a;
+    const dataDog = Object.assign({}, data, {wins0:Object.assign({}, data.wins0, {[dog]:(data.wins0[dog]||0)+1}),
+      schedule:Object.fromEntries(Object.entries(data.schedule).filter(([k2])=>+k2!==wNow))});
+    const alt = seasonSimX(dataDog, {N:120, seed:wNow*13, injuries:false, vectors});
+    const swing = alt.makePct - base.makePct;
+    if(Math.abs(swing)>=2) out.push({root: swing>0 ? dog : fav, against: swing>0 ? fav : dog, swing:Math.abs(swing)});
+  });
+  return out.sort((a,b)=>b.swing-a.swing).slice(0,3);
+}
+async function myRootingGuide(){
+  const data = await seasonSimData(); if(!data) return [];
+  return rootingGuide(data, weeklyVectors(data));
 }
 
 window.__mod = window.__mod || []; window.__mod.push("simx.js");

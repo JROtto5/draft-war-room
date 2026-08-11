@@ -34,3 +34,12 @@ everything — see DATA-FLOW.md.
 
 ## Determinism
 Every sim is seeded (week-derived + re-roll counter). Same seed, same future.
+
+## Opponent behavior (#1112–#1126)
+Opponents aren't optimal robots: each team sims at ITS OWN season lineup
+efficiency (archive-learned, floor 85%), and waiver drift is scaled by FAAB
+aggression from the tendency board (big spenders heal ×1.5, ghosts ×0.6).
+One cached 150-sim-per-team vector run (leagueFutures) powers the scoreboard
+Futures table (record · make% · title% with week-over-week arrows), scout
+future cards, dossier lines, and the Sunday rooting guide — the 2–3 games
+whose outcomes move MY playoff odds most, pushed into the ticker.

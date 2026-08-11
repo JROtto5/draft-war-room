@@ -561,10 +561,25 @@ async function renderScoreboard(){
         effs.map((e2,i)=>'W'+(i+1)+' '+e2.eff+'%').join(" · ")+'</span></div>';
     }
   }
-  h += '<div id="sbOdds" class="dimtxt" style="padding:8px 2px">🎲 computing playoff odds…</div></div>';
+  h += '<div id="sbOdds" class="dimtxt" style="padding:8px 2px">🎲 computing playoff odds…</div>'+
+    '<div id="sbFutures"></div></div>';
   ov.innerHTML = h;
   document.body.appendChild(ov);
   ov.addEventListener("click", e=>{ if(e.target===ov || e.target.closest("[data-sbx]")) ov.remove(); });
+  if(typeof leagueFutures==="function") leagueFutures().then(fut=>{             // #1116
+    const el = document.getElementById("sbFutures");
+    if(!el || !fut) return;
+    const prev = (typeof OPPX!=="undefined") ? OPPX.prevOdds||{} : {};
+    el.innerHTML = '<div class="tag" style="margin-top:14px">🔮 FUTURES (150 sims each, behavior-aware)</div>'+
+      st.slice().sort((a,b2)=>(fut[b2.rid]?fut[b2.rid].make:0)-(fut[a.rid]?fut[a.rid].make:0)).map(r=>{
+        const f2 = fut[r.rid]; if(!f2) return '';
+        const d2 = prev[r.rid]!=null ? f2.make-prev[r.rid] : 0;
+        return '<div class="sbply"'+(r.rid===myRid?' style="color:var(--gold)"':'')+'><span>'+esc(r.name)+
+          ' <span class="dimtxt">'+f2.rec+' · eff '+f2.eff+'%</span></span><b class="mono">'+f2.make+'%'+
+          (d2>1?' <span style="color:var(--green)">▲</span>':d2<-1?' <span style="color:var(--red)">▼</span>':'')+
+          ' <span class="dimtxt">🏆'+f2.title+'%</span></b></div>';
+      }).join("");
+  }).catch(()=>{});
   playoffOdds(300).then(po=>{                                                    // #660
     const el = document.getElementById("sbOdds"); if(!el || !po) { if(el) el.remove(); return; }
     el.innerHTML = '<div class="tag" style="margin-top:6px">🎲 PLAYOFF ODDS (300 sims)</div>'+
@@ -1228,6 +1243,7 @@ function seasonTicker(){                                                        
   items.push('<span class="tk steal">🏈 '+esc(md.me.name)+' <b>'+md.me.pts.toFixed(1)+'</b>'+(md.opp?' — <b>'+md.opp.pts.toFixed(1)+'</b> '+esc(md.opp.name):'')+'</span>');
   try{ const sc = (typeof scenarioLine==="function") ? scenarioLine() : null;
     if(sc) items.push('<span class="tk run">'+esc(sc)+'</span>'); }catch(e8){}
+  try{ (window._rootGuide||[]).slice(0,2).forEach(g2=>items.push('<span class="tk reach">📣 root: '+esc(ridName(g2.root))+' over '+esc(ridName(g2.against))+' (+'+g2.swing+'% for us)</span>')); }catch(e9){}
   md.me.starters.filter(Boolean).forEach(id=>{
     const p = byId[id]; if(!p) return;
     const got = +md.me.ppts[inv[id]] || 0;
