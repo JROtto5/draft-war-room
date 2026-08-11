@@ -140,6 +140,25 @@ try {
     }
     return "OK";
   })()));
+  // What-if machine (#1127–#1141)
+  out.push("whatif:"+((()=>{try{
+    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();
+    S.settings.sleeperRosterId = S.settings.sleeperRosterId || 12;
+    const data={schedule:{5:[[12,2]],6:[[12,2]],7:[[12,2]]}, mu:{12:120,2:118}, wins0:{12:0,2:0}, pf0:{12:0,2:0},
+      myRid:12, rivRid:null, spots:1, lastW:7, games:3};
+    VEC.key=null;
+    const vec=weeklyVectors(data);
+    const base=scenarioCore(data, vec, {}, {N:150, seed:2});
+    const star=allPlayers().filter(p=>!SEASON_LIVE.ids.includes(p.id) && p.pos==="RB").sort((a,b)=>b.proj-a.proj)[0];
+    const boosted=scenarioCore(data, vec, {addIds:[star.id]}, {N:150, seed:2});
+    const hurt=scenarioCore(data, vec, {voidWeeks:{[SEASON_LIVE.ids[0]]:[5,7]}}, {N:150, seed:2});
+    const cm=clinchMath(data, vec, 300);
+    const bandOk=ciBand(50,150)>5 && ciBand(50,150)<12 && ciBand(99,150)<3;
+    SEASON_LIVE.ids=null; SEASON_LIVE.at=0; VEC.key=null;
+    const mono = cm.rows.every((r2,i)=>i===0 || r2.pct>=cm.rows[i-1].pct-25);
+    return boosted.winsAvg>=base.winsAvg && hurt.winsAvg<=base.winsAvg+0.2 && bandOk && mono &&
+      typeof renderWhatIf==="function" && typeof scenGet==="function" && typeof elimWatch==="function";
+  }catch(e){ SEASON_LIVE.ids=null; return false; }})()?"OK":"BAD"));
   // Opponent behavior (#1112–#1126)
   out.push("oppx:"+((()=>{try{
     const fix={schedule:{1:[[1,2]],2:[[1,2]],3:[[1,2]]}, mu:{1:110,2:110}, wins0:{1:0,2:0}, pf0:{1:0,2:0},

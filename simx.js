@@ -192,16 +192,18 @@ function seasonSimX(data, opts){                                                
     if(mySeed < (data.spots||6)){
       seedCount[mySeed]++; made++;
       const seeds = order.slice(0, data.spots||6);
-      const home = 1.5;
-      const pw = data.lastW+1;
-      const g = (x,y,hx)=> (muOf(x,weeks[weeks.length-1]||pw)+ (hx?home:0) + noiseOf(x,weeks[weeks.length-1]||pw)) >=
-                           (muOf(y,weeks[weeks.length-1]||pw) + noiseOf(y,weeks[weeks.length-1]||pw)) ? x : y;
-      const w1 = g(seeds[2], seeds[5], true), w2b = g(seeds[3], seeds[4], true);
-      const survivors = [w1, w2b].sort((x,y)=>seeds.indexOf(x)-seeds.indexOf(y));  // reseed (#1102)
-      const f1 = g(seeds[0], survivors[1], true), f2 = g(seeds[1], survivors[0], true);
-      const inFinal = f1===data.myRid || f2===data.myRid;
-      if(inFinal) finals++;
-      if(g(f1, f2, seeds.indexOf(f1)<seeds.indexOf(f2))===data.myRid) titles++;
+      const lw = weeks[weeks.length-1]||data.lastW;
+      const g = (x,y,hx)=> (muOf(x,lw)+(hx?1.5:0)+noiseOf(x,lw)) >= (muOf(y,lw)+noiseOf(y,lw)) ? x : y;
+      if(seeds.length>=6){
+        const w1 = g(seeds[2], seeds[5], true), w2b = g(seeds[3], seeds[4], true);
+        const survivors = [w1, w2b].sort((x,y)=>seeds.indexOf(x)-seeds.indexOf(y));  // reseed (#1102)
+        const f1 = g(seeds[0], survivors[1], true), f2 = g(seeds[1], survivors[0], true);
+        if(f1===data.myRid || f2===data.myRid) finals++;
+        if(g(f1, f2, seeds.indexOf(f1)<seeds.indexOf(f2))===data.myRid) titles++;
+      } else {                                                                   // tiny fixtures: straight ladder
+        if(mySeed<=1) finals++;
+        if(mySeed===0) titles++;
+      }
     } else seedCount[data.spots||6]++;
   }
   return {recDist, seedCount, titlePct:Math.round(titles/N*1000)/10, winsAvg:Math.round(winsSum/N*10)/10,
@@ -336,6 +338,7 @@ async function leagueFutures(force){                                            
       OPPX.prevOdds = JSON.parse(localStorage.getItem(kp)||"{}");
     } else OPPX.prevOdds = JSON.parse(localStorage.getItem(LS_KEY+"-futprev"+(wNow-1))||"{}");
   }catch(e){}
+  try{ if(curWeek()>=6) OPPX.clinch = clinchMath(data, vectors, 400); }catch(e){}   // #1130/#1138
   OPPX.futures = out; OPPX.futuresAt = Date.now();
   return out;
 }
@@ -360,6 +363,153 @@ function rootingGuide(data, vectors){                                           
 async function myRootingGuide(){
   const data = await seasonSimData(); if(!data) return [];
   return rootingGuide(data, weeklyVectors(data));
+}
+
+/* ---------- R71 The what-if machine (#1127–#1141) ---------- */
+const SIMD = {data:null, at:0};
+async function ensureSimData(){
+  if(SIMD.data && Date.now()-SIMD.at < 10*60e3) return SIMD.data;
+  SIMD.data = await seasonSimData(); SIMD.at = Date.now();
+  return SIMD.data;
+}
+function ciBand(pct, n){ return Math.round(Math.sqrt(Math.max(1, pct*(100-pct))/(n||150))*1.96); }   // #1131
+function myVecWithDelta(vectors, data, delta){                                   // #1127/#1129/#1139
+  const byId = idIndex();
+  const ids = rosterIds().filter(id=>!((delta.dropIds)||[]).includes(id)).concat((delta.addIds)||[]);
+  const myMu = {};
+  Object.keys(vectors.mu[data.myRid]).map(Number).forEach(w2=>{
+    let fix = null;
+    if(delta.voidWeeks){
+      fix = {};
+      ids.map(id=>byId[id]).filter(Boolean).forEach(p=>{
+        const vw = delta.voidWeeks[p.id];
+        fix[p.id] = (vw && w2>=vw[0] && w2<=vw[1]) ? 0 : weekProj(p, w2);
+      });
+    }
+    myMu[w2] = Math.max(60, bestStartersWeek(ids, byId, w2, fix).pts);
+  });
+  return {mu:Object.assign({}, vectors.mu, {[data.myRid]:myMu}), sd:vectors.sd};
+}
+function scenarioCore(data, vectors, delta, opts){                               // pure-ish
+  const vec2 = (delta && (delta.addIds||delta.dropIds||delta.voidWeeks) && vectors)
+    ? myVecWithDelta(vectors, data, delta) : vectors;
+  return seasonSimX(data, Object.assign({N:150, seed:curWeek()*17, injuries:true, vectors:vec2}, opts||{}));
+}
+async function runScenario(delta, opts){
+  const data = await ensureSimData(); if(!data) return null;
+  return scenarioCore(data, weeklyVectors(data), delta||{}, opts);
+}
+function clinchMath(data, vectors, N){                                           // #1130
+  const r = seasonSimX(data, {N:N||400, seed:curWeek()*23, injuries:false, vectors, tally:true});
+  // build wins→make% from recDist + seed miss info: rerun capturing per-sim (wins, made) is cheaper inline:
+  const rng = mulberry32(curWeek()*23);
+  const rids = Object.keys(data.mu).map(Number);
+  const weeks = Object.keys(data.schedule).map(Number).sort((a,b)=>a-b).filter(w2=>w2<=data.lastW);
+  const table = {};
+  const NN = N||400;
+  const muOf = (r2,w2)=> vectors ? vectors.mu[r2][w2] : data.mu[r2];
+  for(let s2=0; s2<NN; s2++){
+    const wins = {}, pf = {};
+    rids.forEach(r2=>{ wins[r2] = data.wins0[r2]||0; pf[r2] = data.pf0[r2]||0; });
+    weeks.forEach(w2=>(data.schedule[w2]||[]).forEach(pair=>{
+      const a = pair[0], b = pair[1];
+      const sa = muOf(a,w2)+(rng()+rng()+rng()-1.5)*26, sb = muOf(b,w2)+(rng()+rng()+rng()-1.5)*26;
+      pf[a]+=sa; pf[b]+=sb; if(sa>=sb) wins[a]++; else wins[b]++;
+    }));
+    const order = rids.slice().sort((x,y)=> wins[y]-wins[x] || pf[y]-pf[x]);
+    const made = order.indexOf(data.myRid) < (data.spots||6);
+    const wv = wins[data.myRid];
+    (table[wv] = table[wv]||{n:0, made:0}).n++; if(made) table[wv].made++;
+  }
+  const rows = Object.keys(table).map(Number).sort((a,b)=>a-b)
+    .map(wv=>({wins:wv, pct:Math.round(table[wv].made/table[wv].n*100), n:table[wv].n}));
+  const clinch = rows.find(r2=>r2.pct>=95 && r2.n>=8);
+  const elim = rows.slice().reverse().find(r2=>r2.pct<=5 && r2.n>=8);
+  return {rows, clinchWins:clinch?clinch.wins:null, elimWins:elim?elim.wins:null};
+}
+function scenGet(){ try{ return JSON.parse(localStorage.getItem(LS_KEY+"-scen")||"[]"); }catch(e){ return []; } }
+function scenSave(a){ try{ localStorage.setItem(LS_KEY+"-scen", JSON.stringify(a.slice(0,3))); }catch(e){} }
+async function renderWhatIf(){                                                   // #1127/#1129/#1133/#1134
+  const old = document.getElementById("wiOverlay"); if(old){ old.remove(); return; }
+  toast("🧪 Base future computing…");
+  const base = await runScenario(null, {N:200});
+  if(!base) return toast("Link the league first", {warn:true});
+  const byId = idIndex();
+  const fas = (typeof freeAgents==="function") ? freeAgents().filter(p=>p.pos!=="DEF").sort((a,b)=>b.proj-a.proj).slice(0,20) : [];
+  const mine = rosterIds().map(id=>byId[id]).filter(Boolean);
+  const scans = scenGet();
+  const ov = document.createElement("div"); ov.id = "wiOverlay"; ov.className = "snov";
+  const band = ciBand(base.makePct, 200);
+  let h = '<div class="sbcard" role="dialog" aria-label="What-if machine"><button class="sbx" data-wix="1">✕</button>'+
+    '<div class="tag">🧪 WHAT-IF MACHINE</div>'+
+    '<div class="sbply"><span>Base future</span><b class="mono">'+base.winsAvg+' wins · make '+base.makePct+'% ±'+band+' · title '+base.titlePct+'%</b></div>'+
+    '<div class="benchhead">Build a scenario</div>'+
+    '<div class="sspad" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+
+    '<select id="wiAdd"><option value="">＋ add nobody</option>'+fas.map(p=>'<option value="'+p.id+'">＋ '+esc(p.name)+' ('+ppgOf(p)+'/wk)</option>').join("")+'</select>'+
+    '<select id="wiDrop"><option value="">− drop nobody</option>'+mine.filter(p=>p.pos!=="DEF").map(p=>'<option value="'+p.id+'">− '+esc(p.name)+'</option>').join("")+'</select>'+
+    '<select id="wiVoid"><option value="">🩹 nobody hurt</option>'+mine.filter(p=>p.pos!=="DEF").map(p=>'<option value="'+p.id+'">🩹 '+esc(p.name)+'</option>').join("")+'</select>'+
+    '<select id="wiVoidN"><option value="2">misses 2 wks</option><option value="4">4 wks</option><option value="6">6 wks</option></select>'+
+    '<button class="hbtn act" id="wiRun">▶ Run 150 seasons</button></div><div id="wiOut"></div>';
+  if(scans.length) h += '<div class="benchhead">Saved scenarios</div>'+scans.map((s3,i)=>
+    '<div class="sbply"><span>'+esc(s3.name)+'</span><span><button class="undo1" data-wirun="'+i+'">▶</button> <button class="undo1" data-widel="'+i+'">✕</button></span></div>').join("")+
+    '<div id="wiCmp"></div>';
+  h += '<div class="benchhead">👑 Keeper board (next-year value)</div><div class="scarce">'+
+    mine.filter(p=>p.pos!=="DEF").map(p=>({p, kv:(typeof keeperValue==="function")?keeperValue(p):0}))
+      .sort((a,b)=>b.kv-a.kv).slice(0,5).map(x=>'<span class="scpill">'+esc(x.p.name.split(" ").slice(-1)[0])+' <b class="mono">'+x.kv+'</b></span>').join("")+'</div>';
+  h += '</div>';
+  ov.innerHTML = h;
+  document.body.appendChild(ov);
+  const runDelta = async (delta, label)=>{
+    const el = document.getElementById("wiOut");
+    if(el) el.innerHTML = '<div class="sspad dim">simulating '+esc(label)+'…</div>';
+    const r = await runScenario(delta, {N:150});
+    if(!el || !r) return;
+    const dMake = r.makePct-base.makePct, dTitle = Math.round((r.titlePct-base.titlePct)*10)/10;
+    el.innerHTML = '<div class="benchhead">'+esc(label)+'</div>'+
+      '<div class="sbply"><span>make the playoffs</span><b class="mono" style="color:var(--'+(dMake>=0?'green':'red')+')">'+r.makePct+'% ('+(dMake>=0?'+':'')+dMake+')</b></div>'+
+      '<div class="sbply"><span>title</span><b class="mono">'+r.titlePct+'% ('+(dTitle>=0?'+':'')+dTitle+')</b></div>'+
+      '<div class="sbply"><span>avg wins</span><b class="mono">'+r.winsAvg+' (base '+base.winsAvg+')</b></div>'+
+      '<div class="sspad"><button class="hbtn" id="wiSave">💾 Save scenario</button></div>';
+    window._wiLast = {delta, label, r};
+  };
+  ov.addEventListener("click", async e=>{
+    if(e.target===ov || e.target.closest("[data-wix]")) return ov.remove();
+    if(e.target.id==="wiRun"){
+      const add = document.getElementById("wiAdd").value, drop = document.getElementById("wiDrop").value;
+      const vid = document.getElementById("wiVoid").value, vn = +document.getElementById("wiVoidN").value;
+      const delta = {};
+      if(add) delta.addIds = [add];
+      if(drop) delta.dropIds = [drop];
+      if(vid){ const w0 = curWeek(); delta.voidWeeks = {[vid]:[w0, w0+vn-1]}; }
+      if(!add && !drop && !vid) return toast("Pick at least one change", {warn:true});
+      const label = [add?"+ "+byId[add].name:null, drop?"− "+byId[drop].name:null, vid?"🩹 "+byId[vid].name+" out "+vn+"wk":null].filter(Boolean).join(" · ");
+      runDelta(delta, label);
+      return;
+    }
+    if(e.target.id==="wiSave" && window._wiLast){
+      const s3 = scenGet(); s3.unshift({name:window._wiLast.label, delta:window._wiLast.delta});
+      scenSave(s3); ov.remove(); renderWhatIf();
+      return;
+    }
+    const wr = e.target.closest("[data-wirun]");
+    if(wr){ const s3 = scenGet()[+wr.dataset.wirun]; if(s3) runDelta(s3.delta, s3.name); return; }
+    const wd = e.target.closest("[data-widel]");
+    if(wd){ const s3 = scenGet(); s3.splice(+wd.dataset.widel,1); scenSave(s3); ov.remove(); renderWhatIf(); }
+  });
+}
+function elimWatch(){                                                            // #1137
+  try{
+    if(typeof hypeOn!=="function" || !hypeOn("full") || !OPPX.clinch) return;
+    const ms = (typeof myStandingsRow==="function") ? myStandingsRow() : null;
+    if(!ms || OPPX.clinch.elimWins==null) return;
+    const gamesLeft = 14-(ms.row.w+ms.row.l+ms.row.t);
+    if(ms.row.w + gamesLeft - 1 === OPPX.clinch.elimWins){
+      const k = LS_KEY+"-elimw"+curWeek();
+      if(localStorage.getItem(k)) return;
+      localStorage.setItem(k, "1");
+      alertFire("elim", "⚠ Elimination math is live", "Lose this week and "+(OPPX.clinch.elimWins)+" wins becomes your ceiling — that's dead territory");
+    }
+  }catch(e){}
 }
 
 window.__mod = window.__mod || []; window.__mod.push("simx.js");

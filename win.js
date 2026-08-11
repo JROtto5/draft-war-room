@@ -1280,6 +1280,9 @@ function seasonPageHtml(){                                                      
   h += '</div></div>';
   // chase card
   h += '<div class="sscard"><div class="sshead">👑 THE CHASE</div><div class="sspad">'+
+    ((typeof OPPX!=="undefined" && OPPX.clinch && curWeek()>=8) ?
+      '<div class="benchhead">🎯 Magic numbers: '+(OPPX.clinch.clinchWins!=null?'clinch at '+OPPX.clinch.clinchWins+' wins':'clinch TBD')+
+      (OPPX.clinch.elimWins!=null?' · dead at '+OPPX.clinch.elimWins:'')+'</div>' : '')+
     ((typeof titleChaseHtml==="function" && titleChaseHtml()) || '<span class="dim">odds compute after the scoreboard loads</span>')+
     ((typeof deathWatch==="function") ? deathWatch() : '')+
     ((typeof elimTracker==="function" && elimTracker().length) ? '<div class="benchhead">☠ Dead: '+elimTracker().map(esc).join(", ")+'</div>' : '')+
@@ -1585,7 +1588,7 @@ function toggleDensity(){
 function copyWkText(){ try{ navigator.clipboard.writeText(window._wkText||"").then(()=>toast("📋 Recap copied")).catch(()=>toast("Copy blocked here — select the text manually", {warn:true})); }catch(e){ toast("Copy blocked here", {warn:true}); } }
 const ACT_OK = ["renderGamePlan","renderSim","renderScoreboard","renderWaivers","renderTrades","renderSeasonStats",
   "renderRituals","egoDash","weeklyRecap2","renderAlertCenter","injuryDigest","scoutMyOpponent","moreSheet",
-  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText","analystReport","stageOptimal","stageWinProb","renderSeasonSim","scoutPicker","alertTest","projDivergence","renderFragility"];
+  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText","analystReport","stageOptimal","stageWinProb","renderSeasonSim","scoutPicker","alertTest","projDivergence","renderFragility","renderWhatIf"];
 document.addEventListener("click", e=>{
   const t = e.target.closest("[data-act],[data-scout],[data-clickid]");
   if(!t) return;

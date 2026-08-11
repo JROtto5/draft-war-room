@@ -772,7 +772,8 @@ async function renderWaivers(){
   const tx = await leagueTransactions();
   const claims = claimsGet();
   const spy = rivalFaabSpy(fr);
-  const bidHtml = p=>{ const b = bidSuggest(p, myFaab); return '<span class="dimtxt">bid ~'+b.pct+'%</span> <button class="undo1" data-claim="'+p.id+'" data-bid="'+b.bid+'">＋ claim</button>'; };
+  const bidHtml = p=>{ const b = bidSuggest(p, myFaab); return '<span class="dimtxt">bid ~'+b.pct+'%</span> <button class="undo1" data-claim="'+p.id+'" data-bid="'+b.bid+'">＋ claim</button>'+
+    ((typeof runScenario==="function")?' <button class="undo1" data-wiseason="'+p.id+'" title="Season impact">🔮</button>':''); };
   const ov = document.createElement("div"); ov.id = "wvOverlay"; ov.className = "snov";
   let h = '<div class="sbcard" role="dialog" aria-label="Waiver wire"><button class="sbx" data-wvx="1" aria-label="Close">✕</button>';
   h += '<div class="tag">📥 WAIVER WIRE — week '+w+(myFaab!=null?' · my FAAB $'+myFaab:'')+'</div>';
@@ -823,6 +824,16 @@ async function renderWaivers(){
       claimsAdd(addId, up && up.drop ? up.drop.id : null, bid);
       toast("📋 Claim planned · lineup "+(wi.delta>=0?"+":"")+wi.delta+" pts/wk if it lands");
       ov.remove(); renderWaivers();
+      return;
+    }
+    const wis = e.target.closest("[data-wiseason]");
+    if(wis && typeof runScenario==="function"){                                  // #1132
+      const addId = wis.dataset.wiseason;
+      const up2 = ups.find(u=>u.add.id===addId);
+      toast("🔮 Simulating that pickup…");
+      Promise.all([runScenario(null,{N:150}), runScenario({addIds:[addId], dropIds:up2&&up2.drop?[up2.drop.id]:[]},{N:150})]).then(([b2,a2])=>{
+        if(b2&&a2) toast("🔮 "+byId[addId].name+": make "+b2.makePct+"% → "+a2.makePct+"% ("+(a2.makePct-b2.makePct>=0?"+":"")+(a2.makePct-b2.makePct)+")");
+      });
       return;
     }
     const uc = e.target.closest("[data-unclaim]");
@@ -1066,7 +1077,13 @@ async function renderTrades(){
         '<div class="sbply"><span>season value out/in</span><b class="mono">'+lastEv.rawOut+' / '+lastEv.rawIn+'</b></div>'+
         '<div class="sbply" id="trOddsRow"><span>playoff odds impact</span><b class="mono">…</b></div>';
       document.getElementById("trPng").style.display = "";
-      tradeOddsImpact(give, get, sel.rid).then(oi=>{                             // #693
+      if(typeof runScenario==="function"){                                       // full season what-if (#1128)
+        Promise.all([runScenario(null,{N:150}), runScenario({addIds:get, dropIds:give},{N:150})]).then(([b2,a2])=>{
+          const row = document.getElementById("trOddsRow");
+          if(row && b2 && a2) row.innerHTML = '<span>season impact</span><b class="mono">make '+b2.makePct+'%→'+a2.makePct+'% · title '+b2.titlePct+'%→'+a2.titlePct+'%</b>';
+          else if(row) row.innerHTML = '<span>season impact</span><b class="mono">n/a</b>';
+        }).catch(()=>{});
+      } else tradeOddsImpact(give, get, sel.rid).then(oi=>{
         const row = document.getElementById("trOddsRow");
         if(row) row.innerHTML = '<span>playoff odds impact</span><b class="mono">'+(oi ? oi.before+'% → '+oi.after+'%' : 'n/a')+'</b>';
       }).catch(()=>{});
@@ -1837,7 +1854,7 @@ async function renderGamePlan(){                                                
     (mode.mode==="ceiling"?'perfect, correlated ceilings win upsets':'watch it — correlated floors sink favorites')+'</span></div>';
   h += '<div class="sbply" id="gpSwing"><span>⚖ What this game is worth</span><b class="mono">computing…</b></div>';
   if(p2p) h += '<div class="sbply"><span>🛣 '+(p2p.inn?'Playoff seat '+ordinal(p2p.seed):'Outside looking in ('+ordinal(p2p.seed)+')')+'</span><span class="dimtxt">'+esc(p2p.line)+'</span></div>';
-  if(dl) h += '<div class="sbply"><span>⏰ '+esc(dl.line)+'</span></div>';
+  if(dl) h += '<div class="sbply"><span>⏰ '+esc(dl.line)+'</span><button class="undo1" data-act="renderWhatIf">🧪 build a scenario</button></div>';
   const ros = rosterIds().map(id=>byId[id]).filter(Boolean).filter(p=>p.pos!=="DEF")
     .map(p=>({p, sos:rosSos(p)})).sort((a,b)=>b.sos-a.sos);
   h += '<div class="benchhead">📅 Rest-of-season schedule (soft → brutal)</div><div class="scarce">'+

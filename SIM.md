@@ -43,3 +43,12 @@ One cached 150-sim-per-team vector run (leagueFutures) powers the scoreboard
 Futures table (record · make% · title% with week-over-week arrows), scout
 future cards, dossier lines, and the Sunday rooting guide — the 2–3 games
 whose outcomes move MY playoff odds most, pushed into the ticker.
+
+## What-if machine (#1127–#1141)
+Scenarios apply roster deltas (add/drop/void-weeks) to MY weekly vector only,
+then re-run the full injury-world sim — trade builder shows make%/title%
+before→after, waiver rows carry a 🔮 season-impact tap, injury what-ifs void a
+player for N weeks. Clinch math tallies wins→make% across 400 sims: clinch =
+fewest wins at ≥95%, dead = most wins at ≤5%; magic numbers surface in the
+chase card from week 8 and elimination-watch alerts on full send. Odds carry
+±1.96·SE bands. Up to 3 scenarios persist for side-by-side reruns.
