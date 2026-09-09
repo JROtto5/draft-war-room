@@ -95,7 +95,8 @@ function projDivergence(){
   document.body.appendChild(ov);
   ov.addEventListener("click", e=>{ if(e.target===ov || e.target.closest("[data-dvx]")) ov.remove(); });
 }
-function divergenceAlerts(){                                                     // #1078 full send
+function divergenceAlerts(){
+  if(projSource()==="consensus") return; // Draft baselines are not current-week providers.                                                     // #1078 full send
   try{
     if(typeof hypeOn!=="function" || !hypeOn("full")) return;
     const w = curWeek(), k = LS_KEY+"-divg"+w;
@@ -184,8 +185,8 @@ function seasonSimX(data, opts){                                                
   const recDist = {}, seedCount = new Array((data.spots||6)+1).fill(0);
   let titles = 0, finals = 0, made = 0, winsSum = 0, injSum = 0, lastPlace = 0, rivalH2H = 0, rivalGames = 0;
   const effM = opts.oppEff || null;                                              // per-rid efficiency multipliers (#1112)
-  const muOf = (r,w2)=> (vec ? vec.mu[r][w2]*driftMult(vec, r, w2, wNow) : data.mu[r]) * (effM && r!==data.myRid && effM[r] ? effM[r] : 1);
-  const noiseOf = (r,w2)=> (rng()+rng()+rng()-1.5)*2*(vec ? vec.sd[r][w2] : 13);
+  const muOf = (r,w2)=> (vec ? (vec.mu[r][w2]??data.mu[r])*driftMult(vec, r, w2, wNow) : data.mu[r]) * (effM && r!==data.myRid && effM[r] ? effM[r] : 1);
+  const noiseOf = (r,w2)=> (rng()+rng()+rng()-1.5)*2*(vec ? (vec.sd[r][w2]??26) : 13);
   for(let s2=0; s2<N; s2++){
     const wins = {}, pf = {}, outUntil = {};
     rids.forEach(r=>{ wins[r] = data.wins0[r]||0; pf[r] = data.pf0[r]||0;
@@ -223,7 +224,10 @@ function seasonSimX(data, opts){                                                
       const seeds = order.slice(0, data.spots||6);
       const lw = weeks[weeks.length-1]||data.lastW;
       const g = (x,y,hx)=> (muOf(x,lw)+(hx?1.5:0)+noiseOf(x,lw)) >= (muOf(y,lw)+noiseOf(y,lw)) ? x : y;
-      if(seeds.length>=6){
+      if(typeof CampaignModel!=='undefined'){
+        const outcome=CampaignModel.bracket(seeds,(x,y,r)=>muOf(x,data.lastW+1+r)+noiseOf(x,data.lastW+1+r)>=muOf(y,data.lastW+1+r)+noiseOf(y,data.lastW+1+r)?x:y,!!data.reseed);
+        if(outcome.finalists.includes(data.myRid))finals++;if(outcome.winner===data.myRid)titles++;
+      } else if(seeds.length>=6){
         const w1 = g(seeds[2], seeds[5], true), w2b = g(seeds[3], seeds[4], true);
         const survivors = [w1, w2b].sort((x,y)=>seeds.indexOf(x)-seeds.indexOf(y));  // reseed (#1102)
         const f1 = g(seeds[0], survivors[1], true), f2 = g(seeds[1], survivors[0], true);
@@ -244,10 +248,10 @@ function seasonSimX(data, opts){                                                
 const VEC = {key:null, mu:{}, sd:{}};
 function weeklyVectors(data){                                                    // #1097/#1098/#1106
   const key = (typeof stateKey==="function"?stateKey():"")+":"+curWeek()+":"+((typeof projSource==="function")?projSource():"");
-  if(VEC.key===key && VEC.mu[data.myRid]) return VEC;
+  if(VEC.key===key && VEC.campaignAt===(typeof CAMPAIGN!=="undefined"?CAMPAIGN.at:0) && VEC.mu[data.myRid]) return VEC;
   const byId = idIndex();
   VEC.mu = {}; VEC.sd = {};
-  const weeks = Object.keys(data.schedule).map(Number);
+  const weeks = [...new Set(Object.keys(data.schedule).map(Number).concat([data.lastW+1,data.lastW+2,data.lastW+3].filter(w=>w<=18)))];
   Object.keys(data.mu).map(Number).forEach(rid=>{
     const ids = (+rid===+S.settings.sleeperRosterId) ? rosterIds() : leagueRosterIds(rid);
     VEC.mu[rid] = {}; VEC.sd[rid] = {};
@@ -260,13 +264,13 @@ function weeklyVectors(data){                                                   
       VEC.sd[rid][w2] = Math.max(12, Math.sqrt(v));
     });
   });
-  VEC.key = key;
+  VEC.key = key; VEC.campaignAt=typeof CAMPAIGN!=="undefined"?CAMPAIGN.at:0;
   return VEC;
 }
 function driftMult(vec, rid, w2, wNow){                                          // waiver drift (#1101)
   const mus = Object.values(vec.mu).map(m2=>m2[w2]).filter(x=>x!=null).sort((a,b)=>a-b);
   const med = mus[Math.floor(mus.length/2)]||100;
-  if(vec.mu[rid][w2] >= med*0.9) return 1;
+  if((vec.mu[rid][w2]??med) >= med*0.9) return 1;
   return Math.min(1.08, 1 + 0.02*Math.max(0, w2-wNow));
 }
 function fragilityRows(rid){ return rosterPack(rid, curWeek(), 14).slice(0, 6); }   // #1087
@@ -343,7 +347,8 @@ function faabAggro(rid, tendRows){                                              
   const spend = t2.faab + t2.claims*3;
   return spend>=40 ? 1.5 : spend>=15 ? 1.15 : spend>0 ? 1 : 0.6;
 }
-async function leagueFutures(force){                                             // one sim powers everything (#1116/#1123)
+async function leagueFutures(force){
+  if(typeof CAMPAIGN!=='undefined' && CAMPAIGN.sim)return Object.fromEntries(CAMPAIGN.sim.rows.map(r=>[r.id,{make:Math.round(r.make),title:r.title,winsAvg:r.wins,rec:'—',eff:100}]));                                             // one sim powers everything (#1116/#1123)
   if(!force && OPPX.futures && Date.now()-OPPX.futuresAt < 15*60e3) return OPPX.futures;
   const data = await seasonSimData(); if(!data) return null;
   const hist = seasonArchive();

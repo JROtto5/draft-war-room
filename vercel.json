@@ -62,5 +62,26 @@
       "source": "/season",
       "destination": "/"
     }
+  ],
+  "functions": {
+    "api/campaign.js": {
+      "maxDuration": 60
+    },
+    "api/season-scan.js": {
+      "maxDuration": 60
+    },
+    "api/edge-refresh.js": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/season-scan",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/edge-refresh",
+      "schedule": "2-59/5 * * * *"
+    }
   ]
 }

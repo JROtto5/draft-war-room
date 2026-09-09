@@ -1280,7 +1280,7 @@ async function heatScan(fire){
     SEASON.avail = allPlayers()
       .filter(p=>p.pos!=="DEF" && !gone(p) && buzzOf(p)>=min)
       .sort((a,b)=>buzzOf(b)-buzzOf(a)).slice(0,8);
-    if(fire && S.settings.heatAlerts!==false && (typeof alertCfg!=="function" || alertCfg().heat) && SEASON.avail.length){
+    if(fire && typeof CAMPAIGN==="undefined" && S.settings.heatAlerts!==false && (typeof alertCfg!=="function" || alertCfg().heat) && SEASON.avail.length){
       const k = LS_KEY+"-heatseen";
       let seen = {}; try{ seen = JSON.parse(localStorage.getItem(k)||"{}"); }catch(e){}
       const fresh = SEASON.avail.filter(p=>!seen[p.id]);
@@ -1341,6 +1341,7 @@ function startSeasonMode(){
       myLiveIds(), myWeekData(), fetchWeekProjections(curWeek()), nflStates()
     ]))
       .then(()=>heatScan(true))
+      .then(()=>{ if(typeof campaignRefresh==="function") campaignRefresh(); })
       .then(()=>{ lineupAlarm(); if(typeof renderNow==="function") renderNow(); })
       .then(()=>{ if(typeof leagueMeta==="function") leagueMeta().then(()=>waiverDayReminder()); })
       .then(()=>leagueHistory()).then(()=>{ if(typeof milestoneSweep==="function") milestoneSweep(); }); };

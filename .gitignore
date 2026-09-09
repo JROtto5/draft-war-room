@@ -1,3 +1,7 @@
 e2e.html
 tools/.cache
 marathon.html
+node_modules/
+.env*
+.vercel/
+.vercel

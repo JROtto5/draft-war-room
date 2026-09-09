@@ -1,0 +1,2 @@
+const {cached,json}=require('../lib/campaign-service.cjs');
+module.exports=async(req,res)=>{res.setHeader('Content-Type','application/json');res.setHeader('Cache-Control','no-store');if(req.method!=='GET'){res.statusCode=405;return res.end('{}');}try{const d=await cached('edge-record',60000,()=>json('https://nfl-edge-kappa.vercel.app/api/record'));res.end(JSON.stringify(d));}catch(e){res.statusCode=502;res.end(JSON.stringify({error:'The Edge Board is temporarily unavailable.'}));}};

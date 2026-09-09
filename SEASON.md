@@ -90,3 +90,44 @@ and keeps the PWA badge equal to real pending actions.
 waiver planner · `-tblock` trade block · `-tnotes` team notes · `-alertlog`
 alert center · `-heatseen` `-inact<w>` `-oppout<w>` `-close<w>` `-lineupalarm`
 `-wvday` `-smiles` one-shot alert guards · `-powerprev` ranking movement.
+
+## Integrated season command center (September 2026)
+
+The season home combines current-week lineup advice, live Sleeper league waiver radar,
+a 5,000-run all-team championship simulation, scores, source health, phone notification
+controls, and `/bets` (the original NFL + college Edge Board feed and embedded board).
+The original betting site's records and browser storage stay on their original origin.
+
+`api/campaign.js` reads the full Sleeper player catalog, rosters, transactions, trends,
+league settings and schedule. Weekly points average Sleeper, ESPN and CBS after league
+scoring conversion. Future rates use freshly fetched Sleeper/ESPN season forecasts /17,
+plus up to 30% recent observed production when current-season nflverse stats are published.
+These are scenario assumptions, not calibrated probabilities or dedicated ROS projections.
+The model supports 2/4/6/8 playoff teams, actual bye weeks, and playoff brackets after the
+regular season; unsupported division/median/multi-week formats fail explicitly. All teams
+are optimized equally. No invented "home seed" bonus or fixed title/playoff multiplier.
+Completed results remain fixed. In-progress weeks use locked starters, points scored, and
+a clock-based estimate of remaining production; this is still a model, not certainty.
+
+The waiver scanner filters the exact league's rostered players and position limits.
+It evaluates bench-drop alternatives, identifies projected starter gains, flags recent
+league drops (last seven days), and estimates FAAB from remaining budget. Popularity alone
+does not produce an urgent alert. "Monitor" rows with no meaningful gain do not recommend
+a drop. Claims, drops and lineup submissions still happen in Sleeper's read-only API model.
+
+Phone notifications are opt-in per device (Home Screen installation required on iPhone).
+Vercel Pro cron runs `/api/season-scan` every five minutes and `/api/edge-refresh` on a
+staggered five-minute schedule. Provider/runtime delays are possible. GitHub's Season
+alerts workflow is manual recovery, not the primary timer. The Edge Board's own scheduler
+and record stay intact. Phone endpoints and scan state are AES-256-GCM encrypted at rest
+in a separate namespace of the existing Blob store, using independent VAPID keys.
+
+Production settings: `BLOB_READ_WRITE_TOKEN` (connected store), `SEASON_STORE_KEY`
+(32-byte hex), `SEASON_VAPID_PUBLIC`, `SEASON_VAPID_PRIVATE`, `SEASON_SCAN_KEY`, and
+`CRON_SECRET` (same as scan key). `SEASON_LEAGUE_ID` and `SEASON_ROSTER_ID` optionally
+override this personal deployment's owner roster. No secret belongs in browser code.
+FantasyPros and RotoWire remain marked disconnected until licensed feed access exists.
+
+Next season: retain this season's history and switch to `/draft`; connect the new Sleeper
+league ID when the league renews. The service refuses to mix an old league with a new NFL
+season. This upgrade does not erase draft settings or the completed season's records.

@@ -1,0 +1,19 @@
+let edgeData=null,edgeDay='today',edgeSport='all';
+const safe=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function edgeRender(){
+ if(!edgeData)return;const now=Date.now(),today=new Date().toLocaleDateString(),age=now-Date.parse(edgeData.updatedAt),records=edgeData.records||[];
+ const leagueOf=c=>records.find(r=>r.name===c.game&&Math.abs(r.kickoff-Date.parse(c.kick))<60000)?.lg;
+ const settled=records.filter(r=>r.graded&&(edgeSport==='all'||r.lg===edgeSport)),wins=settled.filter(r=>r.result==='win').length,losses=settled.filter(r=>r.result==='loss').length,pushes=settled.filter(r=>r.result==='push').length;
+ document.getElementById('freshness').textContent='Shared board updated '+new Date(edgeData.updatedAt).toLocaleString()+(age>30*60000?' · STALE: do not treat these as current calls':' · auto-refresh every 2 minutes');
+ document.getElementById('metrics').innerHTML='<div class="metric"><b>'+wins+'–'+losses+'</b><span>Graded calls in retained history</span></div><div class="metric"><b>'+(wins+losses?(100*wins/(wins+losses)).toFixed(1)+'%':'—')+'</b><span>Win rate · '+pushes+' pushes excluded</span></div><div class="metric"><b>'+settled.length+'</b><span>Settled calls · selected sport</span></div>';
+ let rows;
+ if(edgeDay==='results')rows=settled.slice().sort((a,b)=>b.kickoff-a.kickoff).map(r=>({game:r.name,call:r.playText||r.dir,lg:r.lg,kick:r.kickoff,result:r.result}));
+ else rows=age>30*60000?[]:(edgeData.calls||[]).filter(c=>!c.cut&&Date.parse(c.kick)>now&&!c.live).map(c=>({...c,lg:leagueOf(c)})).filter(c=>(edgeSport==='all'||c.lg===edgeSport)&&(edgeDay!=='today'||new Date(c.kick).toLocaleDateString()===today)).sort((a,b)=>(b.p||0)-(a.p||0));
+ document.getElementById('picks').innerHTML=rows.length?rows.map(c=>'<article class="pick"><span class="badge">'+safe(c.lg==='nfl'?'NFL':c.lg==='cfb'?'COLLEGE':'FOOTBALL')+(c.result?' · '+safe(c.result.toUpperCase()):' · MODEL CALL')+'</span><h2>'+safe(c.game)+'</h2><strong>'+safe(c.call)+'</strong><p>'+new Date(c.kick).toLocaleString()+'</p>'+(c.p?'<p>Model estimate '+safe(c.p)+'% · '+safe((c.cats||[]).join(', '))+'</p>':'')+'<a href="https://nfl-edge-kappa.vercel.app" target="_blank" rel="noopener">Review signals and current line ↗</a></article>').join(''):'<div class="empty"><h2>'+(age>30*60000?'Waiting for fresh calls':edgeDay==='today'?'No qualifying pregame calls today':'No matching calls')+'</h2><p>Check Upcoming or open the full board for live games. No pick is better than inventing an edge.</p></div>';
+}
+async function edgeRefresh(){const b=document.getElementById('refresh');b.disabled=true;try{const r=await fetch('/api/edge-record',{cache:'no-store'});if(!r.ok)throw Error('Shared betting feed unavailable. Open the original board below.');edgeData=await r.json();edgeRender();}catch(e){document.getElementById('freshness').textContent=e.message;document.getElementById('picks').innerHTML='<div class="empty">Current calls are unavailable. Open the original board for its latest status.</div>';}finally{b.disabled=false;}}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-day]');if(b){edgeDay=b.dataset.day;document.querySelectorAll('[data-day]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));edgeRender();}});
+document.getElementById('sport').addEventListener('change',e=>{edgeSport=e.target.value;edgeRender();});document.getElementById('refresh').addEventListener('click',edgeRefresh);document.getElementById('fullBoard').addEventListener('click',()=>{const el=document.getElementById('embedded');el.hidden=!el.hidden;const f=el.querySelector('iframe');if(!f.src)f.src=f.dataset.src;if(!el.hidden)el.scrollIntoView({behavior:'smooth'});});
+edgeRefresh();setInterval(()=>{if(document.visibilityState==='visible')edgeRefresh();},120000);
+
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')edgeRefresh();});

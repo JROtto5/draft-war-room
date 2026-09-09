@@ -60,6 +60,7 @@ async function refreshInjuries(silent){
     const j = await r.json();
     const m = {}, changes = [];
     const known = {}; allPlayers().forEach(p=>known[normName(p.name)]=p);
+    const liveMine = new Set(typeof rosterIds==="function" ? rosterIds() : S.mine);
     (j.injuries||[]).forEach(t=>(t.injuries||[]).forEach(i=>{
       const a = i.athlete||{}, k = normName(a.displayName||"");
       const st = i.status||"";
@@ -70,13 +71,13 @@ async function refreshInjuries(silent){
       const p = known[k];
       if(!p || S.taken[p.id]) continue;
       const oldE = INJ.map[k];
-      if(!oldE || oldE.s!==m[k].s) changes.push({p, s:m[k].s, mine:S.mine.includes(p.id)});
+      if(!oldE || oldE.s!==m[k].s) changes.push({p, s:m[k].s, mine:liveMine.has(p.id)});
     }
     for(const k in INJ.map){ if(!m[k] && INJ.map[k].src==="Sleeper") m[k]=INJ.map[k]; }
     INJ = {map:m, at:Date.now(), src:"ESPN live"};
     try{ localStorage.setItem(LS_KEY+"-inj", JSON.stringify({at:INJ.at, map:m})); }catch(e){}
     _memo = {key:null};
-    if(S.log.length > 0) changes.slice(0,3).forEach(c=>
+    if(S.log.length > 0) changes.filter(c=>!SEASON.on || c.mine).slice(0,3).forEach(c=>
       toast((c.mine?"🚨 YOUR PLAYER — ":"🩹 ")+esc(c.p.name)+": "+esc(c.s), {warn:true}));
     if(S.settings.notifyInj && "Notification" in window && Notification.permission==="granted" && document.visibilityState==="hidden"){
       const mineCh = changes.filter(c=>c.mine);

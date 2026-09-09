@@ -1,0 +1,21 @@
+name: Season alerts
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: season-alert-scanner
+  cancel-in-progress: false
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Scan Sleeper for meaningful roster opportunities
+        env:
+          SEASON_SCAN_KEY: ${{ secrets.SEASON_SCAN_KEY }}
+        run: |
+          test -n "$SEASON_SCAN_KEY"
+          curl --fail-with-body --silent --show-error --max-time 120 \
+            -X POST -H "Authorization: Bearer $SEASON_SCAN_KEY" \
+            https://draft-war-room-chi.vercel.app/api/season-scan

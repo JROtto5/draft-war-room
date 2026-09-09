@@ -3,5 +3,5 @@
 set -e
 cd "$(dirname "$0")/.."
 node scripts/lint.mjs
-for t in tests/engine.test.mjs tests/data.test.mjs tests/golden.test.mjs tests/logic.test.mjs tests/weekly.test.mjs tests/providers.test.mjs; do node "$t"; done
+for t in tests/engine.test.mjs tests/data.test.mjs tests/golden.test.mjs tests/logic.test.mjs tests/weekly.test.mjs tests/providers.test.mjs tests/campaign.test.mjs; do node "$t"; done
 echo "all suites ✓ (browser E2E runs in CI / manually via tests/build-e2e.mjs)"

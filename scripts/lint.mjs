@@ -1,9 +1,9 @@
 import { readFileSync, statSync } from "node:fs";
 const fail = m => { console.error("LINT FAIL: " + m); process.exit(1); };
-const app = ["core.js","views.js","wire.js","boot.js"].map(f=>readFileSync(f,"utf8")).join("\n");
+const app = ["core.js","views.js","wire.js","campaign.js","boot.js"].map(f=>readFileSync(f,"utf8")).join("\n");
 // inline event handlers are dead in production — CSP script-src 'self' blocks them (#950)
 {
-  const mods = ["core.js","season.js","win.js","simx.js","ultra.js","views.js","wire.js","boot.js"];
+  const mods = ["core.js","season.js","win.js","simx.js","ultra.js","views.js","wire.js","campaign.js","boot.js"];
   for (const f of mods){
     const src = readFileSync(f,"utf8");
     const m = src.match(/on(click|input|change|submit|mouseover)=\\?"/);
@@ -12,7 +12,7 @@ const app = ["core.js","views.js","wire.js","boot.js"].map(f=>readFileSync(f,"ut
 }
 // duplicate top-level function names across modules shadow each other silently (#835)
 {
-  const mods = ["engine.js","core.js","season.js","win.js","simx.js","ultra.js","views.js","wire.js","boot.js"];
+  const mods = ["engine.js","core.js","season.js","win.js","simx.js","ultra.js","views.js","wire.js","campaign.js","boot.js"];
   const seen = {};
   for (const f of mods)
     for (const m of readFileSync(f,"utf8").matchAll(/^function (\w+)/gm)) {
@@ -41,7 +41,7 @@ const modals = (html.match(/class="modal[" ]/g) || []).length;
 if (overlays !== modals) fail(`overlay/modal mismatch: ${overlays} vs ${modals}`);
 if (!html.includes("Content-Security-Policy")) fail("CSP meta missing");
 const order = [...html.matchAll(/<script src="([^"]+)" defer>/g)].map(m=>m[1]);
-if (JSON.stringify(order) !== JSON.stringify(["data.js","engine.js","core.js","season.js","win.js","simx.js","ultra.js","views.js","wire.js","boot.js"]))
+if (JSON.stringify(order) !== JSON.stringify(["data.js","engine.js","core.js","season.js","win.js","simx.js","ultra.js","views.js","wire.js","lib/campaign-model.js","campaign.js","boot.js"]))
   fail("script load order wrong: " + order.join(","));
 if (!html.includes('rel="stylesheet" href="styles.css"')) fail("styles.css link missing");
 // Re-baselined after the v6 personalization data (LAST3 histories, hometowns,

@@ -1004,7 +1004,7 @@ function goalsProgress(){
     if(g==="topPF"){ const rank = ms.st.slice().sort((a,b)=>b.pf-a.pf).findIndex(r=>r.rid===myRid)+1;
       out.push({label:"Lead the league in points", pct:Math.max(5, 100-(rank-1)*18), note:ordinal(rank)+" in PF"}); }
     if(g==="10wins") out.push({label:"10 wins", pct:Math.min(100, Math.round(ms.row.w/10*100)), note:ms.row.w+" of 10"+(gp<14?" ("+(14-gp)+" games left)":"")});
-    if(g==="title") out.push({label:"Win it all", pct:odds!=null?Math.round(odds*0.35):15, note:"the only goal that matters"});
+    if(g==="title"){const title=typeof CAMPAIGN!=="undefined"?CAMPAIGN.sim?.rows.find(r=>r.id===myRid)?.title:null;out.push({label:"Win it all",pct:title!=null?Math.round(title):0,note:title!=null?title.toFixed(1)+"% model estimate":"Season simulation pending"});}
   });
   return out;
 }
@@ -1212,12 +1212,13 @@ function seasonPageHtml(){                                                      
   const myRid = +S.settings.sleeperRosterId;
   // page bar (#889)
   let h = '<div class="spbar"><div class="spbt"><b>WEEK '+w+'</b>'+
-    (ms?' <span class="mono">'+ms.row.w+'-'+ms.row.l+(ms.row.t?'-'+ms.row.t:'')+'</span> · '+ordinal(ms.place):'')+'</div>'+
+    (ms?' <span class="mono">'+ms.row.w+'-'+ms.row.l+(ms.row.t?'-'+ms.row.t:'')+'</span> · '+(ms.row.w+ms.row.l+(ms.row.t||0)>0?ordinal(ms.place):'Season opener'):'')+'</div>'+
     '<div class="spbtns">'+
     '<button class="hbtn" data-act="toggleDensity" title="Comfortable / compact">▤</button>'+
     '<button class="hbtn" data-act="togglePool">🗂 '+(window._poolShow?'Hide pool':'Pool')+'</button>'+
     '<a class="hbtn" href="/draft" style="text-decoration:none">✏️ Draft room</a></div></div>';
   try{ if(typeof hypeLine==="function" && hypeOn("mild")) h += '<div class="benchhead" style="color:var(--gold)">😤 '+esc(hypeLine())+'</div>'; }catch(e){}
+  if(typeof campaignSummaryHtml==="function") h += campaignSummaryHtml();
   h += weeklyAdviceHtml();
   // hero (#879/#884/#885)
   h += '<div class="sphero sscard" id="spMatchup">';
@@ -2052,11 +2053,12 @@ function seasonSimCore(opts){                                                   
   }
   return {recDist, rivalDist, seedCount, titlePct:Math.round(titles/N*1000)/10, winsAvg:Math.round(winsSum/N*10)/10, N};
 }
-async function seasonSimData(){                                                  // schedule + inputs from live league
+async function seasonSimData(){
+  if(typeof CAMPAIGN!=='undefined' && CAMPAIGN.data){const d=CAMPAIGN.data;if(d.unsupported||d.week>d.lastWeek)return null;const mu={},wins0={},pf0={};for(const t of d.teams){mu[t.id]=CampaignModel.optimize(t.players,d.slots,'outlook')?.points||0;wins0[t.id]=t.wins+t.ties*.5;pf0[t.id]=t.points;}return {schedule:Object.fromEntries(Object.entries(d.schedule).filter(([w])=>+w>=d.week&&+w<=d.lastWeek)),mu,wins0,pf0,myRid:d.roster,rivRid:null,spots:d.spots,lastW:d.lastWeek,games:d.lastWeek,reseed:d.reseed};}                                                  // schedule + inputs from live league
   if(!SCOREB.rosters) await leagueWeekData(false);
   if(!SCOREB.rosters) return null;
   await playoffOdds(10);                                                         // warms SCOREB.future + lastOdds
-  const w = curWeek(), LAST = 14;
+  const w = curWeek(), LAST = (+WAIV.league?.settings?.playoff_week_start||15)-1;
   const schedule = {};
   const addWeek = (wk, mus)=>{ const pairs = {}; (mus||[]).forEach(m=>{ (pairs[m.matchup_id]=pairs[m.matchup_id]||[]).push(m.roster_id); });
     schedule[wk] = Object.values(pairs).filter(p2=>p2.length===2); };
@@ -2066,7 +2068,7 @@ async function seasonSimData(){                                                 
   const mu = {}, wins0 = {}, pf0 = {};
   st.forEach(r=>{ mu[r.rid] = Math.max(80, rosterStrengthOf(r.rid)/16); wins0[r.rid] = r.w; pf0[r.rid] = r.pf; });
   const rivRid = (S.settings.slot2rid && S.settings.rivalSlot) ? +S.settings.slot2rid[String(S.settings.rivalSlot)] : null;
-  return {schedule, mu, wins0, pf0, myRid:+S.settings.sleeperRosterId, rivRid, spots:6, lastW:LAST, games:14};
+  return {schedule, mu, wins0, pf0, myRid:+S.settings.sleeperRosterId, rivRid, spots:+(WAIV.league?.settings?.playoff_teams)||6, lastW:LAST, games:14};
 }
 function myEffMult(){                                                            // #1002
   try{
@@ -2076,7 +2078,8 @@ function myEffMult(){                                                           
     return Math.max(0.85, Math.min(1, effs.reduce((a,b)=>a+b,0)/effs.length/100));
   }catch(e){ return 0.97; }
 }
-async function renderSeasonSim(){                                                // #997
+async function renderSeasonSim(){
+  if(typeof campaignOdds==='function' && SEASON.on){if(!CAMPAIGN.data)await campaignRefresh();return campaignOdds();}                                                // #997
   const old = document.getElementById("fsOverlay"); if(old){ old.remove(); return; }
   toast("🔮 Simulating the rest of the season…");
   const data = await seasonSimData();

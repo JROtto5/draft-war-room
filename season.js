@@ -65,6 +65,7 @@ function defToughRank(team){
   return r[team] || 16;
 }
 function weekProj(p, w){
+  if(w>curWeek() && typeof CAMPAIGN!=='undefined' && CAMPAIGN.data?.league===S.settings.sleeperLeagueId && projSource()==='consensus'){const live=CAMPAIGN.playerMap?.[p.id];if(live&&live.outlook!=null)return live.bye===w?0:Math.round(live.outlook*10)/10;}
   if(typeof projSource==="function" && projSource()==="consensus" && (w===curWeek() || consensusFor(p,w))){
     const liveInjury = INJ.at && Date.now()-INJ.at<24*3600e3 ? injuryOf(p) : null;
     const status = liveInjury && injSeverity(liveInjury.s);
@@ -262,9 +263,10 @@ function powerRankings(){                                                       
   try{ localStorage.setItem(k, JSON.stringify(Object.fromEntries(rows.map((r,i)=>[r.rid,i])))); }catch(e){}
   return rows;
 }
-async function playoffOdds(nSims, forceMyResult){                                // #660 · forceMyResult: "W"|"L" (#745)
+async function playoffOdds(nSims, forceMyResult){
+  if(typeof CAMPAIGN!=='undefined' && CAMPAIGN.sim && !forceMyResult)return Object.fromEntries(CAMPAIGN.sim.rows.map(r=>[r.id,Math.round(r.make)]));                                // #660 · forceMyResult: "W"|"L" (#745)
   const lg = (S.settings.sleeperLeagueId||"").trim(); if(!lg || !SCOREB.rosters) return null;
-  const w = curWeek(), LAST = 14, N = nSims||300, SPOTS = 6;
+  const w = curWeek(), LAST = (+WAIV.league?.settings?.playoff_week_start||15)-1, N = nSims||300, SPOTS = +WAIV.league?.settings?.playoff_teams||6;
   const myRid = +S.settings.sleeperRosterId || -1;
   if(!SCOREB.future || SCOREB.futureW!==w){
     try{
@@ -1776,7 +1778,7 @@ function pathToPlayoffs(){                                                      
     if(!st.length) return null;
     const myRid = +S.settings.sleeperRosterId;
     const i = st.findIndex(r=>r.rid===myRid); if(i<0) return null;
-    const me = st[i], seed = i+1, SPOTS = 6;
+    const me = st[i], seed = i+1, SPOTS = +WAIV.league?.settings?.playoff_teams||6;
     const weeksLeft = Math.max(0, 14-curWeek()+1);
     if(seed<=SPOTS){
       const chaser = st[SPOTS] || null;
