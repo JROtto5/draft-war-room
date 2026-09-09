@@ -1335,7 +1335,9 @@ function startSeasonMode(){
   if(typeof applySeasonHeader==="function") applySeasonHeader();                  // #732
   clearInterval(SEASON.timer);
   const tick = ()=>{ if(document.visibilityState==="hidden") return;
-    Promise.all([refreshWeek(), myLiveIds()]).then(()=>myWeekData())
+    Promise.all([refreshWeek(), leagueMeta()]).then(()=>Promise.all([
+      myLiveIds(), myWeekData(), fetchWeekProjections(curWeek()), nflStates()
+    ]))
       .then(()=>heatScan(true))
       .then(()=>{ lineupAlarm(); if(typeof renderNow==="function") renderNow(); })
       .then(()=>{ if(typeof leagueMeta==="function") leagueMeta().then(()=>waiverDayReminder()); })

@@ -6,27 +6,46 @@
 
 /* ---------- R67 Sleeper weekly projections feed (#1067–#1081) ---------- */
 const PROJX = {future:{}};                                                       // week → {map: ourId→league-corrected pts, at}
-function projSource(){ return S.settings.projSrc || "blend"; }                   // #1068
+function projSource(){ return S.settings.projSrc || "sleeper"; }
 function projBlendPct(){ const b = +S.settings.projBlendPct; return isNaN(b) ? 50 : Math.max(0, Math.min(100, b)); }
-async function fetchWeekProjections(w, force){                                   // #1067/#1074
-  if(!force && PROJX.future[w] && Date.now()-(PROJX.future[w].at||0) < 30*60e3) return PROJX.future[w].map;
+function weeklyScoring(){
+  const league = typeof WAIV!=="undefined" ? WAIV.league : null;
+  return league && league.league_id===S.settings.sleeperLeagueId ? league.scoring_settings : null;
+}
+function scoreWeeklyStats(st, scoring){
+  if(!st || typeof st!=="object" || st.pts_ppr==null) return null;
+  if(scoring && Object.keys(scoring).length)
+    return Math.round(Object.entries(scoring).reduce((sum, [key, value])=>sum+(Number(st[key])||0)*(Number(value)||0),0)*10)/10;
+  const recPts = S.settings.scoring==="half" ? 0.5 : S.settings.scoring==="std" ? 0 : 1;
+  return Math.round((Number(st.pts_ppr)+((Number(S.settings.ptd)||4)-4)*(st.pass_td||0)+(recPts-1)*(st.rec||0))*10)/10;
+}
+async function fetchWeekProjections(w, force){
+  if(w<1 || w>18) return null;
+  const league = await leagueMeta();
+  const yr = league && league.season || new Date().getFullYear();
+  const context = JSON.stringify([S.settings.sleeperLeagueId, yr, weeklyScoring(), S.settings.ptd, S.settings.scoring]);
+  const key = LS_KEY+"-weekly-proj-"+yr+"-"+S.settings.sleeperLeagueId+"-"+w;
+  const prev = PROJX.future[w];
+  if(prev && prev.context!==context) delete PROJX.future[w];
+  if(!force && prev && prev.context===context && Date.now()-prev.at < 30*60e3) return prev.map;
   try{
-    const yr = new Date().getFullYear();
-    const j = await (await fetch("https://api.sleeper.app/v1/projections/nfl/regular/"+yr+"/"+w)).json();
-    const s2o = sleeperToOurs();
-    const m = {};
+    const response = await fetch(SYNC.base+"/projections/nfl/regular/"+yr+"/"+w, {cache:"no-store"});
+    if(!response.ok) throw new Error("Projection feed unavailable");
+    const j = await response.json(), s2o = sleeperToOurs(), m = {};
     for(const sid in j){
-      const st = j[sid]; if(!st || st.pts_ppr==null) continue;
-      const oid = s2o[String(sid)]; if(!oid) continue;
-      m[oid] = Math.round((st.pts_ppr + 2*(st.pass_td||0))*10)/10;               // league-exact: +2/passTD (#1070), DEFs via team codes (#1075)
+      const oid = s2o[String(sid)], pts = scoreWeeklyStats(j[sid], weeklyScoring());
+      if(oid && pts!=null && Number.isFinite(pts)) m[oid] = pts;
     }
-    if(Object.keys(m).length > 50){
-      PROJX.future[w] = {map:m, at:Date.now()};
-      try{ localStorage.setItem(LS_KEY+"-projx"+w, JSON.stringify(m)); }catch(e){}
+    if(Object.keys(m).length <= 50) throw new Error("Projection feed incomplete");
+    PROJX.future[w] = {map:m, at:Date.now(), context};
+    try{ localStorage.setItem(key, JSON.stringify(PROJX.future[w])); }catch(e){}
+  }catch(e){
+    if(!PROJX.future[w]){
+      try{ const c = JSON.parse(localStorage.getItem(key)||"null");
+        if(c && c.context===context && c.map && Date.now()-c.at<24*3600e3) PROJX.future[w] = c;
+      }catch(e2){}
     }
-  }catch(e){}
-  if(!PROJX.future[w]){                                                          // offline: last fetch (#1074)
-    try{ const c = JSON.parse(localStorage.getItem(LS_KEY+"-projx"+w)||"null"); if(c) PROJX.future[w] = {map:c, at:0}; }catch(e){}
+    if(PROJX.future[w]) PROJX.future[w].stale = true;
   }
   return (PROJX.future[w]||{}).map || null;
 }

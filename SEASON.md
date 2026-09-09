@@ -4,6 +4,28 @@ Season Mode turns on by itself: once your Sleeper league ID is in Settings and
 the league's draft is complete, the finished draft imports on load (your picks
 detected by draft slot) and Season HQ becomes page 1.
 
+## Weekly decision sheet
+
+The first card on Season HQ recommends a legal lineup against the current week's
+actual Sleeper opponent. It compares your set starters, the recommendation, and
+the opponent's set starters. Slot assignments follow the league's roster positions;
+players who have kicked off stay in their exact slots. Reserve/taxi players are
+excluded from available replacements. Unknown players or unsupported slots show
+an incomplete-data message instead of an invented recommendation.
+
+The sheet shows start/sit changes, projected points, close calls, injury backups,
+bench options, game times, and freshness for rosters, weekly projections, and
+injuries. Copy the lineup or open Sleeper to apply it, then refresh to verify.
+It does not submit changes to Sleeper. During games, its projection totals are
+explicitly labeled as pregame estimates.
+
+Weekly Sleeper projections load during startup and refresh with Season Mode.
+Stat projections use the league's scoring weights. ESPN injuries and game states
+use two fixed `/feeds/nfl/` Vercel rewrites so browser CORS failures do not break
+those feeds. Live API responses bypass service-worker caching. Projection fallback
+caches carry timestamps and are scoped to league, season, week, and scoring.
+Use `python3 tools/serve.py` locally to exercise these same routes.
+
 ## The loops
 
 | Loop | Cadence | What it does |

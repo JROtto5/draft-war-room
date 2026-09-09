@@ -30,9 +30,30 @@
           "value": "public, max-age=31536000, immutable"
         }
       ]
+    },
+    {
+      "source": "/feeds/nfl/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        },
+        {
+          "key": "x-vercel-enable-rewrite-caching",
+          "value": "0"
+        }
+      ]
     }
   ],
   "rewrites": [
+    {
+      "source": "/feeds/nfl/injuries",
+      "destination": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries"
+    },
+    {
+      "source": "/feeds/nfl/scoreboard",
+      "destination": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+    },
     {
       "source": "/draft",
       "destination": "/"

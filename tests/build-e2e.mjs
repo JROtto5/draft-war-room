@@ -142,7 +142,7 @@ try {
   })()));
   // Edge intelligence (#1242–#1256)
   out.push("edge:"+((()=>{try{
-    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();
+    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now(); SEASON_LIVE.league = S.settings.sleeperLeagueId;
     const c1=edgeConf(4, 8), c2=edgeConf(1, 1);
     const p0=allPlayers()[3];
     const s3=sosNext(p0,3), ps=playoffSos(p0);
@@ -199,7 +199,7 @@ try {
   }catch(e){ return false; }})()?"OK":"BAD"));
   // The voice: intent parser (#1182–#1196)
   out.push("vox:"+((()=>{try{
-    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();
+    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now(); SEASON_LIVE.league = S.settings.sleeperLeagueId;
     const s0=S.settings.voxSpeak; S.settings.voxSpeak=false;
     const a1=voxAnswer("what's my score");
     const a2=voxAnswer("read me the plan");
@@ -221,7 +221,7 @@ try {
   }catch(e){ SEASON_LIVE.ids=null; return false; }})()?"OK":"BAD"));
   // War room mode (#1167–#1181)
   out.push("bridge:"+((()=>{try{
-    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();
+    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now(); SEASON_LIVE.league = S.settings.sleeperLeagueId;
     bridgeOpen();
     const el=document.getElementById("bridge");
     const panels=el?el.querySelectorAll("[data-brpanel]").length:0;
@@ -235,7 +235,7 @@ try {
   }catch(e){ if(typeof bridgeClose==="function") bridgeClose(); SEASON_LIVE.ids=null; return false; }})()?"OK":"BAD"));
   // Sim Center (#1142–#1156)
   out.push("center:"+((()=>{try{
-    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();
+    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now(); SEASON_LIVE.league = S.settings.sleeperLeagueId;
     document.querySelectorAll(".snov").forEach(x=>x.remove());                    // toggle-safe: clear strays first
     renderFragility();
     let ov=document.getElementById("frOverlay");
@@ -249,7 +249,7 @@ try {
   }catch(e){ SEASON_LIVE.ids=null; return false; }})()?"OK":"BAD"));
   // What-if machine (#1127–#1141)
   out.push("whatif:"+((()=>{try{
-    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();
+    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now(); SEASON_LIVE.league = S.settings.sleeperLeagueId;
     S.settings.sleeperRosterId = S.settings.sleeperRosterId || 12;
     const data={schedule:{5:[[12,2]],6:[[12,2]],7:[[12,2]]}, mu:{12:120,2:118}, wins0:{12:0,2:0}, pf0:{12:0,2:0},
       myRid:12, rivRid:null, spots:1, lastW:7, games:3};
@@ -281,7 +281,7 @@ try {
   }catch(e){ return false; }})()?"OK":"BAD"));
   // Weekly vectors: bye dents + speed (#1097–#1111)
   out.push("vec:"+((()=>{try{
-    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();
+    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now(); SEASON_LIVE.league = S.settings.sleeperLeagueId;
     const byeTeam = allPlayers().slice(0,16).map(x=>x.team).find(t2=>typeof BYES!=="undefined" && BYES[t2]>=6 && BYES[t2]<=13);
     const bw = BYES[byeTeam];
     const data={schedule:{}, mu:{12:140}, wins0:{12:0}, pf0:{12:0}, myRid:12, spots:1, lastW:14, games:14};
@@ -305,7 +305,7 @@ try {
     const h=hazardOf(p);
     const fix={schedule:{1:[[1,2]],2:[[1,2]],3:[[1,2]]}, mu:{1:115,2:100}, wins0:{1:0,2:0}, pf0:{1:0,2:0},
       myRid:1, spots:1, lastW:3, games:3};
-    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now();
+    SEASON_LIVE.ids = allPlayers().slice(0,16).map(x=>x.id); SEASON_LIVE.at = Date.now(); SEASON_LIVE.league = S.settings.sleeperLeagueId;
     const clean=seasonSimX(fix, {N:150, seed:5, injuries:false});
     const hurt=seasonSimX(fix, {N:150, seed:5, injuries:true});
     const hurt2=seasonSimX(fix, {N:150, seed:5, injuries:true});
@@ -394,7 +394,7 @@ try {
   // Lineup lab: real click flow (#967–#981)
   out.push("lab:"+((()=>{try{
     localStorage.removeItem(LS_KEY+"-staged"+curWeek());
-    SEASON_LIVE.ids = allPlayers().slice(0,16).map(p=>p.id); SEASON_LIVE.at = Date.now();
+    SEASON_LIVE.ids = allPlayers().slice(0,16).map(p=>p.id); SEASON_LIVE.at = Date.now(); SEASON_LIVE.league = S.settings.sleeperLeagueId;
     const host=document.createElement("div"); host.id="labHost";
     host.innerHTML=sidebarSeasonHtml(idIndex()).list; document.body.appendChild(host);
     const swapBtn=host.querySelector("[data-swap]");

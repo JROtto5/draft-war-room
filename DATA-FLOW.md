@@ -21,10 +21,12 @@ scale = ppg×16) → `p.proj` is the single override-aware season number.
 ## Sources (#1067–#1081)
 Three weekly sources, one switch inside `weekProj`:
 📊 **baked** (draft-CSV season model ÷16, matchup-leaned) · 📱 **Sleeper weekly**
-(their live per-week numbers, 6pt-corrected via +2×pass_td, used as-is) ·
+(their live per-week stat projections weighted by the league scoring settings) ·
 🔀 **blend** (slider-weighted mix, leaned). Priority: 📌 pins → source → bye/
-injury zeros and discounts on top. Feed cached per week in `-projx<w>`,
-prefetched w..w+2 on the season tick, silent-but-visible fallback to baked.
+injury zeros and discounts on top. Timestamped feed caches are scoped to league, season, week, and scoring.
+The current week loads on the season tick; missing feed rows visibly fall back
+to the draft model. The default source is Sleeper weekly; explicit source
+choices and projection pins are preserved.
 
 ## Scales
 Season totals live only in `p.proj` and the archive; every visible weekly

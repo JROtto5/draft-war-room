@@ -770,7 +770,7 @@ async function renderSim(){                                                     
 }
 
 /* ---------- R49 Live war room v2: real game states (#800–#814) ---------- */
-const NFLSTATE = {at:0, map:{}};
+const NFLSTATE = {at:0, map:{}, w:0};
 const ESPN2OURS = {WSH:"WAS", GB:"GBP", KC:"KCC", LV:"LVR", JAX:"JAC", NE:"NEP", NO:"NOS", SF:"SFO", TB:"TBB"};
 function remFrac(state, period, clock){                                          // pure (#806)
   if(state==="pre") return 1;
@@ -782,9 +782,11 @@ function remFrac(state, period, clock){                                         
   return Math.max(0.02, Math.min(1, rem));
 }
 async function nflStates(force){                                                 // #800
-  if(!force && NFLSTATE.at && Date.now()-NFLSTATE.at < 2*60e3) return NFLSTATE.map;
+  if(!force && NFLSTATE.w===curWeek() && NFLSTATE.at && Date.now()-NFLSTATE.at < 2*60e3) return NFLSTATE.map;
   try{
-    const j = await (await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard")).json();
+    const w = curWeek(), league = await leagueMeta();
+    const year = league && league.season || new Date().getFullYear();
+    const j = await (await fetch("/feeds/nfl/scoreboard?dates="+year+"&seasontype=2&week="+w, {cache:"no-store"})).json();
     const m = {};
     (j.events||[]).forEach(ev=>{
       const comp = (ev.competitions||[])[0]; if(!comp) return;
@@ -795,15 +797,15 @@ async function nflStates(force){                                                
         const opp = (comp.competitors||[]).find(x2=>x2!==c);
         const ab = ESPN2OURS[c.team && c.team.abbreviation] || (c.team && c.team.abbreviation);
         if(!ab) return;
-        m[ab] = {state, period, clock, detail:(st.type && st.type.shortDetail)||"",
+        m[ab] = {state, period, clock, kickoff:comp.date||ev.date, opponent:opp && (ESPN2OURS[opp.team.abbreviation]||opp.team.abbreviation), detail:(st.type && st.type.shortDetail)||"",
           diff:(+c.score||0)-((opp && +opp.score)||0), rem:remFrac(state, period, clock)};
       });
     });
-    if(Object.keys(m).length){ NFLSTATE.map = m; NFLSTATE.at = Date.now(); }
+    if(Object.keys(m).length){ NFLSTATE.map = m; NFLSTATE.at = Date.now(); NFLSTATE.w = w; }
   }catch(e){}
   return NFLSTATE.map;
 }
-function gameStateOf(team){ return NFLSTATE.map[team] || null; }
+function gameStateOf(team){ return (!NFLSTATE.w || NFLSTATE.w===curWeek()) ? NFLSTATE.map[team] || null : null; }
 function anyGameLive(){ for(const t in NFLSTATE.map) if(NFLSTATE.map[t].state==="in") return true; return false; }   // #812
 function gsBadge(team){                                                          // #801
   const g = gameStateOf(team); if(!g) return "";
@@ -1203,7 +1205,7 @@ function ssPRow(p, sub, val, dim){
     '<b class="ssval mono'+(dim?' dim':'')+'">'+val+'</b></div>';
 }
 function seasonPageHtml(){                                                       // pure builder (#879–#893)
-  const byId = idIndex(), w = curWeek(), md = WEEKST.mate;
+  const byId = idIndex(), w = curWeek(), md = currentWeekMate();
   const s2o = sleeperToOurs();
   const inv = {}; for(const k2 in s2o) inv[s2o[k2]] = k2;
   const ms = (typeof myStandingsRow==="function") ? myStandingsRow() : null;
@@ -1216,11 +1218,12 @@ function seasonPageHtml(){                                                      
     '<button class="hbtn" data-act="togglePool">🗂 '+(window._poolShow?'Hide pool':'Pool')+'</button>'+
     '<a class="hbtn" href="/draft" style="text-decoration:none">✏️ Draft room</a></div></div>';
   try{ if(typeof hypeLine==="function" && hypeOn("mild")) h += '<div class="benchhead" style="color:var(--gold)">😤 '+esc(hypeLine())+'</div>'; }catch(e){}
+  h += weeklyAdviceHtml();
   // hero (#879/#884/#885)
   h += '<div class="sphero sscard" id="spMatchup">';
   if(md && md.me){
-    const myBs = bestStartersWeek(rosterIds(), byId, w);
-    const opBs = md.opp ? bestStartersWeek(md.opp.ids, byId, w) : null;
+    const myBs = {pts:md.me.starters.filter(Boolean).reduce((sum,id)=>sum+(byId[id]?weekProj(byId[id],w):0),0)};
+    const opBs = md.opp ? {pts:md.opp.starters.filter(Boolean).reduce((sum,id)=>sum+(byId[id]?weekProj(byId[id],w):0),0)} : null;
     const wpPct = (window._liveWp!=null && typeof anyGameLive==="function" && anyGameLive()) ? window._liveWp
       : (opBs ? Math.round(winProb(myBs.pts, opBs.pts)*100) : 50);
     const leftPts = (()=>{ try{
@@ -1236,7 +1239,7 @@ function seasonPageHtml(){                                                      
     const lev = (typeof SIM!=="undefined" && SIM.lastKey && SIM.cache[SIM.lastKey] && SIM.cache[SIM.lastKey].lev) ? SIM.cache[SIM.lastKey].lev[0] : null;
     const odds = SEASON.lastOdds ? SEASON.lastOdds[myRid] : null;
     h += '<div class="sptiles">'+
-      ssTile("proj final", fmt(myBs.pts))+
+      ssTile("pregame estimate", fmt(myBs.pts))+
       ssTile("win prob", wpPct+"%", wpPct>=55?"up":wpPct<=45?"down":"")+
       ssTile("on bench", leftPts!=null?(leftPts>1?"−"+leftPts:"0"):"—", leftPts>1?"down":"up")+
       ssTile("playoffs", odds!=null?odds+"%":"—")+
@@ -1245,9 +1248,10 @@ function seasonPageHtml(){                                                      
     const plist = (side, mineSide)=>side.starters.filter(Boolean).map(id=>{
       const p = byId[id]; if(!p) return "";
       const got = +side.ppts[inv[id]]||0;
+      const game = gameStateOf(p.team), hasScore = !!(game && (game.state==="in" || game.state==="post"));
       const badge = (typeof gsBadge==="function") ? gsBadge(p.team) : "";
-      const row = ssPRow(p, p.pos+(badge?" · "+badge:""), got?got.toFixed(1):"~"+weekProj(p,w).toFixed(1), !got);
-      return mineSide && p.pos!=="DEF" && !got ? row.replace('<b class="ssval','<button class="swapbtn" data-swap="'+p.id+'" title="Swap out" aria-label="Swap '+esc(p.name)+'">⇄</button><b class="ssval') : row;
+      const row = ssPRow(p, p.pos+(badge?" · "+badge:""), hasScore?got.toFixed(1):"~"+weekProj(p,w).toFixed(1), !hasScore);
+      return mineSide && p.pos!=="DEF" && !weeklyPlayerLocked(p) ? row.replace('<b class="ssval','<button class="swapbtn" data-swap="'+p.id+'" title="Swap out" aria-label="Swap '+esc(p.name)+'">⇄</button><b class="ssval') : row;
     }).join("");
     h += '<div class="sbcols spcols"><div>'+plist(md.me,true)+'</div><div>'+(md.opp?plist(md.opp,false):'<div class="empty">no opponent</div>')+'</div></div>';
     if(typeof liveWpChartHtml==="function") h += liveWpChartHtml();
@@ -1332,10 +1336,11 @@ function ssTile(label, value, cls){
   return '<div class="sstile'+(cls?' '+cls:'')+'"><b class="mono">'+value+'</b><span>'+label+'</span></div>';
 }
 function sidebarSeasonHtml(byId){                                                // returns {hero, list}
-  const w = curWeek(), md = WEEKST.mate;
+  const w = curWeek(), md = currentWeekMate();
   const ids = rosterIds();
-  const bs = ids.length ? bestStartersWeek(ids, byId, w) : null;
-  const opBs = (md && md.opp) ? bestStartersWeek(md.opp.ids, byId, w) : null;
+  const advice = weeklyAdvice();
+  const bs = advice && advice.bs || (ids.length ? bestStartersWeek(ids, byId, w) : null);
+  const opBs = (md && md.opp) ? {pts:md.opp.starters.filter(Boolean).reduce((sum,id)=>sum+(byId[id]?weekProj(byId[id],w):0),0)} : null;
   const ms = (typeof myStandingsRow==="function") ? myStandingsRow() : null;
   const myRid = +S.settings.sleeperRosterId;
   const odds = SEASON.lastOdds ? SEASON.lastOdds[myRid] : null;
@@ -1588,7 +1593,7 @@ function toggleDensity(){
 function copyWkText(){ try{ navigator.clipboard.writeText(window._wkText||"").then(()=>toast("📋 Recap copied")).catch(()=>toast("Copy blocked here — select the text manually", {warn:true})); }catch(e){ toast("Copy blocked here", {warn:true}); } }
 const ACT_OK = ["renderGamePlan","renderSim","renderScoreboard","renderWaivers","renderTrades","renderSeasonStats",
   "renderRituals","egoDash","weeklyRecap2","renderAlertCenter","injuryDigest","scoutMyOpponent","moreSheet",
-  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText","analystReport","stageOptimal","stageWinProb","renderSeasonSim","scoutPicker","alertTest","projDivergence","renderFragility","renderWhatIf","simCenter","exportFuture","bridgeOpen","voxStart","renderArsenal","renderReel","renderVault","renderEdge"];
+  "hypeCard","receiptsCard","pregameSpeech","togglePool","toggleDensity","copyWkText","analystReport","stageOptimal","stageWinProb","renderSeasonSim","scoutPicker","alertTest","projDivergence","renderFragility","renderWhatIf","simCenter","exportFuture","bridgeOpen","refreshWeeklyAdvice","copyWeeklyAdvice","voxStart","renderArsenal","renderReel","renderVault","renderEdge"];
 document.addEventListener("click", e=>{
   const t = e.target.closest("[data-act],[data-scout],[data-clickid]");
   if(!t) return;
@@ -1663,7 +1668,7 @@ function lockedIds(){                                                           
     rosterIds().forEach(id=>{
       const p = idIndex()[id]; if(!p) return;
       const g = (typeof gameStateOf==="function") ? gameStateOf(p.team) : null;
-      if(g && (g.state==="in" || g.state==="post")) out.add(id);
+      if(weeklyPlayerLocked(p)) out.add(id);
     });
   }catch(e){}
   return out;

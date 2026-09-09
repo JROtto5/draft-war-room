@@ -55,7 +55,7 @@ async function refreshInjuries(silent){
   if(silent && _injFails && Date.now()-_injLastTry < Math.min(30, 5*Math.pow(2,_injFails))*60e3) return;
   _injLastTry = Date.now();
   try{
-    const r = await fetch("https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries");
+    const r = await fetch("/feeds/nfl/injuries", {cache:"no-store"});
     if(!r.ok) throw 0;
     const j = await r.json();
     const m = {}, changes = [];

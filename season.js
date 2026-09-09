@@ -19,7 +19,7 @@ async function refreshWeek(){                                                   
   return WEEKST.week;
 }
 function curWeek(){ return +S.settings.weekOverride || WEEKST.week || window._nflWeek || 1; }
-const SEASON_LIVE = {ids:null, at:0};
+const SEASON_LIVE = {ids:null, at:0, league:null, missing:[]};
 async function myRosterId(){
   if(S.settings.sleeperRosterId) return +S.settings.sleeperRosterId;
   const lg = (S.settings.sleeperLeagueId||"").trim(); if(!lg) return null;
@@ -37,18 +37,22 @@ async function myRosterId(){
 }
 async function myLiveIds(force){                                                // #641
   const lg = (S.settings.sleeperLeagueId||"").trim(); if(!lg) return null;
-  if(!force && SEASON_LIVE.ids && Date.now()-SEASON_LIVE.at < 5*60e3) return SEASON_LIVE.ids;
+  if(!force && SEASON_LIVE.league===lg && SEASON_LIVE.ids && Date.now()-SEASON_LIVE.at < 5*60e3) return SEASON_LIVE.ids;
   try{
     const rid = await myRosterId(); if(rid==null) return null;
     const rosters = await (await fetch(SYNC.base+"/league/"+lg+"/rosters")).json();
     const mine = (rosters||[]).find(r=>+r.roster_id===+rid); if(!mine) return null;
     const map = sleeperToOurs();
-    SEASON_LIVE.ids = (mine.players||[]).map(id=>map[String(id)]).filter(Boolean);
+    const reserve = new Set([...(mine.reserve||[]), ...(mine.taxi||[])]);
+    const active = (mine.players||[]).filter(id=>!reserve.has(id));
+    SEASON_LIVE.ids = active.map(id=>map[String(id)]).filter(Boolean);
+    SEASON_LIVE.missing = active.filter(id=>!map[String(id)]);
+    SEASON_LIVE.league = lg;
     SEASON_LIVE.at = Date.now();
   }catch(e){}
   return SEASON_LIVE.ids;
 }
-function rosterIds(){ return (SEASON_LIVE.ids && SEASON_LIVE.ids.length) ? SEASON_LIVE.ids : myIds(); }
+function rosterIds(){ return (SEASON_LIVE.league===S.settings.sleeperLeagueId && SEASON_LIVE.ids) ? SEASON_LIVE.ids : myIds(); }
 /* opponent-defense toughness: rank 1 (meanest) … 32 (softest) from DEF projections */
 function defToughRank(team){
   const r = cached("deftough", ()=>{
@@ -91,19 +95,14 @@ function bestStartersWeek(ids, byId, w, fixture){                               
     for(const x of ps) if(!used.has(x.p.id) && poss.includes(x.p.pos)){ used.add(x.p.id); return x; }
     return null;
   };
-  const sl = slotCfg(), defs = [];
-  const add = (n,lab,poss)=>{ for(let i=1;i<=n;i++) defs.push([n>1?lab+i:lab, poss]); };
-  add(sl.QB,"QB",["QB"]); add(sl.RB,"RB",["RB"]); add(sl.WR,"WR",["WR"]); add(sl.TE,"TE",["TE"]);
-  add(sl.FLEX,"FLEX",["RB","WR","TE"]); add(sl.SF,"SFLX",["QB","RB","WR","TE"]);
-  add(sl.DEF,"DEF",["DEF"]); add(sl.K,"K",["K"]);
-  const line = defs.map(([lab,poss])=>{ const x = take(poss); return {lab, p:x?x.p:null, wp:x?x.wp:0}; });
+  const line = weeklySlotDefs().map(({lab,poss})=>{ const x = take(poss); return {lab, p:x?x.p:null, wp:x?x.wp:0}; });
   return {line, starterIds:new Set([...used]), pts:Math.round(line.reduce((a,s)=>a+s.wp,0)*10)/10};
 }
 function winProb(a, b){ const s = Math.max(10, 0.16*(a+b)/2); return 1/(1+Math.exp(-(a-b)/s)); }   // #647
 async function myWeekData(force){                                               // #644/#646
   const lg = (S.settings.sleeperLeagueId||"").trim(); if(!lg) return null;
   const w = curWeek();
-  if(!force && WEEKST.mate && WEEKST.mw===w && Date.now()-WEEKST.matchAt < 5*60e3) return WEEKST.mate;
+  if(!force && WEEKST.mate && WEEKST.mate.league===lg && WEEKST.mw===w && Date.now()-WEEKST.matchAt < 5*60e3) return WEEKST.mate;
   try{
     const rid = await myRosterId(); if(rid==null) return null;
     const [mus, rosters, users] = await Promise.all([
@@ -112,19 +111,20 @@ async function myWeekData(force){                                               
       fetch(SYNC.base+"/league/"+lg+"/users").then(r=>r.json())
     ]);
     const mine = (mus||[]).find(m=>+m.roster_id===+rid);
-    const opp = mine ? (mus||[]).find(m=>m.matchup_id===mine.matchup_id && +m.roster_id!==+rid) : null;
+    const opp = mine && mine.matchup_id!=null ? (mus||[]).find(m=>m.matchup_id===mine.matchup_id && +m.roster_id!==+rid) : null;
     const rmap = {}; (rosters||[]).forEach(r=>rmap[r.roster_id]=r);
     const umap = {}; (users||[]).forEach(u=>umap[u.user_id]=u.display_name);
     const map = sleeperToOurs();
-    const conv = m=>m ? {rid:m.roster_id, pts:m.points||0,
+    const conv = m=>m ? {rid:m.roster_id, pts:m.custom_points!=null ? +m.custom_points : m.points||0,
       name:umap[(rmap[m.roster_id]||{}).owner_id] || ("Team "+m.roster_id),
       starters:(m.starters||[]).map(id=>map[String(id)]||null),
       ids:(m.players||[]).map(id=>map[String(id)]).filter(Boolean),
-      ppts:m.players_points||{}} : null;
-    WEEKST.mate = {w, me:conv(mine), opp:conv(opp)};
+      ppts:m.players_points||{}, missing:(m.players||[]).filter(id=>!map[String(id)]),
+      rawStarters:m.starters||[] } : null;
+    WEEKST.mate = {w, league:lg, me:conv(mine), opp:conv(opp)};
     WEEKST.mw = w; WEEKST.matchAt = Date.now();
   }catch(e){}
-  return WEEKST.mate;
+  return WEEKST.mate && WEEKST.mate.w===w && WEEKST.mate.league===lg ? WEEKST.mate : null;
 }
 function startSitWhy(inn, out, w){                                              // #650
   const bits = [];
@@ -605,10 +605,16 @@ function seasonHeroBits(){                                                      
 
 /* ---------- R40 Waiver wire war room (#670–#684) ---------- */
 const WAIV = {league:null, leagueAt:0, drops:{map:{}, at:0}, tx:null, txAt:0};
-async function leagueMeta(){
+async function leagueMeta(force){
   const lg = (S.settings.sleeperLeagueId||"").trim(); if(!lg) return null;
-  if(WAIV.league && Date.now()-WAIV.leagueAt < 60*60e3) return WAIV.league;
-  try{ WAIV.league = await (await fetch(SYNC.base+"/league/"+lg)).json(); WAIV.leagueAt = Date.now(); }catch(e){}
+  if(!force && WAIV.league && WAIV.league.league_id===lg && Date.now()-WAIV.leagueAt < 60*60e3) return WAIV.league;
+  try{
+    const response = await fetch(SYNC.base+"/league/"+lg, {cache:"no-store"});
+    if(!response.ok) throw new Error("League unavailable");
+    const league = await response.json();
+    if(league.league_id!==lg || !Array.isArray(league.roster_positions)) throw new Error("Invalid league");
+    WAIV.league = league; WAIV.leagueAt = Date.now();
+  }catch(e){ if(WAIV.league && WAIV.league.league_id!==lg) WAIV.league = null; }
   return WAIV.league;
 }
 function freeAgents(){
@@ -1914,3 +1920,148 @@ function planNag(){                                                             
 }
 
 window.__mod = window.__mod || []; window.__mod.push("season.js");
+
+/* Weekly decision sheet: Sleeper slot order, legal replacements, and honest freshness. */
+function weeklySlotDefs(){
+  const positions = {QB:["QB"], RB:["RB"], WR:["WR"], TE:["TE"], FLEX:["RB","WR","TE"],
+    SUPER_FLEX:["QB","RB","WR","TE"], WRRB_FLEX:["WR","RB"], REC_FLEX:["WR","TE"], DEF:["DEF"], K:["K"]};
+  const league = typeof WAIV!=="undefined" ? WAIV.league : null;
+  let slots = league && league.league_id===S.settings.sleeperLeagueId ? league.roster_positions : null;
+  if(!slots){ const cfg = slotCfg(); slots = []; for(const key of ["QB","RB","WR","TE","FLEX","SF","DEF","K"])
+    for(let i=0;i<(cfg[key]||0);i++) slots.push(key==="SF"?"SUPER_FLEX":key); }
+  slots = slots.filter(key=>key!=="BN");
+  const seen = {};
+  return slots.map(key=>{ seen[key] = (seen[key]||0)+1; const label = key==="SUPER_FLEX" ? "SFLX" : key;
+    return {key, lab:label+(slots.filter(k=>k===key).length>1?seen[key]:""), poss:positions[key]||[]}; });
+}
+function weeklyPlayerLocked(p){
+  const game = p && typeof gameStateOf==="function" ? gameStateOf(p.team) : null;
+  return !!(game && (game.state==="in" || game.state==="post" || (game.kickoff && Date.parse(game.kickoff)<=Date.now())));
+}
+function recommendedWeekLineup(side, ids, byId, w){
+  const slots = weeklySlotDefs(), actual = side.starters || [];
+  if(slots.length>16 || slots.some(slot=>!slot.poss.length)) return null;
+  const fixed = slots.map((_,i)=>actual[i] && weeklyPlayerLocked(byId[actual[i]]) ? actual[i] : null);
+  const fixedSet = new Set(fixed.filter(Boolean));
+  // Dynamic programming assigns each player once, while locked starters stay in their exact slots.
+  let dp = new Map([[0,{score:0, line:Array(slots.length).fill(null)}]]);
+  for(const id of [...new Set(ids.concat([...fixedSet]))]){
+    const p = byId[id]; if(!p || (weeklyPlayerLocked(p) && !fixedSet.has(id))) continue;
+    const wp = weekProj(p,w), next = new Map(dp);
+    for(const [mask, value] of dp) slots.forEach((slot,i)=>{
+      if(mask & (1<<i) || !slot.poss.includes(p.pos) || (fixed[i] && fixed[i]!==id) || (fixedSet.has(id) && fixed[i]!==id)) return;
+      const key = mask | (1<<i), score = value.score+wp+(actual[i]===id?0.0001:0);
+      if(!next.has(key) || score>next.get(key).score){ const line = value.line.slice(); line[i]=p; next.set(key,{score,line}); }
+    });
+    dp = next;
+  }
+  const complete = dp.get((1<<slots.length)-1);
+  if(!complete) return null;
+  const line = complete.line.map((p,i)=>({lab:slots[i].lab, p, wp:weekProj(p,w), locked:fixed[i]===p.id}));
+  return {line, starterIds:new Set(line.map(row=>row.p.id)), pts:Math.round(line.reduce((n,row)=>n+row.wp,0)*10)/10};
+}
+function currentWeekMate(){
+  const md = WEEKST.mate;
+  return md && md.w===curWeek() && (!md.league || md.league===S.settings.sleeperLeagueId) ? md : null;
+}
+function weeklyAdvice(){
+  const md = currentWeekMate(), w = curWeek(), byId = idIndex();
+  if(!md || !md.me) return null;
+  const actual = md.me.starters || [], slots = weeklySlotDefs();
+  const missing = (md.me.missing||[]).length + (md.opp && md.opp.missing||[]).length;
+  const bs = !missing && slots.length===actual.length ? recommendedWeekLineup(md.me, rosterIds(), byId, w) : null;
+  const total = side=>side ? Math.round(side.starters.filter(Boolean).reduce((sum,id)=>sum+(byId[id]?weekProj(byId[id],w):0),0)*10)/10 : null;
+  const current = total(md.me), opponent = total(md.opp);
+  const started = actual.concat(md.opp?md.opp.starters:[]).some(id=>weeklyPlayerLocked(byId[id]));
+  const ins = bs ? bs.line.filter(row=>!actual.includes(row.p.id)) : [];
+  const outs = bs ? actual.filter(id=>id && !bs.starterIds.has(id)) : [];
+  return {md,w,byId,slots,bs,missing,current,opponent,started,ins,outs,
+    gain:bs ? Math.round((bs.pts-current)*10)/10 : 0};
+}
+function weeklyPlayerDetail(p){
+  const game = gameStateOf(p.team), e = injuryOf(p), severity = e && injSeverity(e.s);
+  const opp = game && game.opponent || (typeof SCHED!=="undefined" && SCHED[p.team] && SCHED[p.team][curWeek()]);
+  const bits = [p.pos, p.team];
+  if(opp) bits.push("vs "+opp);
+  if(game && game.kickoff) bits.push(new Date(game.kickoff).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit",timeZoneName:"short"}));
+  if(weeklyPlayerLocked(p)) bits.push(game && game.state==="post" ? "Final · locked" : "Locked after kickoff");
+  if(severity) bits.push(severity.label);
+  else if(typeof BYES!=="undefined" && BYES[p.team]===curWeek()) bits.push("Bye");
+  return bits.join(" · ");
+}
+function weeklyAdviceHtml(){
+  const a = weeklyAdvice(), refreshing = window._weeklyRefreshing;
+  let h = '<section class="sscard week-advice" id="weeklyAdvice" aria-labelledby="weeklyAdviceTitle">'+
+    '<div class="week-advice-head"><div><span class="week-eyebrow">YOUR WEEK '+curWeek()+' DECISION SHEET</span><h2 id="weeklyAdviceTitle">Who should I start?</h2></div>'+
+    '<button class="hbtn" data-act="refreshWeeklyAdvice"'+(refreshing?' disabled':'')+'>'+(refreshing?'Refreshing…':'↻ Refresh live data')+'</button></div>';
+  if(!a) return h+'<p class="week-note">Waiting for your Sleeper roster and this week’s matchup. Use Refresh live data to try again.</p></section>';
+  const {md,bs,byId,w} = a, feed = typeof PROJX!=="undefined" ? PROJX.future[w] : null;
+  const age = t=>t ? Math.max(0,Math.floor((Date.now()-t)/60000))+" min ago" : "not refreshed";
+  const fresh = Date.now()-WEEKST.matchAt < 10*60e3;
+  const coverage = feed && feed.map && bs ? bs.line.filter(row=>feed.map[row.p.id]!=null).length : 0;
+  const fullCoverage = bs && coverage===bs.line.length;
+  const scoring = weeklyScoring();
+  const source = projSource()==="baked" ? 'Draft model' : projSource()==="blend" ? 'Blended projections' : 'Sleeper weekly projections';
+  h += '<p class="week-context">'+esc(md.me.name)+' <span>vs</span> '+esc(md.opp?md.opp.name:'Opponent not assigned')+
+    ' <span>· Week '+w+' · '+(scoring ? (scoring.rec||0)+' PPR · '+(scoring.pass_td||0)+'-point pass TD' : 'Scoring settings pending')+'</span></p>';
+  h += '<div class="week-freshness"><span class="'+(fresh?'fresh':'stale')+'">Roster synced '+age(WEEKST.matchAt)+'</span><span>'+source+' · '+age(feed && feed.at)+
+    (feed && feed.stale?' · last refresh failed':'')+'</span><span>Injuries · '+age(INJ.at)+'</span></div>';
+  if(!fresh) h += '<p class="week-warning">Roster data is stale. Refresh before making lineup changes.</p>';
+  if(!NFLSTATE.at || NFLSTATE.w!==w) h += '<p class="week-warning">Kickoff times are unavailable. Check game locks in Sleeper before changing players.</p>';
+  if(!INJ.at || Date.now()-INJ.at>30*60e3) h += '<p class="week-warning">Injury reports need a refresh. Check questionable players before kickoff.</p>';
+  if(!fullCoverage || projSource()==="baked") h += '<p class="week-warning">'+(coverage ? coverage+' of '+(bs?bs.line.length:0)+' starters have weekly projections. ' : '')+'Draft-model estimates are in use. Treat close decisions as provisional.</p>';
+  if(!bs) return h+'<p class="week-warning">'+(a.missing?'Some roster players are missing from the player database.':'A complete legal lineup cannot be built with the available players and locked slots.')+' Review the roster in Sleeper before choosing starters.</p></section>';
+  if(a.started) h += '<p class="week-note">Games have started. Locked players stay in their slots; the numbers below are pregame estimates, not projected final scores.</p>';
+  h += '<div class="week-summary"><div><span>Your current lineup</span><strong>'+a.current.toFixed(1)+'</strong></div><div class="week-recommended"><span>Recommended lineup</span><strong>'+bs.pts.toFixed(1)+'</strong></div><div><span>Opponent’s set lineup</span><strong>'+(a.opponent==null?'—':a.opponent.toFixed(1))+'</strong></div></div>';
+  const edge = a.opponent==null ? null : Math.round((bs.pts-a.opponent)*10)/10;
+  h += '<div class="week-verdict"><b>'+(a.ins.length ? a.ins.length+' starter change'+(a.ins.length>1?'s':'')+' recommended' : 'Keep your current starters')+'</b><span>'+
+    (a.gain>0.05?'+'+a.gain.toFixed(1)+' estimated points': 'Your starters already match the best available projection')+'</span></div>';
+  if(edge!=null) h += '<p class="week-note">'+(edge>=0 ? 'You project '+edge.toFixed(1)+' points ahead' : 'You project '+Math.abs(edge).toFixed(1)+' points behind')+
+    ' against '+esc(md.opp.name)+'’s current starters. '+(edge<0?'Take the strongest projected lineup; use the close calls below if late news changes the matchup.':'Keep the projected points and monitor injury news.')+' These are estimates, not a promised result.</p>';
+  if(a.ins.length){
+    h += '<div class="week-changes"><div><b>START</b>'+a.ins.map(row=>'<span>'+esc(row.p.name)+' <small>'+row.wp.toFixed(1)+'</small></span>').join('')+'</div><div><b>SIT</b>'+
+      a.outs.map(id=>'<span>'+esc(byId[id].name)+' <small>'+weekProj(byId[id],w).toFixed(1)+'</small></span>').join('')+'</div></div>';
+  }
+  for(const id of a.outs){
+    const p = byId[id], injury = injuryOf(p), sv = injury && injSeverity(injury.s);
+    if(sv && (sv.code==="Q" || sv.code==="D")){
+      const factor = sv.code==="Q" ? 0.85 : 0.4;
+      h += '<p class="week-warning">This decision includes a '+Math.round((1-factor)*100)+'% model reduction for '+esc(p.name)+'’s '+sv.label.toLowerCase()+' tag. Without that adjustment, the estimate is about '+(weekProj(p,w)/factor).toFixed(1)+' points. '+esc(injury.c||'Check the latest practice report.')+' Recheck before kickoff; being cleared could reverse this call.</p>';
+    }
+  }
+  h += '<div class="week-lineup" role="list" aria-label="Recommended starting lineup">';
+  bs.line.forEach((row,i)=>{
+    const current = md.me.starters[i], kept = current===row.p.id;
+    const pinned = S.overrides[row.p.id]!=null;
+    const fromFeed = feed && feed.map && feed.map[row.p.id]!=null && projSource()!=="baked";
+    const reason = row.locked ? 'Game locked — retain this slot' : !md.me.starters.includes(row.p.id) ? 'Higher projected total with this starter' : kept ? 'Keep in your starting lineup' : 'Move here to fill the legal lineup';
+    h += '<div class="week-player" role="listitem"><span class="week-slot">'+row.lab+'</span><div><button class="week-name" data-card="'+row.p.id+'">'+esc(row.p.name)+'</button><span class="week-detail">'+esc(weeklyPlayerDetail(row.p))+'</span><span class="week-reason">'+reason+' · '+(pinned?'Your projection override':fromFeed?source:'Draft estimate')+'</span></div><div class="week-points"><b>'+row.wp.toFixed(1)+'</b><small>'+(row.locked?'LOCKED':!md.me.starters.includes(row.p.id)?'START':kept?'KEEP':'MOVE')+'</small></div></div>';
+  });
+  h += '</div>';
+  const bench = rosterIds().map(id=>byId[id]).filter(p=>p && !bs.starterIds.has(p.id)).sort((p,q)=>weekProj(q,w)-weekProj(p,w));
+  const calls = bs.line.map((row,i)=>{
+    if(row.locked) return null;
+    const alt = bench.find(p=>a.slots[i].poss.includes(p.pos) && !weeklyPlayerLocked(p) && weekProj(p,w)>0);
+    if(!alt) return null;
+    const injury = injuryOf(row.p), diff = Math.round((row.wp-weekProj(alt,w))*10)/10;
+    return diff<=2 || injury ? {row,alt,diff,injury} : null;
+  }).filter(Boolean).slice(0,3);
+  if(calls.length) h += '<div class="week-close"><h3>Close calls & injury backups</h3>'+calls.map(c=>'<p><b>'+esc(c.row.p.name)+' over '+esc(c.alt.name)+'</b><span>'+c.diff.toFixed(1)+'-point projected edge. '+(c.injury?'Check the injury report; '+esc(c.alt.name)+' is an eligible bench backup.':'Small edge — either outcome is plausible. Recheck before kickoff.')+'</span></p>').join('')+'</div>';
+  h += '<details class="week-bench"><summary>Bench watch · '+bench.length+' players</summary>'+bench.map(p=>'<div><span>'+esc(p.name)+'<small>'+esc(weeklyPlayerDetail(p))+'</small></span><b>'+weekProj(p,w).toFixed(1)+'</b></div>').join('')+'</details>';
+  h += '<div class="week-actions"><button class="hbtn" data-act="copyWeeklyAdvice">Copy lineup</button><a class="hbtn primary" href="https://sleeper.com/leagues/'+encodeURIComponent(S.settings.sleeperLeagueId)+'/team" target="_blank" rel="noopener noreferrer">Set lineup in Sleeper ↗</a></div><p class="week-note">Advice only. Make these changes in Sleeper, then refresh here to verify your starters match.</p></section>';
+  return h;
+}
+async function refreshWeeklyAdvice(){
+  if(window._weeklyRefreshing) return;
+  window._weeklyRefreshing = true; renderSeasonPage();
+  try{
+    WEEKST.at = 0;
+    await Promise.all([refreshWeek(), leagueMeta(true)]);
+    await Promise.allSettled([myLiveIds(true), myWeekData(true), leagueWeekData(true), fetchWeekProjections(curWeek(),true), nflStates(true), refreshInjuries(true)]);
+  }finally{ window._weeklyRefreshing = false; renderNow(); }
+}
+function copyWeeklyAdvice(){
+  const a = weeklyAdvice(); if(!a || !a.bs) return;
+  const text = 'Week '+a.w+' — '+a.md.me.name+' vs '+(a.md.opp?a.md.opp.name:'TBD')+'\n'+a.bs.line.map(row=>row.lab+': '+row.p.name+' ('+row.wp.toFixed(1)+' projected)').join('\n')+'\nMake changes in Sleeper, then refresh the War Room to verify.';
+  try{ navigator.clipboard.writeText(text).then(()=>toast('Lineup copied')).catch(()=>toast('Copy unavailable — use the lineup above', {warn:true})); }catch(e){ toast('Copy unavailable', {warn:true}); }
+}
