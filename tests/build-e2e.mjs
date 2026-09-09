@@ -10,6 +10,7 @@ const test = `
 window.addEventListener("DOMContentLoaded", ()=>{ setTimeout(()=>{
 const out=[];
 try {
+  S.settings.projSrc="baked"; // Existing draft/simulation fixtures use the deterministic model.
   renderNow();
   out.push("rows:"+(document.querySelectorAll("#poolBody tr[data-pid]").length>=250?"OK":"BAD"));
   out.push("hero:"+(document.getElementById("hero").innerHTML.includes("% at #")?"OK":"BAD"));

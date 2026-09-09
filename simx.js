@@ -6,7 +6,7 @@
 
 /* ---------- R67 Sleeper weekly projections feed (#1067–#1081) ---------- */
 const PROJX = {future:{}};                                                       // week → {map: ourId→league-corrected pts, at}
-function projSource(){ return S.settings.projSrc || "sleeper"; }
+function projSource(){ return S.settings.projSrc || "consensus"; }
 function projBlendPct(){ const b = +S.settings.projBlendPct; return isNaN(b) ? 50 : Math.max(0, Math.min(100, b)); }
 function weeklyScoring(){
   const league = typeof WAIV!=="undefined" ? WAIV.league : null;
@@ -19,7 +19,7 @@ function scoreWeeklyStats(st, scoring){
   const recPts = S.settings.scoring==="half" ? 0.5 : S.settings.scoring==="std" ? 0 : 1;
   return Math.round((Number(st.pts_ppr)+((Number(S.settings.ptd)||4)-4)*(st.pass_td||0)+(recPts-1)*(st.rec||0))*10)/10;
 }
-async function fetchWeekProjections(w, force){
+async function fetchSleeperProjections(w, force){
   if(w<1 || w>18) return null;
   const league = await leagueMeta();
   const yr = league && league.season || new Date().getFullYear();
@@ -52,13 +52,16 @@ async function fetchWeekProjections(w, force){
 function sleeperWk(p, w){ const f = PROJX.future[w]; return (f && f.map[p.id]!=null) ? f.map[p.id] : null; }
 function projSrcLabel(){                                                         // #1071
   const w = curWeek(), f = PROJX.future[w], mode = projSource();
+  if(mode==="consensus") return CONSENSUS.weeks[w] ? "Consensus · W"+w : "Weekly feeds pending";
   if(mode==="baked" || !f) return "📊 baked";
   const stale = f.at && Date.now()-f.at > 2*60*60e3 ? " ⚠" : "";
   return (mode==="sleeper" ? "📱 wk"+w : "🔀 "+projBlendPct()+"%")+stale;
 }
 function projSourceLine(p){                                                      // card source note (#1077)
   try{
-    const w = curWeek(), sv = sleeperWk(p, w);
+    const w = curWeek();
+    if(projSource()==="consensus") return consensusNumbersHtml(p,w);
+    const sv = sleeperWk(p, w);
     if(sv==null || S.overrides[p.id]!=null) return "";
     const baked = Math.round(p.proj/16*10)/10;
     if(Math.abs(sv-baked) < 0.3) return "";
@@ -74,6 +77,13 @@ function divergenceRows(){                                                      
 }
 function projDivergence(){
   const old = document.getElementById("dvOverlay"); if(old){ old.remove(); return; }
+  if(projSource()==="consensus"){
+    const panel=document.createElement("div"); panel.id="dvOverlay"; panel.className="snov";
+    panel.innerHTML='<div class="sbcard" role="dialog" aria-label="Weekly provider comparison"><button class="sbx" data-dvx="1" aria-label="Close comparison">✕</button><div class="tag">WEEK '+curWeek()+' PROVIDER COMPARISON</div>'+consensusSourcesHtml(curWeek())+consensusTableHtml(rosterIds(),idIndex(),curWeek()).replace('<details class="week-bench">','<details class="week-bench" open>')+'</div>';
+    document.body.appendChild(panel);
+    panel.addEventListener("click",e=>{if(e.target===panel || e.target.closest("[data-dvx]")) panel.remove();});
+    return;
+  }
   const rows = divergenceRows();
   const ov = document.createElement("div"); ov.id = "dvOverlay"; ov.className = "snov";
   ov.innerHTML = '<div class="sbcard" role="dialog"><button class="sbx" data-dvx="1">✕</button>'+
@@ -562,3 +572,117 @@ function exportFuture(){                                                        
 }
 
 window.__mod = window.__mod || []; window.__mod.push("simx.js");
+
+/* Current-week consensus. Each provider contributes once; no draft or season-total fallback. */
+const CONSENSUS = {weeks:{},pending:{}};
+const WEEKLY_PROVIDERS = ['sleeper','espn','cbs'];
+function projectionIdentity(name){ return String(name).toLowerCase().replace(/\b(jr|sr|ii|iii|iv)\b\.?/g,'').replace(/[^a-z0-9]/g,''); }
+function projectionContext(){
+  return JSON.stringify([S.settings.sleeperLeagueId, WAIV.league && WAIV.league.season, weeklyScoring(), S.settings.ptd, S.settings.scoring]);
+}
+function providerPlayerId(row){
+  const players=allPlayers(), key=projectionIdentity(row.name);
+  if(row.position==='DEF' && row.team){
+    const aliases={GB:'GBP',KC:'KCC',LV:'LVR',NE:'NEP',NO:'NOS',SF:'SFO',TB:'TBB',JAX:'JAC',WSH:'WAS'};
+    return (players.find(p=>p.pos==='DEF' && p.team===(aliases[row.team]||row.team))||{}).id;
+  }
+  const matches=players.filter(p=>p.pos===row.position && projectionIdentity(p.name)===key);
+  return matches.length===1 ? matches[0].id : null;
+}
+function providerLeaguePoints(row, scoring){
+  const stats={...row.stats};
+  if(row.position==='DEF' && stats.pts_allow!=null){
+    // Approximation is exposed in the source table: mean PA is not a full scoring-tier distribution.
+    const pa=stats.pts_allow;
+    const bucket=pa<1?'pts_allow_0':pa<7?'pts_allow_1_6':pa<14?'pts_allow_7_13':pa<21?'pts_allow_14_20':pa<28?'pts_allow_21_27':pa<35?'pts_allow_28_34':'pts_allow_35p';
+    stats[bucket]=1;
+  }
+  const weights=scoring||{pass_yd:.04,pass_td:+S.settings.ptd||6,pass_int:-1,rush_yd:.1,rush_td:6,rec:1,rec_yd:.1,rec_td:6,fum_lost:-2};
+  const pts=Object.entries(weights).reduce((sum,[key,value])=>sum+(Number(stats[key])||0)*(Number(value)||0),0);
+  return Number.isFinite(pts) ? Math.round(pts*100)/100 : null;
+}
+async function fetchCurrentProvider(source, season, week){
+  const response=await fetch('/api/projections?source='+source+'&season='+season+'&week='+week,{cache:'no-store',signal:AbortSignal.timeout(25000)});
+  if(!response.ok) throw new Error(source.toUpperCase()+' unavailable');
+  const body=await response.json();
+  if(body.source!==source || body.season!==+season || body.week!==week || !Array.isArray(body.rows)) throw new Error('Provider week/season mismatch');
+  const map={}, approximate={};
+  for(const row of body.rows){
+    const id=providerPlayerId(row), pts=providerLeaguePoints(row,weeklyScoring());
+    if(id && pts!=null){map[id]=pts;if(row.approximate) approximate[id]=true;}
+  }
+  return {map,approximate,at:body.fetchedAt,url:body.url,notes:body.notes||[],publishedAt:body.publishedAt};
+}
+async function fetchWeekProjections(w, force){
+  if(w<1 || w>18) return null;
+  await leagueMeta();
+  const context=projectionContext(), season=Number(WAIV.league && WAIV.league.season)||new Date().getFullYear();
+  const key=LS_KEY+'-consensus-'+season+'-'+S.settings.sleeperLeagueId+'-'+w;
+  const old=CONSENSUS.weeks[w];
+  if(!force && old && old.context===context && Date.now()-old.at<15*60e3) return old;
+  const pendingKey=context+':'+w;
+  if(CONSENSUS.pending[pendingKey]) return CONSENSUS.pending[pendingKey];
+  const run=(async()=>{
+    const results=await Promise.allSettled([
+      fetchSleeperProjections(w,force).then(map=>{const f=PROJX.future[w];if(!map || !f || f.stale) throw new Error('Sleeper refresh unavailable');return {map,at:f.at,url:SYNC.base+'/projections/nfl/regular/'+season+'/'+w,notes:['Weekly stat projections; source update time not supplied.']};}),
+      fetchCurrentProvider('espn',season,w),fetchCurrentProvider('cbs',season,w)
+    ]);
+    const sources={};
+    results.forEach((result,i)=>{sources[WEEKLY_PROVIDERS[i]]=result.status==='fulfilled'?result.value:{map:{},error:'Could not refresh this provider'};});
+    if(context!==projectionContext()) return null; // Ignore an in-flight response after the user switches leagues.
+    const entry={season,week:w,context,at:Date.now(),sources};
+    if(results.some(r=>r.status==='fulfilled')){
+      CONSENSUS.weeks[w]=entry;
+      try{localStorage.setItem(key,JSON.stringify(entry));}catch(e){}
+    }else{
+      let cached=old;
+      if(!cached) try{cached=JSON.parse(localStorage.getItem(key)||'null');}catch(e){}
+      CONSENSUS.weeks[w]=cached && cached.context===context && Date.now()-cached.at<24*3600e3 ? {...cached,stale:true} : entry;
+    }
+    return CONSENSUS.weeks[w];
+  })().finally(()=>delete CONSENSUS.pending[pendingKey]);
+  CONSENSUS.pending[pendingKey]=run;
+  return run;
+}
+function consensusFor(p,w){
+  const entry=CONSENSUS.weeks[w];
+  if(!entry || entry.context!==projectionContext() || Date.now()-entry.at>24*3600e3) return null;
+  const values=[];
+  for(const source of WEEKLY_PROVIDERS){
+    const feed=entry.sources[source], value=feed && feed.map[p.id];
+    if(value!=null && Number.isFinite(value) && Date.now()-feed.at<24*3600e3) values.push({source,value,at:feed.at,approximate:!!(feed.approximate&&feed.approximate[p.id])});
+  }
+  if(!values.length) return null;
+  const points=values.map(v=>v.value);
+  return {mean:Math.round(points.reduce((n,v)=>n+v,0)/points.length*10)/10,min:Math.min(...points),max:Math.max(...points),count:points.length,values,stale:!!entry.stale};
+}
+function consensusVote(start,bench,w){
+  const a=consensusFor(start,w),b=consensusFor(bench,w);
+  if(!a || !b) return '';
+  const common=a.values.map(v=>({a:v,b:b.values.find(x=>x.source===v.source)})).filter(v=>v.b);
+  const wins=common.filter(v=>v.a.value>v.b.value).length;
+  return common.length ? wins+' of '+common.length+' shared sources favor '+start.name+'.' : '';
+}
+function consensusNumbersHtml(p,w){
+  const c=consensusFor(p,w);
+  if(!c) return '<span class="week-reason">No current weekly projection</span>';
+  return '<span class="week-reason source-numbers">'+c.values.map(v=>v.source.toUpperCase()+' '+v.value.toFixed(1)).join(' · ')+'</span>'+
+    '<span class="week-reason">'+c.count+' source'+(c.count===1?' only':'s')+' · source range '+c.min.toFixed(1)+'–'+c.max.toFixed(1)+(c.stale?' · cached snapshot':'')+'</span>';
+}
+function consensusSourcesHtml(w){
+  const entry=CONSENSUS.weeks[w];
+  if(!entry || entry.context!==projectionContext()) return '<p class="week-warning">Loading current weekly providers. Recommendations wait for their projections.</p>';
+  const title={sleeper:'Sleeper',espn:'ESPN',cbs:'CBS Sports'};
+  return '<div class="consensus-sources">'+WEEKLY_PROVIDERS.map(source=>{
+    const s=entry.sources[source], count=Object.keys(s.map||{}).length;
+    const time=s.at?new Date(s.at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'unavailable';
+    return '<div><b>'+(s.url?'<a href="'+esc(s.url)+'" target="_blank" rel="noopener noreferrer">'+title[source]+' ↗</a>':title[source])+'</b><span>'+entry.season+' · Week '+w+'</span><small>'+(count?'Retrieved '+time+' · '+count+' players':'Unavailable — excluded from average')+'</small></div>';
+  }).join('')+'</div><details class="consensus-method"><summary>How the average works</summary><p class="week-note">Equal-weight average of available weekly providers, not a proven accuracy ranking. Source ranges show disagreement, not confidence intervals. Retrieval time is when we checked; providers do not supply a reliable last-updated time. No preseason estimates or draft overrides enter this consensus.</p></details>';
+}
+function consensusTableHtml(ids,byId,w){
+  return '<details class="week-bench"><summary>Compare every player’s provider projections</summary><div class="consensus-scroll"><table class="consensus-table"><thead><tr><th>Player</th><th>Sleeper</th><th>ESPN</th><th>CBS</th><th>Mean</th></tr></thead><tbody>'+ids.map(id=>{
+    const p=byId[id];if(!p)return '';
+    const c=consensusFor(p,w);
+    return '<tr><th>'+esc(p.name)+'</th>'+WEEKLY_PROVIDERS.map(source=>{const v=c&&c.values.find(x=>x.source===source);return '<td>'+(v?v.value.toFixed(1):'—')+'</td>';}).join('')+'<td><b>'+(c?c.mean.toFixed(1):'—')+'</b></td></tr>';
+  }).join('')+'</tbody></table></div><p class="week-note">D/ST conversions for ESPN and CBS are approximate: their expected points allowed select your league’s scoring tier. CBS rounds projected stats and does not publish every rare scoring category. These limitations can affect close defense calls.</p></details>';
+}

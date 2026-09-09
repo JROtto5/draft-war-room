@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 
 const SHIPPED = [
   "index.html", "styles.css", "engine.js", "core.js", "season.js", "win.js", "simx.js", "ultra.js", "views.js", "wire.js",
+  "api/projections.js", "lib/weekly-projections.cjs", "vercel.json",
   "boot.js", "data.js", "sw.js", "manifest.json", "404.html",
 ];
 

@@ -19,12 +19,28 @@ injuries. Copy the lineup or open Sleeper to apply it, then refresh to verify.
 It does not submit changes to Sleeper. During games, its projection totals are
 explicitly labeled as pregame estimates.
 
-Weekly Sleeper projections load during startup and refresh with Season Mode.
-Stat projections use the league's scoring weights. ESPN injuries and game states
+Current weekly projections from Sleeper, ESPN, and CBS load during startup and
+refresh with Season Mode. Each provider contributes once to an equal-weight mean,
+using the league's scoring weights. Every starter shows the individual numbers,
+source count, and provider range. The expandable table compares the whole roster.
+No preseason totals, draft overrides, or blanket questionable/doubtful discounts
+enter current-week consensus; confirmed out/IR statuses from recent injury data
+still block a start. Missing forecasts prevent a confident full-lineup recommendation.
+
+`api/projections.js` retrieves ESPN and CBS without dependencies. ESPN records must
+match the requested season, week, and projection type. CBS pages must identify the
+requested Week N projections, and offense rows must contain one game. The function
+caches provider responses for 15 minutes and reports the original retrieval time;
+that timestamp is not represented as the provider's publication date. D/ST scores
+from ESPN and CBS are approximate conversions using expected points allowed, and
+CBS does not provide every rare scoring statistic. These limitations are visible.
+
+State v6 migrates the old weekly source setting to consensus while preserving draft
+overrides for draft/season analysis. Users may still select Sleeper-only mode. ESPN injuries and game states
 use two fixed `/feeds/nfl/` Vercel rewrites so browser CORS failures do not break
 those feeds. Live API responses bypass service-worker caching. Projection fallback
 caches carry timestamps and are scoped to league, season, week, and scoring.
-Use `python3 tools/serve.py` locally to exercise these same routes.
+Use `node tools/serve.mjs` locally to exercise these same routes.
 
 ## The loops
 

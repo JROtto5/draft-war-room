@@ -8,8 +8,10 @@ const POSITIONS = ["QB","RB","WR","TE","DEF"];
 const LS_KEY = "draft-war-room-v2";
 
 /* ---------- State ---------- */
-const STATE_V = 5;
+const STATE_V = 6;
 const MIGRATIONS = {
+  // Weekly decisions now use current provider consensus; keep draft overrides for draft/season analysis.
+  5: s => { s.settings=s.settings||{}; s.settings.projSrc="consensus"; return s; },
   // 1 -> 2: keepers/queue introduced (defaults suffice); stamp only
   1: s => { s.keepers = s.keepers||{}; s.queue = s.queue||[]; return s; },
   // 4 -> 5: ghost drafter + rivalry grudges
@@ -61,7 +63,7 @@ const defaultState = () => ({
   log: [],              // {id, who:'me'|'other'}
   custom: [],           // [name,team,pos,proj,id]
   overrides: {},        // id -> proj
-  settings: { teams:12, roster:16, slot:12, scoring:"ppr", ptd:6, min:{QB:2,RB:3,WR:3,TE:1,DEF:1},
+  settings: { projSrc:"consensus", teams:12, roster:16, slot:12, scoring:"ppr", ptd:6, min:{QB:2,RB:3,WR:3,TE:1,DEF:1},
               slots:{QB:1,RB:2,WR:2,TE:1,FLEX:1,SF:1,DEF:1,K:0,BN:7}, budget:200 },
   prices: {},           // id -> auction price paid (auction mode)
   ghost: [],            // {pick, mine, ghost} — what the engine would've taken at each of my turns

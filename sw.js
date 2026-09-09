@@ -1,6 +1,6 @@
 /* Draft War Room — service worker.
    MIT License — see LICENSE. © 2026 JROtto5 / Draft War Room. */
-const CACHE = "war-room-v69";
+const CACHE = "war-room-v70";
 const CORE = ["./", "./index.html", "./styles.css", "./data.js", "./engine.js", "./core.js", "./season.js", "./win.js", "./simx.js", "./ultra.js", "./views.js", "./wire.js", "./boot.js", "./manifest.json", "./icon.svg", "./icon-192.png", "./icon-512.png", "./fonts/Sora-400.woff2", "./fonts/JetBrainsMono-400.woff2"];
 
 self.addEventListener("install", e => {
@@ -19,7 +19,7 @@ self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
   const sameOrigin = new URL(e.request.url).origin === location.origin;
   // Live API data must reach the network. The app owns timestamped offline fallbacks.
-  if (new URL(e.request.url).pathname.startsWith("/feeds/nfl/") || (!sameOrigin && !["image", "font", "style"].includes(e.request.destination))) {
+  if (new URL(e.request.url).pathname==="/api/projections" || new URL(e.request.url).pathname.startsWith("/feeds/nfl/") || (!sameOrigin && !["image", "font", "style"].includes(e.request.destination))) {
     e.respondWith(fetch(e.request, {cache: "no-store"}).catch(() => new Response("", {status: 503})));
     return;
   }

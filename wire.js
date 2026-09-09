@@ -1160,7 +1160,7 @@ $("#settingsBtn").addEventListener("click", ()=>{
     }
     sel.value = S.settings.voxVoice||"";
   }catch(e){}
-  $("#setProjSrc").value = S.settings.projSrc||"blend";
+  $("#setProjSrc").value = S.settings.projSrc||"consensus";
   $("#setProjBlend").value = isNaN(+S.settings.projBlendPct)?50:+S.settings.projBlendPct;
   $("#projBlendVal").textContent = $("#setProjBlend").value+"% 📱";
   try{
@@ -1277,7 +1277,7 @@ $("#settingsSave").addEventListener("click", ()=>{
   S.settings.voxSpeak = $("#voxSpeak").checked;
   S.settings.voxWake = $("#voxWake").checked;
   S.settings.voxVoice = $("#voxVoice").value||"";
-  S.settings.projSrc = $("#setProjSrc").value||"blend";
+  S.settings.projSrc = $("#setProjSrc").value||"consensus";
   S.settings.projBlendPct = +$("#setProjBlend").value;
   _memo = {key:null};
   if(typeof applyCalm==="function") applyCalm(S.settings.calm);

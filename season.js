@@ -64,7 +64,14 @@ function defToughRank(team){
   });
   return r[team] || 16;
 }
-function weekProj(p, w){                                                        // #642 · source-aware (#1069)
+function weekProj(p, w){
+  if(typeof projSource==="function" && projSource()==="consensus" && (w===curWeek() || consensusFor(p,w))){
+    const liveInjury = INJ.at && Date.now()-INJ.at<24*3600e3 ? injuryOf(p) : null;
+    const status = liveInjury && injSeverity(liveInjury.s);
+    if(status && (status.code==="O" || status.code==="IR")) return 0;
+    const consensus = consensusFor(p,w);
+    return consensus ? consensus.mean : 0; // Missing is disclosed and blocks weekly advice below.
+  }
   if(typeof BYES!=="undefined" && BYES[p.team]===w) return 0;
   const e = (typeof injuryOf==="function") ? injuryOf(p) : null;
   const sev = e ? injSeverity(e.s) : null;
@@ -1969,13 +1976,14 @@ function weeklyAdvice(){
   if(!md || !md.me) return null;
   const actual = md.me.starters || [], slots = weeklySlotDefs();
   const missing = (md.me.missing||[]).length + (md.opp && md.opp.missing||[]).length;
-  const bs = !missing && slots.length===actual.length ? recommendedWeekLineup(md.me, rosterIds(), byId, w) : null;
+  const projectionMissing = projSource()==="consensus" ? [...new Set(rosterIds().concat(md.opp?md.opp.starters:[]))].filter(id=>byId[id] && !consensusFor(byId[id],w)) : [];
+  const bs = !missing && !projectionMissing.length && slots.length===actual.length ? recommendedWeekLineup(md.me, rosterIds(), byId, w) : null;
   const total = side=>side ? Math.round(side.starters.filter(Boolean).reduce((sum,id)=>sum+(byId[id]?weekProj(byId[id],w):0),0)*10)/10 : null;
   const current = total(md.me), opponent = total(md.opp);
   const started = actual.concat(md.opp?md.opp.starters:[]).some(id=>weeklyPlayerLocked(byId[id]));
   const ins = bs ? bs.line.filter(row=>!actual.includes(row.p.id)) : [];
   const outs = bs ? actual.filter(id=>id && !bs.starterIds.has(id)) : [];
-  return {md,w,byId,slots,bs,missing,current,opponent,started,ins,outs,
+  return {md,w,byId,slots,bs,missing,projectionMissing,current,opponent,started,ins,outs,
     gain:bs ? Math.round((bs.pts-current)*10)/10 : 0};
 }
 function weeklyPlayerDetail(p){
@@ -1998,31 +2006,33 @@ function weeklyAdviceHtml(){
   const {md,bs,byId,w} = a, feed = typeof PROJX!=="undefined" ? PROJX.future[w] : null;
   const age = t=>t ? Math.max(0,Math.floor((Date.now()-t)/60000))+" min ago" : "not refreshed";
   const fresh = Date.now()-WEEKST.matchAt < 10*60e3;
-  const coverage = feed && feed.map && bs ? bs.line.filter(row=>feed.map[row.p.id]!=null).length : 0;
+  const coverage = bs ? bs.line.filter(row=>projSource()==="consensus" ? !!consensusFor(row.p,w) : feed && feed.map && feed.map[row.p.id]!=null).length : 0;
   const fullCoverage = bs && coverage===bs.line.length;
   const scoring = weeklyScoring();
-  const source = projSource()==="baked" ? 'Draft model' : projSource()==="blend" ? 'Blended projections' : 'Sleeper weekly projections';
+  const source = projSource()==="consensus" ? 'Current weekly consensus' : projSource()==="baked" ? 'Draft model' : projSource()==="blend" ? 'Blended projections' : 'Sleeper weekly projections';
   h += '<p class="week-context">'+esc(md.me.name)+' <span>vs</span> '+esc(md.opp?md.opp.name:'Opponent not assigned')+
     ' <span>· Week '+w+' · '+(scoring ? (scoring.rec||0)+' PPR · '+(scoring.pass_td||0)+'-point pass TD' : 'Scoring settings pending')+'</span></p>';
-  h += '<div class="week-freshness"><span class="'+(fresh?'fresh':'stale')+'">Roster synced '+age(WEEKST.matchAt)+'</span><span>'+source+' · '+age(feed && feed.at)+
+  h += '<div class="week-freshness"><span class="'+(fresh?'fresh':'stale')+'">Roster synced '+age(WEEKST.matchAt)+'</span><span>'+source+' · '+age(projSource()==="consensus" ? (CONSENSUS.weeks[w]||{}).at : feed && feed.at)+
     (feed && feed.stale?' · last refresh failed':'')+'</span><span>Injuries · '+age(INJ.at)+'</span></div>';
   if(!fresh) h += '<p class="week-warning">Roster data is stale. Refresh before making lineup changes.</p>';
   if(!NFLSTATE.at || NFLSTATE.w!==w) h += '<p class="week-warning">Kickoff times are unavailable. Check game locks in Sleeper before changing players.</p>';
   if(!INJ.at || Date.now()-INJ.at>30*60e3) h += '<p class="week-warning">Injury reports need a refresh. Check questionable players before kickoff.</p>';
-  if(!fullCoverage || projSource()==="baked") h += '<p class="week-warning">'+(coverage ? coverage+' of '+(bs?bs.line.length:0)+' starters have weekly projections. ' : '')+'Draft-model estimates are in use. Treat close decisions as provisional.</p>';
-  if(!bs) return h+'<p class="week-warning">'+(a.missing?'Some roster players are missing from the player database.':'A complete legal lineup cannot be built with the available players and locked slots.')+' Review the roster in Sleeper before choosing starters.</p></section>';
+  if(projSource()!=="consensus" && (!fullCoverage || projSource()==="baked")) h += '<p class="week-warning">'+(coverage ? coverage+' of '+(bs?bs.line.length:0)+' starters have weekly projections. ' : '')+'Draft-model estimates are in use. Treat close decisions as provisional.</p>';
+  if(!bs) return h+(projSource()==="consensus"?consensusSourcesHtml(w):'')+'<p class="week-warning">'+(a.projectionMissing.length?'Current weekly projections are missing for '+a.projectionMissing.map(id=>esc(byId[id].name)).join(', ')+'. No preseason replacement is used.':a.missing?'Some roster players are missing from the player database.':'A complete legal lineup cannot be built with the available players and locked slots.')+' Review the roster in Sleeper before choosing starters.</p></section>';
   if(a.started) h += '<p class="week-note">Games have started. Locked players stay in their slots; the numbers below are pregame estimates, not projected final scores.</p>';
   h += '<div class="week-summary"><div><span>Your current lineup</span><strong>'+a.current.toFixed(1)+'</strong></div><div class="week-recommended"><span>Recommended lineup</span><strong>'+bs.pts.toFixed(1)+'</strong></div><div><span>Opponent’s set lineup</span><strong>'+(a.opponent==null?'—':a.opponent.toFixed(1))+'</strong></div></div>';
+  if(projSource()==="consensus") h += consensusSourcesHtml(w);
   const edge = a.opponent==null ? null : Math.round((bs.pts-a.opponent)*10)/10;
   h += '<div class="week-verdict"><b>'+(a.ins.length ? a.ins.length+' starter change'+(a.ins.length>1?'s':'')+' recommended' : 'Keep your current starters')+'</b><span>'+
     (a.gain>0.05?'+'+a.gain.toFixed(1)+' estimated points': 'Your starters already match the best available projection')+'</span></div>';
   if(edge!=null) h += '<p class="week-note">'+(edge>=0 ? 'You project '+edge.toFixed(1)+' points ahead' : 'You project '+Math.abs(edge).toFixed(1)+' points behind')+
     ' against '+esc(md.opp.name)+'’s current starters. '+(edge<0?'Take the strongest projected lineup; use the close calls below if late news changes the matchup.':'Keep the projected points and monitor injury news.')+' These are estimates, not a promised result.</p>';
+  if(projSource()==="consensus") h += '<p class="week-note">Questionable and doubtful tags are alerts, not automatic percentage cuts. Confirmed out/IR players are excluded from the starting recommendation. Draft projection pins are preserved for draft analysis and ignored here.</p>';
   if(a.ins.length){
     h += '<div class="week-changes"><div><b>START</b>'+a.ins.map(row=>'<span>'+esc(row.p.name)+' <small>'+row.wp.toFixed(1)+'</small></span>').join('')+'</div><div><b>SIT</b>'+
       a.outs.map(id=>'<span>'+esc(byId[id].name)+' <small>'+weekProj(byId[id],w).toFixed(1)+'</small></span>').join('')+'</div></div>';
   }
-  for(const id of a.outs){
+  if(projSource()!=="consensus") for(const id of a.outs){
     const p = byId[id], injury = injuryOf(p), sv = injury && injSeverity(injury.s);
     if(sv && (sv.code==="Q" || sv.code==="D")){
       const factor = sv.code==="Q" ? 0.85 : 0.4;
@@ -2032,10 +2042,10 @@ function weeklyAdviceHtml(){
   h += '<div class="week-lineup" role="list" aria-label="Recommended starting lineup">';
   bs.line.forEach((row,i)=>{
     const current = md.me.starters[i], kept = current===row.p.id;
-    const pinned = S.overrides[row.p.id]!=null;
-    const fromFeed = feed && feed.map && feed.map[row.p.id]!=null && projSource()!=="baked";
+    const pinned = projSource()!=="consensus" && S.overrides[row.p.id]!=null;
+    const fromFeed = projSource()==="consensus" || feed && feed.map && feed.map[row.p.id]!=null && projSource()!=="baked";
     const reason = row.locked ? 'Game locked — retain this slot' : !md.me.starters.includes(row.p.id) ? 'Higher projected total with this starter' : kept ? 'Keep in your starting lineup' : 'Move here to fill the legal lineup';
-    h += '<div class="week-player" role="listitem"><span class="week-slot">'+row.lab+'</span><div><button class="week-name" data-card="'+row.p.id+'">'+esc(row.p.name)+'</button><span class="week-detail">'+esc(weeklyPlayerDetail(row.p))+'</span><span class="week-reason">'+reason+' · '+(pinned?'Your projection override':fromFeed?source:'Draft estimate')+'</span></div><div class="week-points"><b>'+row.wp.toFixed(1)+'</b><small>'+(row.locked?'LOCKED':!md.me.starters.includes(row.p.id)?'START':kept?'KEEP':'MOVE')+'</small></div></div>';
+    h += '<div class="week-player" role="listitem"><span class="week-slot">'+row.lab+'</span><div><button class="week-name" data-card="'+row.p.id+'">'+esc(row.p.name)+'</button><span class="week-detail">'+esc(weeklyPlayerDetail(row.p))+'</span><span class="week-reason">'+reason+' · '+(pinned?'Your projection override':fromFeed?source:'Draft estimate')+'</span>'+(projSource()==="consensus"?consensusNumbersHtml(row.p,w):'')+'</div><div class="week-points"><b>'+row.wp.toFixed(1)+'</b><small>'+(row.locked?'LOCKED':!md.me.starters.includes(row.p.id)?'START':kept?'KEEP':'MOVE')+'</small></div></div>';
   });
   h += '</div>';
   const bench = rosterIds().map(id=>byId[id]).filter(p=>p && !bs.starterIds.has(p.id)).sort((p,q)=>weekProj(q,w)-weekProj(p,w));
@@ -2046,7 +2056,8 @@ function weeklyAdviceHtml(){
     const injury = injuryOf(row.p), diff = Math.round((row.wp-weekProj(alt,w))*10)/10;
     return diff<=2 || injury ? {row,alt,diff,injury} : null;
   }).filter(Boolean).slice(0,3);
-  if(calls.length) h += '<div class="week-close"><h3>Close calls & injury backups</h3>'+calls.map(c=>'<p><b>'+esc(c.row.p.name)+' over '+esc(c.alt.name)+'</b><span>'+c.diff.toFixed(1)+'-point projected edge. '+(c.injury?'Check the injury report; '+esc(c.alt.name)+' is an eligible bench backup.':'Small edge — either outcome is plausible. Recheck before kickoff.')+'</span></p>').join('')+'</div>';
+  if(projSource()==="consensus") h += consensusTableHtml(rosterIds(),byId,w);
+  if(calls.length) h += '<div class="week-close"><h3>Close calls & injury backups</h3>'+calls.map(c=>'<p><b>'+esc(c.row.p.name)+' over '+esc(c.alt.name)+'</b><span>'+c.diff.toFixed(1)+'-point projected edge. '+(projSource()==="consensus"?esc(consensusVote(c.row.p,c.alt,w))+' ':'')+(c.injury?'Check the injury report; '+esc(c.alt.name)+' is an eligible bench backup.':'Small edge — either outcome is plausible. Recheck before kickoff.')+'</span></p>').join('')+'</div>';
   h += '<details class="week-bench"><summary>Bench watch · '+bench.length+' players</summary>'+bench.map(p=>'<div><span>'+esc(p.name)+'<small>'+esc(weeklyPlayerDetail(p))+'</small></span><b>'+weekProj(p,w).toFixed(1)+'</b></div>').join('')+'</details>';
   h += '<div class="week-actions"><button class="hbtn" data-act="copyWeeklyAdvice">Copy lineup</button><a class="hbtn primary" href="https://sleeper.com/leagues/'+encodeURIComponent(S.settings.sleeperLeagueId)+'/team" target="_blank" rel="noopener noreferrer">Set lineup in Sleeper ↗</a></div><p class="week-note">Advice only. Make these changes in Sleeper, then refresh here to verify your starters match.</p></section>';
   return h;

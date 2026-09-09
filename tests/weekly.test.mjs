@@ -48,7 +48,7 @@ assert.equal(g('scoreWeeklyStats')({pts_ppr:5,sack:3,ff:1,int:1,pts_allow_14_20:
 assert.equal(g('scoreWeeklyStats')({adp:30},{pass_td:6}),null);
 
 // The live lineup follows Sleeper's slot order, preserves locked slots, and never uses a locked bench player.
-g(`S=defaultState(); S.settings.sleeperLeagueId='test'; S.settings.sleeperRosterId=12;
+g(`S=defaultState(); S.settings.projSrc='baked'; S.settings.sleeperLeagueId='test'; S.settings.sleeperRosterId=12;
 WAIV.league={league_id:'test',season:'2026',roster_positions:['SUPER_FLEX','QB','RB','WR','FLEX','BN'],scoring_settings:{pass_td:6}};
 WEEKST.week=1; INJ={map:{},at:Date.now()}; NFLSTATE.map={};
 window.testPlayers={q1:{id:'q1',name:'Quarter One',team:'Q1',pos:'QB',proj:320},q2:{id:'q2',name:'Quarter Two',team:'Q2',pos:'QB',proj:304},
@@ -94,7 +94,7 @@ assert.equal(g('rosterIds().length'),0);
 g(`WAIV.league={league_id:'test',season:'2026',roster_positions:['QB'],scoring_settings:{pass_td:6}};WAIV.leagueAt=Date.now();
 PROJX.future[1]={map:{q1:99},at:Date.now(),context:'old-league'};`);
 ctx.fetch=async()=>{throw new Error('offline');};
-assert.equal(await g('fetchWeekProjections(1,true)'),null);
+assert.equal(await g('fetchSleeperProjections(1,true)'),null);
 assert.equal(g('sleeperWk(testPlayers.q1,1)'),null);
 
 // Live API calls bypass the service worker's image cache, including offline failures.
@@ -111,3 +111,25 @@ assert.equal((await reply).status,503);assert.equal(cached,0);
 handlers.fetch({request:{method:'GET',url:'https://app.test/feeds/nfl/injuries',destination:''},respondWith:p=>reply=p});
 assert.equal((await reply).status,503);assert.equal(cached,0,'same-origin feeds also bypass cached HTML and JSON');
 console.log('weekly lineup, scoring, freshness, and kickoff-lock tests passed');
+// Consensus is an equal-weight average of available current-week values, never preseason pins.
+g(`S.settings.projSrc='consensus'; WEEKST.week=1; INJ={map:{},at:Date.now()};
+CONSENSUS.weeks[1]={context:projectionContext(),week:1,season:2026,at:Date.now(),sources:{
+ sleeper:{map:{q1:20},at:Date.now()},espn:{map:{q1:26},at:Date.now()},cbs:{map:{q1:23},at:Date.now()}}};
+S.overrides.q1=9999;testPlayers.q1.proj=9999;`);
+assert.equal(g('consensusFor(testPlayers.q1,1).mean'),23);
+assert.equal(g('weekProj(testPlayers.q1,1)'),23,'draft overrides and season totals cannot affect weekly consensus');
+g(`INJ.map[normName(testPlayers.q1.name)]={s:'Questionable'};`);
+assert.equal(g('weekProj(testPlayers.q1,1)'),23,'do not double-discount provider projections for a questionable tag');
+g(`INJ.map[normName(testPlayers.q1.name)]={s:'Out'};`);
+assert.equal(g('weekProj(testPlayers.q1,1)'),0,'confirmed inactive player cannot be recommended');
+g(`INJ.map={}; CONSENSUS.weeks[1].sources.espn={map:{},error:'offline'};`);
+assert.equal(g('consensusFor(testPlayers.q1,1).mean'),21.5);
+assert.equal(g('consensusFor(testPlayers.q1,1).count'),2,'an unavailable source is omitted, not counted as zero');
+g(`CONSENSUS.weeks[1].sources.cbs.map.q1=0;`);
+assert.equal(g('consensusFor(testPlayers.q1,1).mean'),10,'a real zero projection is retained');
+g(`CONSENSUS.weeks[1].context='old-league';`);
+assert.equal(g('consensusFor(testPlayers.q1,1)'),null);
+assert.equal(g('weekProj(testPlayers.q1,1)'),0,'no draft fallback if weekly sources are absent');
+const migrated=g('migrate({v:5,settings:{projSrc:"blend"},overrides:{old:300}})');
+assert.equal(migrated.settings.projSrc,'consensus');assert.equal(migrated.overrides.old,300);
+console.log('consensus averaging, source failures, injury handling, and migration tests passed');

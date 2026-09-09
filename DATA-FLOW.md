@@ -18,15 +18,25 @@ scale = ppg×16) → `p.proj` is the single override-aware season number.
   projections in display (bold = banked, plain ~ = projected), archived weekly
   to `-mhist`, feed efficiency/ROI/consistency/live-sim locking.
 
-## Sources (#1067–#1081)
-Three weekly sources, one switch inside `weekProj`:
-📊 **baked** (draft-CSV season model ÷16, matchup-leaned) · 📱 **Sleeper weekly**
-(their live per-week stat projections weighted by the league scoring settings) ·
-🔀 **blend** (slider-weighted mix, leaned). Priority: 📌 pins → source → bye/
-injury zeros and discounts on top. Timestamped feed caches are scoped to league, season, week, and scoring.
-The current week loads on the season tick; missing feed rows visibly fall back
-to the draft model. The default source is Sleeper weekly; explicit source
-choices and projection pins are preserved.
+## Weekly consensus sources
+
+Current-week Season HQ uses the equal-weight mean of current Sleeper, ESPN, and CBS
+stat forecasts, converted to the live league scoring settings. Raw provider numbers,
+count, spread, and retrieval times are displayed. Source records are scoped to the
+season, week, and league/scoring context. Previous seasons, season-total records,
+draft projections, and draft CSV pins do not enter this current-week path.
+
+Questionable/doubtful tags are warnings without a second automatic haircut. Recent
+confirmed out/IR statuses force zero eligibility. An absent provider is omitted;
+a genuine numeric zero is retained. A player with no weekly projection blocks the
+complete lineup recommendation rather than silently falling back to preseason data.
+
+ESPN/CBS are fetched by `api/projections.js`; Sleeper remains a direct public fetch.
+The server caches providers for 15 minutes; the browser refreshes on the season tick.
+Offline snapshots are timestamped, league/season/week/scoring-specific, limited to
+24 hours, and labeled cached. D/ST expected-points-allowed conversions are approximate.
+Long-range season simulation retains its explicitly modeled season outlook when
+future-week forecasts have not loaded. This does not enter the current-week consensus.
 
 ## Scales
 Season totals live only in `p.proj` and the archive; every visible weekly
