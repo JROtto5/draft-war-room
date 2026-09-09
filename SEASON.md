@@ -131,3 +131,14 @@ FantasyPros and RotoWire remain marked disconnected until licensed feed access e
 Next season: retain this season's history and switch to `/draft`; connect the new Sleeper
 league ID when the league renews. The service refuses to mix an old league with a new NFL
 season. This upgrade does not erase draft settings or the completed season's records.
+
+### $5 Party Parlays
+
+The betting page has a separate entertainment section for tonight's pregame NFL games
+(Eastern date). Two four-leg story ideas combine an ESPN-reported winner/total reference
+with unpriced anytime-touchdown ideas drawn from Sleeper's current weekly touchdown
+forecasts. The props and same-game compatibility must be confirmed in the user's book.
+No combined odds or joint probability are fabricated. The user may enter their actual
+combined American quote to calculate the return on a fixed $5 ticket. A copied recipe is
+not a placed wager. Selections reset on refresh, expire after five minutes, and close at
+kickoff. Games or prices missing from the feed produce an unavailable state.

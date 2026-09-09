@@ -7,7 +7,7 @@ import {createRequire} from 'node:module';
 const root=fileURLToPath(new URL('..',import.meta.url));
 const require=createRequire(import.meta.url);
 const projections=require('../api/projections.js');
-const handlers=Object.fromEntries(['campaign','edge-record','season-alerts','season-scan'].map(n=>['/api/'+n,async(req,res)=>require('../api/'+n+'.js')(req,res)]));
+const handlers=Object.fromEntries(['party-parlays','campaign','edge-record','season-alerts','season-scan'].map(n=>['/api/'+n,async(req,res)=>require('../api/'+n+'.js')(req,res)]));
 const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.woff2':'font/woff2'};
 const feeds={'/feeds/nfl/injuries':'injuries','/feeds/nfl/scoreboard':'scoreboard'};
 const port=Number(process.argv[process.argv.indexOf('--port')+1])||8767;
