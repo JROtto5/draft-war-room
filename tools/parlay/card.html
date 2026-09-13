@@ -486,6 +486,100 @@ footer{margin-top:50px; padding-top:22px; border-top:1px solid var(--line); font
 </section>
 
 <section>
+ <div class="sec-head"><h2>Real markets</h2><span class="sub">team totals · game totals · spreads · anytime TD</span></div>
+ <p class="lede">Fantasy points aren't a market you can bet at most books. These are. The bridge is that every passing touchdown is also a
+  receiving touchdown — so summing receiving TDs across a team's pass catchers must equal that team's passing TDs. That constraint isn't assumed,
+  it's <b>solved</b>: it lands at 142 receiving yards per receiving TD for wideouts and 119 for tight ends, both inside the real NFL band, and
+  puts the slate at 2.7 offensive TDs per team. The file is self-consistent once you count the full player pool.</p>
+
+ <div class="thesis" style="margin-top:0">
+  <h2 style="font-size:21px">Two independent reads, and they mostly agree</h2>
+  <p style="font-size:14px;color:var(--text-2);margin-top:8px">Team totals can be derived twice from this file, from opposite directions: forward from
+   the offensive projections, and backward by inverting each defense's projection through DraftKings' points-allowed brackets. The two correlate at
+   <b>0.723</b> — but the offensive side runs <b>1.9 points hotter</b> per team. The numbers below split the difference, which lands the slate at
+   23.2 points per team against an NFL baseline near 22.5.</p>
+  <p style="font-size:14px;color:var(--text-2);margin-top:10px">That gap is itself the finding: <b>if it's all touchdowns, expected TDs from these
+   projections run about 10% high</b> — which is exactly the market a casual bettor is most likely to be taking overs in. Every anytime-TD price below
+   is shaded for it.</p>
+ </div>
+
+ <div class="tbl-scroll" style="margin-top:22px"><table class="data">
+  <thead><tr><th>Game</th><th class="n">Total</th><th>Spread (neutral field)</th><th class="n">Fav moneyline</th></tr></thead>
+  <tbody>
+   <tr><td>DET / NO</td><td class="n">52.6</td><td>DET −5.7</td><td class="n">−200</td></tr>
+   <tr><td>ARI / LAC</td><td class="n">48.8</td><td>LAC −10.7</td><td class="n">−377</td></tr>
+   <tr><td>CAR / CHI</td><td class="n">48.7</td><td>CHI −4.0</td><td class="n">−162</td></tr>
+   <tr><td>GB / MIN</td><td class="n">47.3</td><td>GB −1.4</td><td class="n">−118</td></tr>
+   <tr><td>CIN / TB</td><td class="n">47.2</td><td>CIN −2.4</td><td class="n">−133</td></tr>
+   <tr><td>BUF / HOU</td><td class="n">46.9</td><td>BUF −1.8</td><td class="n">−124</td></tr>
+   <tr><td>LV / MIA</td><td class="n">46.2</td><td>LV −0.6</td><td class="n">−107</td></tr>
+   <tr><td>BAL / IND</td><td class="n">45.8</td><td>BAL −3.1</td><td class="n">−145</td></tr>
+   <tr><td>PHI / WAS</td><td class="n">45.7</td><td>PHI −6.9</td><td class="n">−234</td></tr>
+   <tr><td>ATL / PIT</td><td class="n">43.1</td><td>PIT −5.4</td><td class="n">−194</td></tr>
+   <tr><td>NYJ / TEN</td><td class="n">42.7</td><td>TEN −0.4</td><td class="n">−104</td></tr>
+   <tr><td>CLE / JAX</td><td class="n">42.3</td><td>JAX −4.7</td><td class="n">−177</td></tr>
+  </tbody>
+ </table></div>
+ <p style="font-size:13.5px;color:var(--text-2);margin-top:12px"><b>Spreads are neutral-field.</b> The file carries no home/away flag, so shift roughly
+  1.2 points toward whichever side is home. Highest team totals: LAC 29.8, DET 29.1, CHI 26.3, PHI 26.3. Lowest: ATL and CLE at 18.8, ARI 19.1, WAS 19.4.</p>
+
+ <h3 class="disp" style="font-size:23px;margin-top:32px;text-transform:uppercase">Anytime touchdown</h3>
+ <p class="lede" style="margin-top:8px">Poisson on expected touchdowns, shaded 10% for the calibration gap above.</p>
+ <div class="tbl-scroll"><table class="data">
+  <thead><tr><th>Player</th><th>Matchup</th><th class="n">Fair probability</th><th class="n">Fair price</th><th class="n">Unshaded</th></tr></thead>
+  <tbody>
+   <tr><td>Jahmyr Gibbs (RB)</td><td>DET vs NO</td><td class="n">67.9%</td><td class="n">−211</td><td class="n">−253</td></tr>
+   <tr><td>Bijan Robinson (RB)</td><td>ATL vs PIT</td><td class="n">60.1%</td><td class="n">−151</td><td class="n">−178</td></tr>
+   <tr><td>Jonathan Taylor (RB)</td><td>IND vs BAL</td><td class="n">58.5%</td><td class="n">−141</td><td class="n">−166</td></tr>
+   <tr><td>Saquon Barkley (RB)</td><td>PHI vs WAS</td><td class="n">56.7%</td><td class="n">−131</td><td class="n">−154</td></tr>
+   <tr><td>Travis Etienne Jr. (RB)</td><td>NO vs DET</td><td class="n">55.5%</td><td class="n">−125</td><td class="n">−146</td></tr>
+   <tr><td>De'Von Achane (RB)</td><td>MIA vs LV</td><td class="n">54.5%</td><td class="n">−120</td><td class="n">−140</td></tr>
+   <tr><td>James Cook III (RB)</td><td>BUF vs HOU</td><td class="n">54.4%</td><td class="n">−119</td><td class="n">−139</td></tr>
+   <tr><td>Derrick Henry (RB)</td><td>BAL vs IND</td><td class="n">53.6%</td><td class="n">−115</td><td class="n">−135</td></tr>
+   <tr><td>Chase Brown (RB)</td><td>CIN vs TB</td><td class="n">52.5%</td><td class="n">−111</td><td class="n">−129</td></tr>
+   <tr><td>Ja'Marr Chase (WR)</td><td>CIN vs TB</td><td class="n">43.2%</td><td class="n">+132</td><td class="n">+115</td></tr>
+   <tr><td>Amon-Ra St. Brown (WR)</td><td>DET vs NO</td><td class="n">39.5%</td><td class="n">+153</td><td class="n">+134</td></tr>
+   <tr><td>Jalen Hurts (QB, rush)</td><td>PHI vs WAS</td><td class="n">38.6%</td><td class="n">+159</td><td class="n">+139</td></tr>
+  </tbody>
+ </table></div>
+
+ <h3 class="disp" style="font-size:23px;margin-top:32px;text-transform:uppercase">Yardage and reception lines</h3>
+ <div class="tbl-scroll"><table class="data">
+  <thead><tr><th>Player</th><th>Matchup</th><th class="n">Pass yds</th><th class="n">Pass TD</th><th class="n">Rush yds</th><th class="n">Rec</th><th class="n">Rec yds</th></tr></thead>
+  <tbody>
+   <tr class="grp"><td colspan="7">Quarterbacks</td></tr>
+   <tr><td>Justin Herbert</td><td>LAC vs ARI</td><td class="n">295</td><td class="n">1.97</td><td class="n">9</td><td class="n">—</td><td class="n">—</td></tr>
+   <tr><td>Joe Burrow</td><td>CIN vs TB</td><td class="n">292</td><td class="n">1.95</td><td class="n">5</td><td class="n">—</td><td class="n">—</td></tr>
+   <tr><td>Jared Goff</td><td>DET vs NO</td><td class="n">286</td><td class="n">1.91</td><td class="n">2</td><td class="n">—</td><td class="n">—</td></tr>
+   <tr><td>Caleb Williams</td><td>CHI vs CAR</td><td class="n">255</td><td class="n">1.70</td><td class="n">14</td><td class="n">—</td><td class="n">—</td></tr>
+   <tr><td>Baker Mayfield</td><td>TB vs CIN</td><td class="n">252</td><td class="n">1.68</td><td class="n">7</td><td class="n">—</td><td class="n">—</td></tr>
+   <tr><td>Josh Allen</td><td>BUF vs HOU</td><td class="n">233</td><td class="n">1.55</td><td class="n">31</td><td class="n">—</td><td class="n">—</td></tr>
+   <tr><td>Jalen Hurts</td><td>PHI vs WAS</td><td class="n">216</td><td class="n">1.44</td><td class="n">38</td><td class="n">—</td><td class="n">—</td></tr>
+   <tr><td>Lamar Jackson</td><td>BAL vs IND</td><td class="n">216</td><td class="n">1.44</td><td class="n">35</td><td class="n">—</td><td class="n">—</td></tr>
+   <tr class="grp"><td colspan="7">Running backs — rush yds shown; add receptions for scrimmage props</td></tr>
+   <tr><td>Jahmyr Gibbs</td><td>DET vs NO</td><td class="n">—</td><td class="n">—</td><td class="n">99</td><td class="n">3.6</td><td class="n">27</td></tr>
+   <tr><td>Bijan Robinson</td><td>ATL vs PIT</td><td class="n">—</td><td class="n">—</td><td class="n">80</td><td class="n">2.9</td><td class="n">22</td></tr>
+   <tr><td>Jonathan Taylor</td><td>IND vs BAL</td><td class="n">—</td><td class="n">—</td><td class="n">77</td><td class="n">2.8</td><td class="n">21</td></tr>
+   <tr><td>Saquon Barkley</td><td>PHI vs WAS</td><td class="n">—</td><td class="n">—</td><td class="n">73</td><td class="n">2.7</td><td class="n">20</td></tr>
+   <tr><td>Travis Etienne Jr.</td><td>NO vs DET</td><td class="n">—</td><td class="n">—</td><td class="n">71</td><td class="n">2.6</td><td class="n">19</td></tr>
+   <tr class="grp"><td colspan="7">Receivers and tight ends</td></tr>
+   <tr><td>Ja'Marr Chase</td><td>CIN vs TB</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">7.1</td><td class="n">89</td></tr>
+   <tr><td>Amon-Ra St. Brown</td><td>DET vs NO</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">6.3</td><td class="n">79</td></tr>
+   <tr><td>Justin Jefferson</td><td>MIN vs GB</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">5.8</td><td class="n">72</td></tr>
+   <tr><td>Chris Olave</td><td>NO vs DET</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">5.6</td><td class="n">70</td></tr>
+   <tr><td>Nico Collins</td><td>HOU vs BUF</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">5.4</td><td class="n">68</td></tr>
+   <tr><td>Trey McBride (TE)</td><td>ARI vs LAC</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">5.4</td><td class="n">57</td></tr>
+   <tr><td>Tee Higgins</td><td>CIN vs TB</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">4.8</td><td class="n">60</td></tr>
+   <tr><td>Emeka Egbuka</td><td>TB vs CIN</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">4.7</td><td class="n">58</td></tr>
+   <tr><td>Michael Mayer (TE)</td><td>LV vs MIA</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">4.2</td><td class="n">44</td></tr>
+  </tbody>
+ </table></div>
+ <p style="font-size:13.5px;color:var(--text-2);margin-top:12px">These are <b>median</b> lines — the 50/50 number. Same rule as everywhere else on this page:
+  bet the over only if your book posts below, the under only if it posts above. And per the caveat below, don't push these yardage figures into the
+  tail — the median is sound, the tail runs high.</p>
+</section>
+
+<section>
  <div class="sec-head"><h2>The under angle</h2><span class="sub">the most actionable thing here if you have real lines</span></div>
  <p class="lede">Everything above hunts for overs. But the median-versus-mean gap points the other way, and it may be the single most
   useful finding on this page. Books and pick'em apps generally post fantasy-point lines at a consensus <b>mean</b>. These projections are
