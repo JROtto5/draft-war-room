@@ -1,0 +1,562 @@
+<title>Correlation Beats Craziness</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+:root{
+  --ink:#12161F; --paper:#EDF0F4; --surface:#FFFFFF; --surface-2:#E4E9EF;
+  --line:#C8D1DB; --line-soft:#DCE3EA;
+  --text:#161B24; --text-2:#4A5665; --text-3:#6F7C8C;
+  --amber:#B4650A; --amber-bright:#D8801C; --slate:#33536F;
+  --good:#1F6F4F; --bad:#A6301F;
+  --board:#161B24; --board-text:#F0E3CE;
+  --grad-a:#B4650A; --grad-b:#33536F;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0E1219; --surface:#161C26; --surface-2:#1D2531;
+    --line:#2C3644; --line-soft:#232C38;
+    --text:#E6EBF1; --text-2:#A3AFBD; --text-3:#7A8797;
+    --amber:#E8952B; --amber-bright:#F2A845; --slate:#7FA8CC;
+    --good:#4FBF8B; --bad:#E2705C;
+    --board:#080B10; --board-text:#F0E3CE;
+    --grad-a:#E8952B; --grad-b:#7FA8CC;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0E1219; --surface:#161C26; --surface-2:#1D2531;
+  --line:#2C3644; --line-soft:#232C38;
+  --text:#E6EBF1; --text-2:#A3AFBD; --text-3:#7A8797;
+  --amber:#E8952B; --amber-bright:#F2A845; --slate:#7FA8CC;
+  --good:#4FBF8B; --bad:#E2705C;
+  --board:#080B10; --board-text:#F0E3CE;
+  --grad-a:#E8952B; --grad-b:#7FA8CC;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--text);
+  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px; margin:0 auto; padding-inline:20px; padding-block:0 72px}
+h1,h2,h3,.disp{font-family:"Barlow Condensed","Arial Narrow",sans-serif; text-wrap:balance; margin:0}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---------- masthead ---------- */
+.top{background:var(--board); color:var(--board-text); margin-inline:-20px; padding:34px 20px 30px; border-bottom:3px solid var(--amber)}
+.top-in{max-width:1000px; margin:0 auto}
+.kicker{font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--amber-bright); margin-bottom:12px}
+h1{font-size:clamp(38px,8vw,68px); line-height:.94; font-weight:700; letter-spacing:-.01em; text-transform:uppercase}
+h1 em{font-style:normal; color:var(--amber-bright)}
+.dek{margin-top:16px; max-width:64ch; color:#C8BCA8; font-size:16px}
+.meta-row{display:flex; flex-wrap:wrap; gap:10px 26px; margin-top:22px; padding-top:18px; border-top:1px solid rgba(240,227,206,.18); font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.05em; color:#A2977F}
+.meta-row b{color:var(--board-text); font-weight:500}
+
+/* ---------- thesis ---------- */
+.thesis{margin-top:32px; background:var(--surface); border:1px solid var(--line); border-left:4px solid var(--amber); padding:26px 24px}
+.thesis h2{font-size:26px; font-weight:600; letter-spacing:.01em; text-transform:uppercase}
+.vs{display:grid; grid-template-columns:1fr 1fr; gap:2px; margin-top:20px; background:var(--line-soft); border:1px solid var(--line-soft)}
+.vs>div{background:var(--surface); padding:18px 16px}
+.vs .lab{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-3)}
+.vs .big{font-family:"Barlow Condensed",sans-serif; font-size:46px; line-height:1; margin-top:8px; font-variant-numeric:tabular-nums}
+.vs .odds{font-family:"IBM Plex Mono",monospace; font-size:14px; margin-top:4px; color:var(--text-2)}
+.vs .win .big{color:var(--good)} .vs .lose .big{color:var(--bad)}
+.vs .note{font-size:13px; color:var(--text-2); margin-top:10px; line-height:1.45}
+
+/* ---------- sections ---------- */
+section{margin-top:56px}
+.sec-head{display:flex; align-items:baseline; gap:14px; border-bottom:2px solid var(--text); padding-bottom:8px; margin-bottom:22px; flex-wrap:wrap}
+.sec-head h2{font-size:30px; font-weight:700; text-transform:uppercase; letter-spacing:.01em}
+.sec-head .sub{font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3)}
+.lede{max-width:68ch; color:var(--text-2); margin:0 0 22px}
+
+/* ---------- slips ---------- */
+.slip{background:var(--surface); border:1px solid var(--line); margin-bottom:22px}
+.slip-head{display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:16px 18px; border-bottom:1px solid var(--line-soft); flex-wrap:wrap}
+.slip-head .t{font-family:"Barlow Condensed",sans-serif; font-size:27px; font-weight:700; text-transform:uppercase; line-height:1.05}
+.slip-head .s{font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.07em; color:var(--text-3); text-transform:uppercase; margin-top:3px}
+.risk{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; padding:5px 10px; border:1px solid currentColor; white-space:nowrap}
+.r-safe{color:var(--good)} .r-mid{color:var(--slate)} .r-hot{color:var(--amber)} .r-wild{color:var(--bad)}
+.legs{width:100%; border-collapse:collapse; font-size:14px}
+.legs th{font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); text-align:left; padding:9px 18px; border-bottom:1px solid var(--line-soft); font-weight:500}
+.legs td{padding:10px 18px; border-bottom:1px solid var(--line-soft); vertical-align:top}
+.legs tr:last-child td{border-bottom:none}
+.legs .pl{font-weight:600; white-space:nowrap}
+.legs .tm{font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--text-3); display:block; font-weight:400}
+.legs .ln{font-family:"IBM Plex Mono",monospace; font-weight:600; white-space:nowrap}
+.legs .nd{font-size:12.5px; color:var(--text-2); font-family:"IBM Plex Mono",monospace}
+.legs .pc{font-family:"IBM Plex Mono",monospace; text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap}
+.tbl-scroll{overflow-x:auto}
+.slip-foot{display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line-soft); border-top:1px solid var(--line)}
+.slip-foot>div{background:var(--surface-2); padding:13px 18px}
+.slip-foot .k{font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3)}
+.slip-foot .v{font-family:"Barlow Condensed",sans-serif; font-size:28px; line-height:1.1; margin-top:2px; font-variant-numeric:tabular-nums}
+.slip-foot .v.amber{color:var(--amber)}
+.liftbar{height:7px; background:var(--line-soft); margin-top:7px; position:relative; overflow:hidden}
+.liftbar i{position:absolute; inset:0 auto 0 0; background:linear-gradient(90deg,var(--grad-b),var(--grad-a)); display:block}
+.why{padding:14px 18px; font-size:13.5px; color:var(--text-2); border-top:1px solid var(--line-soft); background:var(--surface)}
+.why b{color:var(--text); font-weight:600}
+
+/* ---------- chart ---------- */
+.chart{background:var(--surface); border:1px solid var(--line); padding:22px 20px; margin-top:8px}
+.bars{display:flex; flex-direction:column; gap:14px; margin-top:18px}
+.bar-row{display:grid; grid-template-columns:78px 1fr 92px; align-items:center; gap:12px}
+.bar-row .lab{font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--text-2)}
+.bar-track{height:26px; background:var(--surface-2); position:relative}
+.bar-fill{height:100%; background:linear-gradient(90deg,var(--grad-b),var(--grad-a))}
+.bar-row .val{font-family:"Barlow Condensed",sans-serif; font-size:22px; text-align:right; font-variant-numeric:tabular-nums; color:var(--amber)}
+.axis{display:flex; justify-content:space-between; font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--text-3); margin-top:10px; padding-left:90px}
+
+/* ---------- generic table ---------- */
+.data{width:100%; border-collapse:collapse; font-size:13.5px; background:var(--surface)}
+.data th{font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.09em; text-transform:uppercase; color:var(--text-3); text-align:left; padding:10px 12px; border-bottom:2px solid var(--line); font-weight:500; white-space:nowrap}
+.data td{padding:9px 12px; border-bottom:1px solid var(--line-soft); white-space:nowrap}
+.data td.n{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums; text-align:right}
+.data tr:last-child td{border-bottom:none}
+.data .grp td{background:var(--surface-2); font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3)}
+.pos{color:var(--good)} .neg{color:var(--bad)}
+
+/* ---------- callouts ---------- */
+.warn{background:var(--surface); border:1px solid var(--line); border-left:4px solid var(--bad); padding:20px 22px; margin-bottom:14px}
+.warn h3{font-size:19px; font-weight:600; text-transform:uppercase; letter-spacing:.02em; color:var(--bad)}
+.warn p{margin:8px 0 0; font-size:14px; color:var(--text-2)}
+.warn p b{color:var(--text)}
+.howto{display:grid; gap:1px; background:var(--line-soft); border:1px solid var(--line-soft)}
+.howto>div{background:var(--surface); padding:18px 20px}
+.howto .n{font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--amber); letter-spacing:.1em}
+.howto h3{font-size:20px; font-weight:600; margin-top:5px; text-transform:uppercase}
+.howto p{margin:6px 0 0; font-size:14px; color:var(--text-2)}
+.howto code{font-family:"IBM Plex Mono",monospace; font-size:12.5px; background:var(--surface-2); padding:1px 5px}
+
+/* ---------- score ---------- */
+.score{background:var(--board); color:var(--board-text); padding:26px 24px; border-top:3px solid var(--amber)}
+.score h2{font-size:28px; text-transform:uppercase; font-weight:700}
+.score p{color:#C8BCA8; font-size:14px; max-width:66ch}
+.score .row{display:flex; align-items:baseline; gap:10px; padding:7px 0; border-bottom:1px solid rgba(240,227,206,.13); font-family:"IBM Plex Mono",monospace; font-size:12.5px; flex-wrap:wrap}
+.score .row:last-child{border-bottom:none}
+.box{width:13px; height:13px; border:1.5px solid var(--amber-bright); flex:none; display:inline-block}
+.score .nm{flex:1; min-width:150px; font-family:"IBM Plex Sans",sans-serif; font-weight:500}
+.score .pp{color:var(--amber-bright); font-variant-numeric:tabular-nums}
+.tally{margin-top:20px; padding-top:16px; border-top:1px solid var(--amber); font-family:"IBM Plex Mono",monospace; font-size:13px}
+.tally b{color:var(--amber-bright); font-size:17px}
+
+footer{margin-top:50px; padding-top:22px; border-top:1px solid var(--line); font-size:12.5px; color:var(--text-3)}
+
+@media (max-width:720px){
+  .vs{grid-template-columns:1fr}
+  .slip-foot{grid-template-columns:1fr}
+  .bar-row{grid-template-columns:58px 1fr 64px}
+  .axis{padding-left:70px}
+  h1{font-size:40px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<div class="top">
+ <div class="top-in">
+  <div class="kicker">DraftKings NFL · 12-game main slate · projection set 151307</div>
+  <h1>Correlation beats<br><em>craziness</em></h1>
+  <p class="dek">Five parlays built from 320 player projections. The useful finding isn't which players to pick — it's that
+   <b>stacking one game instead of spreading across five makes the same-difficulty parlay 15× more likely to hit.</b></p>
+  <div class="meta-row">
+   <span><b>320</b> live projections</span>
+   <span><b>192</b> distribution-fitted</span>
+   <span>lognormal · median=proj · P90=ceil · P10=floor</span>
+   <span>Gaussian copula · <b>300k</b> trials/parlay</span>
+  </div>
+ </div>
+</div>
+
+<div class="thesis">
+ <h2>The whole idea, in two numbers</h2>
+ <p class="lede" style="margin-top:10px">Two five-leg parlays. Comparable difficulty on every individual leg — each one needs a player to beat
+  roughly 115% of their projection. The only difference is that one is built inside a single game and the other is spread across five.</p>
+ <div class="vs">
+  <div class="win">
+   <div class="lab">5 legs · all in Bengals–Buccaneers</div>
+   <div class="big">4.74%</div>
+   <div class="odds">fair odds +2008</div>
+   <div class="note">Legs rise together. If that game turns into a track meet, all five cash at once.</div>
+  </div>
+  <div class="lose">
+   <div class="lab">5 legs · five different games</div>
+   <div class="big">0.31%</div>
+   <div class="odds">fair odds +31713</div>
+   <div class="note">Nothing helps anything else. You need five unrelated things to go right.</div>
+  </div>
+ </div>
+ <p class="note" style="font-size:14px;color:var(--text-2);margin-top:16px">Most people build the second one because it <i>feels</i> more diversified.
+  In a parlay every leg must hit, so diversification is not protection — it is the thing killing you.</p>
+</div>
+
+<section>
+ <div class="sec-head"><h2>The card</h2><span class="sub">fair odds = break-even · beat the number to profit</span></div>
+ <p class="lede">Every price below is a <b>fair</b> price computed from the projections, not an edge. Bet a leg only if your
+  sportsbook posts a line at or below the threshold shown. <b>Lift</b> is how much correlation improves the parlay versus a book
+  that prices the legs as independent — the bigger the lift, the more likely a same-game-parlay price is beatable.</p>
+
+ <!-- 1 -->
+ <div class="slip">
+  <div class="slip-head">
+   <div><div class="t">1 · The Anchor</div><div class="s">3 legs · Cincinnati · conservative lines</div></div>
+   <span class="risk r-safe">coin-flip favourite</span>
+  </div>
+  <div class="tbl-scroll"><table class="legs">
+   <thead><tr><th>Player</th><th>Line</th><th>What it needs</th><th style="text-align:right">Hit</th></tr></thead>
+   <tbody>
+    <tr><td class="pl">Joe Burrow<span class="tm">QB · CIN vs TB</span></td><td class="ln">o15.5</td><td class="nd">224 pass yds + 1.5 TD</td><td class="pc">75.3%</td></tr>
+    <tr><td class="pl">Ja'Marr Chase<span class="tm">WR · CIN vs TB</span></td><td class="ln">o13.5</td><td class="nd">4.8 rec + 60 yds</td><td class="pc">80.9%</td></tr>
+    <tr><td class="pl">Chase Brown<span class="tm">RB · CIN vs TB</span></td><td class="ln">o12.0</td><td class="nd">65 scrim yds + 0.6 TD</td><td class="pc">74.7%</td></tr>
+   </tbody>
+  </table></div>
+  <div class="slip-foot">
+   <div><div class="k">Win probability</div><div class="v">51.07%</div></div>
+   <div><div class="k">Fair odds</div><div class="v amber">−104</div></div>
+   <div><div class="k">Correlation lift</div><div class="v">1.12×<span class="liftbar"><i style="width:11%"></i></span></div></div>
+  </div>
+  <div class="why"><b>Why:</b> deliberately discounted lines on the slate's most reliable passing offense. This is the only one on the card
+   I'd stake real money on at anything near fair. Needs a deep alternate ladder — these rungs won't exist on a standard prop board.</div>
+ </div>
+
+ <!-- 2 -->
+ <div class="slip">
+  <div class="slip-head">
+   <div><div class="t">2 · The Correlation Play</div><div class="s">4 legs · Bengals–Buccaneers game stack</div></div>
+   <span class="risk r-mid">best structural edge</span>
+  </div>
+  <div class="tbl-scroll"><table class="legs">
+   <thead><tr><th>Player</th><th>Line</th><th>What it needs</th><th style="text-align:right">Hit</th></tr></thead>
+   <tbody>
+    <tr><td class="pl">Joe Burrow<span class="tm">QB · CIN</span></td><td class="ln">o19.5</td><td class="nd">274 pass yds + 1.8 TD</td><td class="pc">49.8%</td></tr>
+    <tr><td class="pl">Ja'Marr Chase<span class="tm">WR · CIN</span></td><td class="ln">o19.8</td><td class="nd">6.8 rec + 86 yds + 0.55 TD</td><td class="pc">50.0%</td></tr>
+    <tr><td class="pl">Baker Mayfield<span class="tm">QB · TB</span></td><td class="ln">o17.4</td><td class="nd">240 pass yds + 1.6 TD</td><td class="pc">49.7%</td></tr>
+    <tr><td class="pl">Emeka Egbuka<span class="tm">WR · TB</span></td><td class="ln">o13.0</td><td class="nd">4.6 rec + 57 yds</td><td class="pc">50.0%</td></tr>
+   </tbody>
+  </table></div>
+  <div class="slip-foot">
+   <div><div class="k">Win probability</div><div class="v">15.09%</div></div>
+   <div><div class="k">Fair odds</div><div class="v amber">+563</div></div>
+   <div><div class="k">Correlation lift</div><div class="v">2.44×<span class="liftbar"><i style="width:24%"></i></span></div></div>
+  </div>
+  <div class="why"><b>Why:</b> every leg is an individual coin flip, so a book pricing them independently lands near <span class="mono">+1517</span>.
+   The true number is <span class="mono">+563</span>. Both quarterbacks and a receiver from each side — the bet is on the <i>game</i>, not on four players.
+   Highest-total symmetric matchup on the slate, meaning neither team gets a clock-killing lead.
+   <b>I tested the obvious alternative</b> — replacing the Tampa half with a third Cincinnati pass-catcher plus their running back — and this structure wins
+   (2.44× lift against 1.94×). Two correlated pairs bridged by the shootout beat one deep single-team stack, because running backs barely correlate with a
+   passing game and drag the stack down.</div>
+ </div>
+
+ <!-- 3 -->
+ <div class="slip">
+  <div class="slip-head">
+   <div><div class="t">3 · The Leverage Play</div><div class="s">3 legs · verified role monopolies</div></div>
+   <span class="risk r-mid">stale-line edge</span>
+  </div>
+  <div class="tbl-scroll"><table class="legs">
+   <thead><tr><th>Player</th><th>Line</th><th>What it needs</th><th style="text-align:right">Hit</th></tr></thead>
+   <tbody>
+    <tr><td class="pl">Michael Mayer<span class="tm">TE · LV vs MIA</span></td><td class="ln">o8.5</td><td class="nd">3.3 rec + 35 yds</td><td class="pc">67.1%</td></tr>
+    <tr><td class="pl">Travis Etienne Jr.<span class="tm">RB · NO vs DET</span></td><td class="ln">o13.5</td><td class="nd">72 scrim yds + 0.67 TD</td><td class="pc">72.3%</td></tr>
+    <tr><td class="pl">Chris Olave<span class="tm">WR · NO vs DET</span></td><td class="ln">o12.0</td><td class="nd">4.3 rec + 53 yds</td><td class="pc">69.6%</td></tr>
+   </tbody>
+  </table></div>
+  <div class="slip-foot">
+   <div><div class="k">Win probability</div><div class="v">33.95%</div></div>
+   <div><div class="k">Fair odds</div><div class="v amber">+195</div></div>
+   <div><div class="k">Correlation lift</div><div class="v">1.01×<span class="liftbar"><i style="width:2%"></i></span></div></div>
+  </div>
+  <div class="why"><b>Why:</b> a different edge entirely — not correlation, but lines that haven't caught up. Four notable players carry
+   <i>no projection at all</i> in this file, meaning the source has them out. I checked each depth chart directly: with Brock Bowers gone,
+   Mayer is the only Raiders tight end with a pulse; with Kamara gone, Etienne owns the backfield; with Tyson gone, Olave is a target monopoly
+   in the slate's highest-total game. Books are slowest to re-price a backup who just inherited a full workload.
+   <b>I dropped a fourth leg during this check</b> — MarShawn Lloyd looked like the same spot, but Green Bay's backfield is still a committee.</div>
+ </div>
+
+ <!-- 4 -->
+ <div class="slip">
+  <div class="slip-head">
+   <div><div class="t">4 · The Crazy One</div><div class="s">5 legs · Bengals–Buccaneers goes nuclear</div></div>
+   <span class="risk r-hot">longshot</span>
+  </div>
+  <div class="tbl-scroll"><table class="legs">
+   <thead><tr><th>Player</th><th>Line</th><th>What it needs</th><th style="text-align:right">Hit</th></tr></thead>
+   <tbody>
+    <tr><td class="pl">Joe Burrow<span class="tm">QB · CIN</span></td><td class="ln">o22.5</td><td class="nd">312 pass yds + 2.1 TD</td><td class="pc">33.1%</td></tr>
+    <tr><td class="pl">Ja'Marr Chase<span class="tm">WR · CIN</span></td><td class="ln">o22.5</td><td class="nd">7.7 rec + 96 yds + 0.62 TD</td><td class="pc">38.6%</td></tr>
+    <tr><td class="pl">Tee Higgins<span class="tm">WR · CIN</span></td><td class="ln">o15.0</td><td class="nd">5.2 rec + 65 yds</td><td class="pc">41.7%</td></tr>
+    <tr><td class="pl">Baker Mayfield<span class="tm">QB · TB</span></td><td class="ln">o20.0</td><td class="nd">272 pass yds + 1.8 TD</td><td class="pc">34.4%</td></tr>
+    <tr><td class="pl">Emeka Egbuka<span class="tm">WR · TB</span></td><td class="ln">o15.0</td><td class="nd">5.2 rec + 65 yds</td><td class="pc">40.0%</td></tr>
+   </tbody>
+  </table></div>
+  <div class="slip-foot">
+   <div><div class="k">Win probability</div><div class="v">4.74%</div></div>
+   <div><div class="k">Fair odds</div><div class="v amber">+2008</div></div>
+   <div><div class="k">Correlation lift</div><div class="v">6.47×<span class="liftbar"><i style="width:58%"></i></span></div></div>
+  </div>
+  <div class="why"><b>Why:</b> this is the crazy parlay done correctly. It needs exactly one thing to happen — that game becomes a shootout —
+   and then all five legs cash together. Priced as independent legs it would be <span class="mono">+13538</span>; the real number is
+   <span class="mono">+2008</span>. That gap is the entire bet.</div>
+ </div>
+
+ <!-- 5 -->
+ <div class="slip">
+  <div class="slip-head">
+   <div><div class="t">5 · The Lottery Ticket</div><div class="s">6 legs · maximum chaos, one game</div></div>
+   <span class="risk r-wild">1-in-83</span>
+  </div>
+  <div class="tbl-scroll"><table class="legs">
+   <thead><tr><th>Player</th><th>Line</th><th>What it needs</th><th style="text-align:right">Hit</th></tr></thead>
+   <tbody>
+    <tr><td class="pl">Joe Burrow<span class="tm">QB · CIN</span></td><td class="ln">o25.0</td><td class="nd">344 pass yds + 2.3 TD</td><td class="pc">22.5%</td></tr>
+    <tr><td class="pl">Ja'Marr Chase<span class="tm">WR · CIN</span></td><td class="ln">o26.0</td><td class="nd">8.9 rec + 111 yds + 0.71 TD</td><td class="pc">26.8%</td></tr>
+    <tr><td class="pl">Tee Higgins<span class="tm">WR · CIN</span></td><td class="ln">o17.5</td><td class="nd">6.1 rec + 76 yds</td><td class="pc">31.5%</td></tr>
+    <tr><td class="pl">Baker Mayfield<span class="tm">QB · TB</span></td><td class="ln">o22.5</td><td class="nd">303 pass yds + 2.0 TD</td><td class="pc">23.1%</td></tr>
+    <tr><td class="pl">Emeka Egbuka<span class="tm">WR · TB</span></td><td class="ln">o17.0</td><td class="nd">5.9 rec + 74 yds</td><td class="pc">31.8%</td></tr>
+    <tr><td class="pl">Chris Godwin Jr.<span class="tm">WR · TB</span></td><td class="ln">o14.5</td><td class="nd">5.1 rec + 63 yds</td><td class="pc">31.3%</td></tr>
+   </tbody>
+  </table></div>
+  <div class="slip-foot">
+   <div><div class="k">Win probability</div><div class="v">1.20%</div></div>
+   <div><div class="k">Fair odds</div><div class="v amber">+8250</div></div>
+   <div><div class="k">Correlation lift</div><div class="v">27.3×<span class="liftbar"><i style="width:100%"></i></span></div></div>
+  </div>
+  <div class="why"><b>Why:</b> it loses 99 times out of 100 and I'm telling you that plainly. But priced as six independent legs it's
+   <span class="mono">+228127</span> and the true price is <span class="mono">+8250</span> — a <b>27×</b> pricing gap, the largest on the card.
+   If you're going to throw money away, throw it at the structure the book is worst at pricing.</div>
+ </div>
+</section>
+
+<section>
+ <div class="sec-head"><h2>Why lift grows with legs</h2><span class="sub">measured across all 12 games</span></div>
+ <p class="lede">I simulated every game jointly and searched the full space of same-game parlays. Correlation doesn't just help — it
+  compounds. Each added leg multiplies the naive price much faster than it cuts the true probability.</p>
+ <div class="chart">
+  <div class="bars">
+   <div class="bar-row"><span class="lab">3 legs</span><span class="bar-track"><span class="bar-fill" style="width:19%"></span></span><span class="val">2.93×</span></div>
+   <div class="bar-row"><span class="lab">4 legs</span><span class="bar-track"><span class="bar-fill" style="width:27%"></span></span><span class="val">4.15×</span></div>
+   <div class="bar-row"><span class="lab">5 legs</span><span class="bar-track"><span class="bar-fill" style="width:48%"></span></span><span class="val">7.44×</span></div>
+   <div class="bar-row"><span class="lab">6 legs</span><span class="bar-track"><span class="bar-fill" style="width:100%"></span></span><span class="val">15.4×</span></div>
+  </div>
+  <div class="axis"><span>0×</span><span>4×</span><span>8×</span><span>12×</span><span>15.4×</span></div>
+  <p style="font-size:13px;color:var(--text-2);margin:16px 0 0">Median correlation lift for the best same-game parlay at each size.
+   The best single six-leg stack found reached <b>75×</b>. Spread the same legs across different games and every one of these drops to 1.0×.</p>
+ </div>
+
+ <p class="lede" style="margin-top:26px">Leg count is only half of it. The <i>depth</i> of each threshold matters just as much — the further into the tail you
+  push, the more the legs depend on one shared event. Same two players, same game, five different thresholds:</p>
+ <div class="tbl-scroll"><table class="data">
+  <thead><tr><th>Burrow + Chase, both at…</th><th class="n">Joint probability</th><th class="n">Correlation lift</th></tr></thead>
+  <tbody>
+   <tr><td>60% of projection</td><td class="n">84.59%</td><td class="n">1.03×</td></tr>
+   <tr><td>80% of projection</td><td class="n">59.59%</td><td class="n">1.15×</td></tr>
+   <tr><td>at projection</td><td class="n">34.83%</td><td class="n">1.39×</td></tr>
+   <tr><td>125% of projection</td><td class="n">15.04%</td><td class="n">1.96×</td></tr>
+   <tr><td>160% of projection</td><td class="n">3.93%</td><td class="n pos">3.53×</td></tr>
+  </tbody>
+ </table></div>
+ <p style="font-size:13.5px;color:var(--text-2);margin-top:14px">Which cuts both ways: correlation barely helps a conservative parlay
+  (the Anchor only gets 1.12×), and it helps enormously on an aggressive one. <b>Safe parlays should be spread; crazy parlays must be stacked.</b></p>
+</section>
+
+<section>
+ <div class="sec-head"><h2>The volatility inversion</h2><span class="sub">a non-obvious second edge</span></div>
+ <p class="lede">Sorting by fitted volatility rather than by projection flips the usual read. The marquee ceiling names are
+  <i>less</i> volatile than their position, not more — their big ceilings come from a large median, not a fat tail.</p>
+ <div class="tbl-scroll"><table class="data">
+  <thead><tr><th>Player</th><th class="n">Projection</th><th class="n">Own volatility</th><th class="n">Position typical</th><th>Tail read</th></tr></thead>
+  <tbody>
+   <tr><td>Jahmyr Gibbs (RB)</td><td class="n">23.8</td><td class="n">0.329</td><td class="n">0.507</td><td class="neg">thin tail — ceiling is bought with median</td></tr>
+   <tr><td>Ja'Marr Chase (WR)</td><td class="n">19.8</td><td class="n">0.439</td><td class="n">0.613</td><td class="neg">thin tail for a star receiver</td></tr>
+   <tr><td>Alec Pierce (WR)</td><td class="n">9.3</td><td class="n">0.756</td><td class="n">0.613</td><td class="pos">genuinely fat tail</td></tr>
+   <tr><td>Quentin Johnston (WR)</td><td class="n">9.7</td><td class="n">0.738</td><td class="n">0.613</td><td class="pos">genuinely fat tail</td></tr>
+   <tr><td>Rome Odunze (WR)</td><td class="n">9.8</td><td class="n">0.700</td><td class="n">0.613</td><td class="pos">genuinely fat tail</td></tr>
+  </tbody>
+ </table></div>
+ <p style="font-size:13.5px;color:var(--text-2);margin-top:14px">If a book builds alternate ladders from one generic volatility per position — which is
+  the cheap way to build them — it misprices in <i>both</i> directions: too short on deep Gibbs and Chase ladders, too long on the boom-or-bust receivers.
+  This is a hypothesis about how ladders get built, not an observed price, so treat it as a place to look rather than a bet. The three fat-tail names are
+  also the least stable figures in the file, since their volatility is driven by very low floors.</p>
+</section>
+
+<section>
+ <div class="sec-head"><h2>If you play PrizePicks or Underdog</h2><span class="sub">fixed payouts make correlation free</span></div>
+ <p class="lede">Pick'em apps pay a <b>fixed</b> multiplier for an N-pick entry regardless of who you pick. So correlation costs you nothing
+  and buys you everything. Both columns below use the same number of picks at the same lines — the only difference is whether the picks share a game.</p>
+ <div class="tbl-scroll"><table class="data">
+  <thead><tr><th>Entry</th><th>Payout</th><th class="n">Same game</th><th class="n">Spread out</th><th class="n">EV same</th><th class="n">EV spread</th></tr></thead>
+  <tbody>
+   <tr><td>3-pick</td><td class="mono">5.0×</td><td class="n">22.8%</td><td class="n">12.6%</td><td class="n pos">1.14</td><td class="n neg">0.63</td></tr>
+   <tr><td>4-pick</td><td class="mono">10.0×</td><td class="n">14.1%</td><td class="n">6.3%</td><td class="n pos">1.42</td><td class="n neg">0.63</td></tr>
+   <tr><td>5-pick</td><td class="mono">20.0×</td><td class="n">10.5%</td><td class="n">3.1%</td><td class="n pos">2.10</td><td class="n neg">0.62</td></tr>
+   <tr><td>6-pick</td><td class="mono">37.5×</td><td class="n">7.5%</td><td class="n">1.5%</td><td class="n pos">2.80</td><td class="n neg">0.55</td></tr>
+  </tbody>
+ </table></div>
+ <p style="font-size:13.5px;color:var(--text-2);margin-top:14px">EV is per $1 staked; 1.00 is break-even.
+  <b>The absolute numbers assume these projections are right and the lines sit at the median — treat them as optimistic.</b>
+  The <i>ratio</i> between the columns is the robust part: it survives even if the projections are wrong, because moving the lines moves both columns together.
+  Stress-tested, the correlated side stays above break-even down to a ~44–46% per-leg hit rate at 5–6 picks. The spread column never gets close at any hit rate.</p>
+</section>
+
+<section>
+ <div class="sec-head"><h2>How to actually use this</h2><span class="sub">read before betting anything</span></div>
+ <div class="howto">
+  <div>
+   <div class="n">STEP 1</div><h3>The file has no odds in it</h3>
+   <p>This is a DFS projection export — fantasy points, ceilings, floors, salaries. There are no sportsbook lines, spreads or totals anywhere in it.
+    So I cannot compute edge, and anyone who tells you otherwise from this file is guessing. What I can compute is the <b>fair line</b>. The bet only
+    exists where the book disagrees with it.</p>
+  </div>
+  <div>
+   <div class="n">STEP 2</div><h3>Compare, then bet — never bet blind</h3>
+   <p>For each leg, look up the posted line. Bet the over only if the book's number is <b>at or below</b> my threshold. If Chase's fantasy-score line
+    is posted at 21.5 and my fair number is 19.8, that leg is <i>negative</i> value — skip it and the parlay with it.</p>
+  </div>
+  <div>
+   <div class="n">STEP 3</div><h3>Prefer fantasy-points props</h3>
+   <p>The projection is denominated in DK fantasy points, so a fantasy-score prop needs no translation at all. The receptions and yardage lines in the
+    "what it needs" column come from a decomposition with stated assumptions (12.5 yds/rec for wideouts, 155 receiving yards per TD, and so on) — useful for
+    sanity, worse as a bet.</p>
+  </div>
+  <div>
+   <div class="n">STEP 4</div><h3>Check actives first</h3>
+   <p>Four notable players carry no projection here, which is how I identified the leverage spots — but it also means this file encodes a specific
+    injury picture. If it has since changed, several legs change with it.</p>
+  </div>
+ </div>
+</section>
+
+<section>
+ <div class="sec-head"><h2>What would make me wrong</h2><span class="sub">the honest failure modes</span></div>
+
+ <div class="warn">
+  <h3>The median trap — the one that would cost you most</h3>
+  <p>The <code class="mono">fpts</code> column is a <b>median</b>, not a mean. I verified this: the geometric mean of ceiling and floor lands within 1% of it
+   across 170 players. Because the distribution is right-skewed, the <i>mean</i> sits meaningfully higher — and most public projections you'd compare against
+   are means. <b>If a book sets its line at a mean-based projection, the over is a 43% shot for a quarterback and 38% for a receiver, not a coin flip.</b>
+   Every "50%" on this card assumes the line is at the median. A line two points higher quietly turns a fair bet into a bad one.</p>
+ </div>
+
+ <div class="warn">
+  <h3>Injury and game-script risk is nowhere in this model</h3>
+  <p>The distribution describes a player who takes a normal, healthy workload. It assigns <b>zero</b> probability to an inactive scratch, a first-quarter
+   exit, or a blowout benching. That barely matters for a longshot; it is the whole story for the Anchor. Shade every probability here down by roughly
+   2–4% before comparing to a real price.</p>
+ </div>
+
+ <div class="warn">
+  <h3>The correlation numbers carry more model risk than the single legs</h3>
+  <p>Correlation strengths are a standard NFL structure I specified (same-team QB→WR +0.58, opposing quarterbacks +0.22), not something measured from this
+   slate. I verified every matrix used is mathematically valid, so the lifts aren't a numerical artifact — but if the real correlations are weaker, the lift
+   figures shrink. The direction is solid; the magnitude is an estimate.</p>
+ </div>
+
+ <div class="warn">
+  <h3>Defenses are excluded because the data for them is broken</h3>
+  <p>I found <b>10 of 23</b> defenses with a floor above their own median — impossible for a 10th percentile — and DST ceilings run about 6× the median
+   versus 2× for skill players. The published defensive ceiling is a max case, not a percentile. No defense appears anywhere on this card, and you shouldn't
+   let any model hand you a defensive number from this file.</p>
+ </div>
+
+ <div class="warn">
+  <h3>Don't bet the yardage translations in the tail</h3>
+  <p>The "what it needs" column converts fantasy points into receptions and yards at the <b>median</b>, which is sound. Pushing that same conversion
+   into the tail is not: my decomposition scales yardage by each player's <i>fantasy-point</i> volatility, and a large share of fantasy variance is
+   touchdown variance rather than yardage variance. That inflates yardage tails — it would put Burrow at 350+ passing yards roughly 8–10 points too high.
+   Use the stat lines as a sanity check on whether a number is reasonable, and place the bets on fantasy-points props, which need no translation at all.</p>
+ </div>
+
+ <div class="warn">
+  <h3>These lines may not be purchasable</h3>
+  <p>The Anchor's thresholds sit 20–35% below each player's median. Those rungs exist on alternate fantasy-score ladders at full sportsbooks; they do not exist
+   on pick'em apps, where the deepest discount is around 15–20%. If your book doesn't post the rung, the leg doesn't exist — don't substitute the standard
+   line and call it the same bet.</p>
+ </div>
+</section>
+
+<section>
+ <div class="sec-head"><h2>Fair lines</h2><span class="sub">the reference table · compare against any book</span></div>
+ <p class="lede"><b>Fair 50%</b> is the true median — the line where over and under are even money. Bet the over only below it, the under only above it.</p>
+ <div class="tbl-scroll"><table class="data">
+  <thead><tr><th>Player</th><th>Tm</th><th>Opp</th><th class="n">Fair 50%</th><th class="n">66% line</th><th class="n">40% line</th><th>Implied line at median</th></tr></thead>
+  <tbody>
+   <tr class="grp"><td colspan="7">Quarterbacks — lowest variance on the slate, the best parlay anchors</td></tr>
+   <tr><td>Jalen Hurts</td><td>PHI</td><td>WAS</td><td class="n">20.7</td><td class="n">18.0</td><td class="n">22.5</td><td class="mono">210 pass + 1.40 TD + 38 rush</td></tr>
+   <tr><td>Josh Allen</td><td>BUF</td><td>HOU</td><td class="n">20.5</td><td class="n">17.8</td><td class="n">22.3</td><td class="mono">224 pass + 1.49 TD + 31 rush</td></tr>
+   <tr><td>Justin Herbert</td><td>LAC</td><td>ARI</td><td class="n">20.3</td><td class="n">17.7</td><td class="n">22.1</td><td class="mono">277 pass + 1.84 TD</td></tr>
+   <tr><td>Lamar Jackson</td><td>BAL</td><td>IND</td><td class="n">20.1</td><td class="n">17.4</td><td class="n">21.9</td><td class="mono">209 pass + 1.39 TD + 35 rush</td></tr>
+   <tr><td>Joe Burrow</td><td>CIN</td><td>TB</td><td class="n">19.5</td><td class="n">16.9</td><td class="n">21.2</td><td class="mono">273 pass + 1.82 TD</td></tr>
+   <tr><td>Caleb Williams</td><td>CHI</td><td>CAR</td><td class="n">18.8</td><td class="n">16.2</td><td class="n">20.4</td><td class="mono">242 pass + 1.62 TD</td></tr>
+   <tr><td>Jared Goff</td><td>DET</td><td>NO</td><td class="n">18.5</td><td class="n">16.0</td><td class="n">20.2</td><td class="mono">269 pass + 1.79 TD</td></tr>
+   <tr><td>Baker Mayfield</td><td>TB</td><td>CIN</td><td class="n">17.4</td><td class="n">14.9</td><td class="n">19.0</td><td class="mono">240 pass + 1.60 TD</td></tr>
+   <tr class="grp"><td colspan="7">Running backs</td></tr>
+   <tr><td>Jahmyr Gibbs</td><td>DET</td><td>NO</td><td class="n">23.8</td><td class="n">20.7</td><td class="n">25.9</td><td class="mono">94 rush + 3.7 rec + 1.12 TD</td></tr>
+   <tr><td>Bijan Robinson</td><td>ATL</td><td>PIT</td><td class="n">19.3</td><td class="n">16.5</td><td class="n">21.1</td><td class="mono">78 rush + 3.0 rec + 0.92 TD</td></tr>
+   <tr><td>Jonathan Taylor</td><td>IND</td><td>BAL</td><td class="n">18.5</td><td class="n">15.6</td><td class="n">20.4</td><td class="mono">75 rush + 2.8 rec + 0.89 TD</td></tr>
+   <tr><td>Saquon Barkley</td><td>PHI</td><td>WAS</td><td class="n">17.6</td><td class="n">14.8</td><td class="n">19.4</td><td class="mono">72 rush + 2.7 rec + 0.85 TD</td></tr>
+   <tr><td>Travis Etienne Jr.</td><td>NO</td><td>DET</td><td class="n">17.0</td><td class="n">14.4</td><td class="n">18.7</td><td class="mono">70 rush + 2.6 rec + 0.82 TD</td></tr>
+   <tr><td>Chase Brown</td><td>CIN</td><td>TB</td><td class="n">15.6</td><td class="n">13.0</td><td class="n">17.3</td><td class="mono">65 rush + 2.4 rec + 0.76 TD</td></tr>
+   <tr class="grp"><td colspan="7">Receivers &amp; tight ends</td></tr>
+   <tr><td>Ja'Marr Chase</td><td>CIN</td><td>TB</td><td class="n">19.8</td><td class="n">16.4</td><td class="n">22.1</td><td class="mono">6.8 rec + 86 yds + 0.55 TD</td></tr>
+   <tr><td>Amon-Ra St. Brown</td><td>DET</td><td>NO</td><td class="n">17.6</td><td class="n">14.6</td><td class="n">19.7</td><td class="mono">6.1 rec + 77 yds + 0.49 TD</td></tr>
+   <tr><td>Justin Jefferson</td><td>MIN</td><td>GB</td><td class="n">16.1</td><td class="n">13.2</td><td class="n">18.1</td><td class="mono">5.6 rec + 70 yds + 0.45 TD</td></tr>
+   <tr><td>Chris Olave</td><td>NO</td><td>DET</td><td class="n">15.5</td><td class="n">12.6</td><td class="n">17.5</td><td class="mono">5.4 rec + 68 yds + 0.44 TD</td></tr>
+   <tr><td>Nico Collins</td><td>HOU</td><td>BUF</td><td class="n">15.1</td><td class="n">12.2</td><td class="n">17.0</td><td class="mono">5.3 rec + 66 yds + 0.43 TD</td></tr>
+   <tr><td>Trey McBride</td><td>ARI</td><td>LAC</td><td class="n">14.0</td><td class="n">11.5</td><td class="n">15.8</td><td class="mono">5.4 rec + 57 yds + 0.44 TD</td></tr>
+   <tr><td>Tee Higgins</td><td>CIN</td><td>TB</td><td class="n">13.3</td><td class="n">10.8</td><td class="n">15.0</td><td class="mono">4.7 rec + 58 yds + 0.38 TD</td></tr>
+   <tr><td>Emeka Egbuka</td><td>TB</td><td>CIN</td><td class="n">13.0</td><td class="n">10.7</td><td class="n">14.6</td><td class="mono">4.6 rec + 57 yds + 0.37 TD</td></tr>
+   <tr><td>Michael Mayer</td><td>LV</td><td>MIA</td><td class="n">10.8</td><td class="n">8.8</td><td class="n">12.1</td><td class="mono">4.2 rec + 44 yds + 0.34 TD</td></tr>
+  </tbody>
+ </table></div>
+</section>
+
+<section>
+ <div class="score">
+  <h2>Score the experiment</h2>
+  <p>You asked to see how I'd do, so here is every prediction in one place with the probability I assigned it.
+   Tick what hits. Twenty-one leg predictions, average predicted hit rate <b>47.3%</b>.</p>
+  <div style="margin-top:18px">
+   <div class="row"><span class="box"></span><span class="nm">Joe Burrow o15.5</span><span class="pp">75.3%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Ja'Marr Chase o13.5</span><span class="pp">80.9%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Chase Brown o12.0</span><span class="pp">74.7%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Michael Mayer o8.5</span><span class="pp">67.1%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Travis Etienne o13.5</span><span class="pp">72.3%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Chris Olave o12.0</span><span class="pp">69.6%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Joe Burrow o19.5</span><span class="pp">49.8%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Ja'Marr Chase o19.8</span><span class="pp">50.0%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Baker Mayfield o17.4</span><span class="pp">49.7%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Emeka Egbuka o13.0</span><span class="pp">50.0%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Tee Higgins o15.0</span><span class="pp">41.7%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Emeka Egbuka o15.0</span><span class="pp">40.0%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Ja'Marr Chase o22.5</span><span class="pp">38.6%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Baker Mayfield o20.0</span><span class="pp">34.4%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Joe Burrow o22.5</span><span class="pp">33.1%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Emeka Egbuka o17.0</span><span class="pp">31.8%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Tee Higgins o17.5</span><span class="pp">31.5%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Chris Godwin Jr. o14.5</span><span class="pp">31.3%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Ja'Marr Chase o26.0</span><span class="pp">26.8%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Baker Mayfield o22.5</span><span class="pp">23.1%</span></div>
+   <div class="row"><span class="box"></span><span class="nm">Joe Burrow o25.0</span><span class="pp">22.5%</span></div>
+  </div>
+  <div class="tally">Expected to hit: <b>9.9 of 21</b>. Materially fewer means the projections ran hot; materially more means they were
+   conservative. That count — not whether the lottery ticket cashed — is the honest score.</div>
+ </div>
+</section>
+
+<section>
+ <div class="sec-head"><h2>If you only make one bet</h2><span class="sub">the recommendation</span></div>
+ <p class="lede" style="font-size:17px"><b>Parlay 2, the four-leg Bengals–Buccaneers game stack, at any price of +563 or better.</b>
+  It's the one where my edge comes from something structural rather than from trusting a projection to the decimal: four legs a book
+  may price near <span class="mono">+1517</span> that are truly worth <span class="mono">+563</span>. If you want the crazy one, take Parlay 4
+  for a small stake and understand you're paying for the story. If the game stack isn't available at a fair price, the correct move is to bet nothing.</p>
+</section>
+
+<footer>
+ Built from a single DraftKings projection export (12 games, 320 live projections). Distributions fitted per player and validated against
+ real NFL weekly variance; parlays priced by Gaussian-copula simulation at 300,000 trials each. No sportsbook odds were available as input,
+ so every price shown is a fair price, not a measured edge. Gambling involves risk — never stake money you need.
+</footer>
+
+</div>

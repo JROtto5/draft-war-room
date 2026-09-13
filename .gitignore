@@ -5,3 +5,5 @@ node_modules/
 .env*
 .vercel/
 .vercel
+__pycache__/
+*.pyc
